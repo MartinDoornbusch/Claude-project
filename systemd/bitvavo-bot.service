@@ -1,0 +1,18 @@
+[Unit]
+Description=Bitvavo AI Trading Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/bitvavo-bot
+EnvironmentFile=/home/pi/bitvavo-bot/.env
+ExecStart=/home/pi/bitvavo-bot/venv/bin/python main.py run
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
