@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import os
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, redirect, url_for
 
 from src.database import get_latest_signals, get_paper_trades, get_cash, get_position, get_ai_decisions
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
 from src.portfolio import get_ticker_price
 from src.ai_strategy import AI_ENABLED
+from src.config_manager import read_config, write_config, config_from_form
 
 app = Flask(__name__, template_folder="../templates")
 
@@ -90,6 +91,20 @@ def api_portfolio():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify(pf)
+
+
+@app.route("/settings", methods=["GET"])
+def settings_page():
+    config = read_config()
+    saved = request.args.get("saved") == "1"
+    return render_template("settings.html", config=config, saved=saved)
+
+
+@app.route("/settings", methods=["POST"])
+def settings_save():
+    updates = config_from_form(request.form)
+    write_config(updates)
+    return redirect(url_for("settings_page", saved=1))
 
 
 def start(host: str = "0.0.0.0", port: int = 5000, debug: bool = False) -> None:
