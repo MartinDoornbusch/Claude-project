@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Instellingen — Bitvavo Bot</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #0d1117; color: #e6edf3; }
+    .card { background: #161b22; border: 1px solid #30363d; }
+    .card-header { background: #21262d; border-bottom: 1px solid #30363d; font-weight: 600; }
+    .navbar { background: #161b22 !important; border-bottom: 1px solid #30363d; }
+    .form-control, .form-select {
+      background: #0d1117; border-color: #30363d; color: #e6edf3;
+    }
+    .form-control:focus, .form-select:focus {
+      background: #0d1117; border-color: #58a6ff; color: #e6edf3;
+      box-shadow: 0 0 0 .2rem rgba(88,166,255,.2);
+    }
+    .form-control::placeholder { color: #484f58; }
+    .input-group-text {
+      background: #21262d; border-color: #30363d; color: #8b949e;
+      cursor: pointer; user-select: none;
+    }
+    .input-group-text:hover { color: #e6edf3; }
+    .form-label { color: #8b949e; font-size: .8rem; margin-bottom: .3rem;
+                  text-transform: uppercase; letter-spacing: .05em; }
+    .form-text  { color: #484f58 !important; font-size: .78rem; }
+    .card-live  { border-color: rgba(248,81,73,.5) !important; }
+    .card-ai    { border-color: rgba(88,166,255,.5) !important; }
+    .card-mode  { border-color: rgba(56,139,253,.6) !important; background: #161b22; }
+    .mode-col   { border-radius: .5rem; padding: 1.2rem 1rem; }
+    .mode-col-paper { background: rgba(63,185,80,.06); }
+    .mode-col-live  { background: rgba(248,81,73,.06); }
+    .mode-col-regel { background: rgba(139,148,158,.06); }
+    .mode-col-ai    { background: rgba(88,166,255,.06); }
+    .big-switch .form-check-input { width: 3.2em; height: 1.6em; cursor: pointer; }
+    .mode-name { font-size: 1.05rem; font-weight: 700; letter-spacing: .02em; }
+    .mode-desc { font-size: .78rem; color: #8b949e; min-height: 1.2em; }
+    .restart-note { font-size: .75rem; color: #f0883e; }
+    option { background: #21262d; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark px-3 mb-4">
+  <a class="navbar-brand fw-bold text-decoration-none" href="/">← Dashboard</a>
+  <span style="font-size:.85rem; color:#8b949e;">Instellingen</span>
+</nav>
+
+<div class="container-fluid px-3 pb-5" style="max-width:960px;">
+
+  {% if saved %}
+  <div class="alert alert-success alert-dismissible fade show mb-4" role="alert" style="background:#1a3a1a; border-color:#238636; color:#3fb950;">
+    ✓ Instellingen opgeslagen. <strong>Herstart de bot</strong> om strategie- en modus-wijzigingen te activeren.
+    <button type="button" class="btn-close" style="filter:invert(1);" data-bs-dismiss="alert"></button>
+  </div>
+  {% endif %}
+
+  <form method="POST" action="/settings">
+
+    <!-- ── Strategie Schakelaar ── -->
+    <div class="card mb-4 card-mode">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Actieve Modus</span>
+        <span class="restart-note">⚡ Herstart de bot na opslaan</span>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+
+          <!-- Paper ↔ Live -->
+          <div class="col-12 col-sm-6">
+            <div class="mode-col {{ 'mode-col-live' if config.LIVE_TRADING_ENABLED == 'true' else 'mode-col-paper' }}" id="col-trading">
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="form-label mb-0">Handelen</span>
+                <div class="form-check form-switch big-switch m-0">
+                  <input class="form-check-input" type="checkbox" id="live_toggle"
+                         name="LIVE_TRADING_ENABLED"
+                         {{ 'checked' if config.LIVE_TRADING_ENABLED == 'true' }}>
+                </div>
+              </div>
+              <div class="mode-name" id="trading-name"
+                   style="color: {{ '#f85149' if config.LIVE_TRADING_ENABLED == 'true' else '#3fb950' }}">
+                {{ 'LIVE TRADING' if config.LIVE_TRADING_ENABLED == 'true' else 'PAPER TRADING' }}
+              </div>
+              <div class="mode-desc" id="trading-desc">
+                {{ 'Echte orders op Bitvavo' if config.LIVE_TRADING_ENABLED == 'true' else 'Virtueel geld, geen risico' }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Regel ↔ AI -->
+          <div class="col-12 col-sm-6">
+            <div class="mode-col {{ 'mode-col-ai' if config.AI_STRATEGY_ENABLED == 'true' else 'mode-col-regel' }}" id="col-strategy">
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="form-label mb-0">Strategie</span>
+                <div class="form-check form-switch big-switch m-0">
+                  <input class="form-check-input" type="checkbox" id="ai_toggle"
+                         name="AI_STRATEGY_ENABLED"
+                         {{ 'checked' if config.AI_STRATEGY_ENABLED == 'true' }}>
+                </div>
+              </div>
+              <div class="mode-name" id="strategy-name"
+                   style="color: {{ '#58a6ff' if config.AI_STRATEGY_ENABLED == 'true' else '#8b949e' }}">
+                {{ 'CLAUDE AI' if config.AI_STRATEGY_ENABLED == 'true' else 'REGEL-GEBASEERD' }}
+              </div>
+              <div class="mode-desc" id="strategy-desc">
+                {{ 'claude-opus-4-7 analyseert markt' if config.AI_STRATEGY_ENABLED == 'true' else 'MA crossover + RSI regels' }}
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4">
+
+      <!-- ── Linker kolom ── -->
+      <div class="col-12 col-md-6">
+
+        <!-- Bitvavo API -->
+        <div class="card mb-4">
+          <div class="card-header">Bitvavo API</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label">API Key</label>
+              <div class="input-group">
+                <input type="password" class="form-control font-monospace" name="BITVAVO_API_KEY"
+                       placeholder="{{ '●●●●●●●● (ingesteld)' if config.BITVAVO_API_KEY else 'Voer API key in' }}">
+                <span class="input-group-text toggle-pw">Toon</span>
+              </div>
+              <div class="form-text">Laat leeg om de huidige waarde te bewaren</div>
+            </div>
+            <div>
+              <label class="form-label">API Secret</label>
+              <div class="input-group">
+                <input type="password" class="form-control font-monospace" name="BITVAVO_API_SECRET"
+                       placeholder="{{ '●●●●●●●● (ingesteld)' if config.BITVAVO_API_SECRET else 'Voer API secret in' }}">
+                <span class="input-group-text toggle-pw">Toon</span>
+              </div>
+              <div class="form-text">Maak aan via Bitvavo › Instellingen › API</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trading -->
+        <div class="card mb-4">
+          <div class="card-header">Trading Instellingen</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label">Handelsparen</label>
+              <input type="text" class="form-control" name="TRADING_MARKETS"
+                     value="{{ config.TRADING_MARKETS }}" placeholder="BTC-EUR,ETH-EUR">
+              <div class="form-text">Kommagescheiden, bijv. BTC-EUR,ETH-EUR,SOL-EUR</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Candle interval</label>
+              <select class="form-select" name="CANDLE_INTERVAL">
+                {% for iv in ['1m','5m','15m','30m','1h','2h','4h','6h','8h','12h','1d'] %}
+                <option value="{{ iv }}" {{ 'selected' if config.CANDLE_INTERVAL == iv }}>{{ iv }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Check interval (minuten)</label>
+              <input type="number" class="form-control" name="CHECK_INTERVAL_MINUTES"
+                     value="{{ config.CHECK_INTERVAL_MINUTES }}" min="1" max="1440">
+              <div class="form-text">Hoe vaak de strategie draait</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paper Trading -->
+        <div class="card mb-4">
+          <div class="card-header">Paper Trading</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label">Startkapitaal (EUR)</label>
+              <div class="input-group">
+                <span class="input-group-text" style="cursor:default;">€</span>
+                <input type="number" class="form-control" name="PAPER_STARTING_CAPITAL"
+                       value="{{ config.PAPER_STARTING_CAPITAL }}" step="50" min="0">
+              </div>
+              <div class="form-text">Alleen actief bij een nieuw (leeg) portfolio</div>
+            </div>
+            <div>
+              <label class="form-label">Trade fractie (0.05–1.0)</label>
+              <input type="number" class="form-control" name="PAPER_TRADE_FRACTION"
+                     value="{{ config.PAPER_TRADE_FRACTION }}" step="0.05" min="0.05" max="1.0">
+              <div class="form-text">Deel van cash per trade — 0.95 = 95%</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── Rechter kolom ── -->
+      <div class="col-12 col-md-6">
+
+        <!-- Claude AI -->
+        <div class="card mb-4 card-ai">
+          <div class="card-header" style="color:#58a6ff;">Claude AI Strategie</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label">Anthropic API Key</label>
+              <div class="input-group">
+                <input type="password" class="form-control font-monospace" name="ANTHROPIC_API_KEY"
+                       placeholder="{{ '●●●●●●●● (ingesteld)' if config.ANTHROPIC_API_KEY else 'sk-ant-...' }}">
+                <span class="input-group-text toggle-pw">Toon</span>
+              </div>
+              <div class="form-text">
+                Aanmaken via
+                <a href="https://console.anthropic.com" target="_blank" style="color:#58a6ff;">console.anthropic.com</a>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Minimum confidence (0.5–1.0)</label>
+              <input type="number" class="form-control" name="AI_MIN_CONFIDENCE"
+                     value="{{ config.AI_MIN_CONFIDENCE }}" step="0.05" min="0.5" max="1.0">
+              <div class="form-text">Besluit onder deze waarde → automatisch HOLD</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Max orders per dag (per markt)</label>
+              <input type="number" class="form-control" name="AI_MAX_ORDERS_PER_DAY"
+                     value="{{ config.AI_MAX_ORDERS_PER_DAY }}" min="1" max="20">
+            </div>
+            <div>
+              <label class="form-label">Cooldown tussen trades (minuten)</label>
+              <input type="number" class="form-control" name="AI_COOLDOWN_MINUTES"
+                     value="{{ config.AI_COOLDOWN_MINUTES }}" min="5" max="1440">
+              <div class="form-text">Minimale rust na een uitgevoerde AI-trade</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Trading -->
+        <div class="card mb-4 card-live">
+          <div class="card-header" style="color:#f85149;">Live Trading</div>
+          <div class="card-body">
+            <div class="alert mb-3 p-2" style="background:rgba(248,81,73,.08); border:1px solid rgba(248,81,73,.3); font-size:.82rem; color:#e6edf3;">
+              ⚠️ Echte orders met echt geld. Controleer of je Bitvavo API-sleutel
+              <strong>Handelen</strong> rechten heeft (maar <strong>geen</strong> Opnemen).
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Max order grootte (EUR)</label>
+              <div class="input-group">
+                <span class="input-group-text" style="cursor:default;">€</span>
+                <input type="number" class="form-control" name="MAX_TRADE_EUR"
+                       value="{{ config.MAX_TRADE_EUR }}" min="5" step="5">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Max totale blootstelling (EUR)</label>
+              <div class="input-group">
+                <span class="input-group-text" style="cursor:default;">€</span>
+                <input type="number" class="form-control" name="MAX_EXPOSURE_EUR"
+                       value="{{ config.MAX_EXPOSURE_EUR }}" min="10" step="10">
+              </div>
+              <div class="form-text">Stop met kopen als open posities dit bedrag overschrijden</div>
+            </div>
+            <div>
+              <label class="form-label">Dagelijks verlies limiet (EUR)</label>
+              <div class="input-group">
+                <span class="input-group-text" style="cursor:default;">€</span>
+                <input type="number" class="form-control" name="DAILY_LOSS_LIMIT_EUR"
+                       value="{{ config.DAILY_LOSS_LIMIT_EUR }}" min="10" step="10">
+              </div>
+              <div class="form-text">Bot stopt met traden als dit dagverlies bereikt wordt</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MQTT -->
+        <div class="card mb-4">
+          <div class="card-header">MQTT (Home Assistant)</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label">Host</label>
+              <input type="text" class="form-control" name="MQTT_HOST"
+                     value="{{ config.MQTT_HOST }}" placeholder="Leeg = MQTT uitgeschakeld">
+            </div>
+            <div class="row g-2 mb-3">
+              <div class="col-5">
+                <label class="form-label">Poort</label>
+                <input type="number" class="form-control" name="MQTT_PORT"
+                       value="{{ config.MQTT_PORT }}" min="1" max="65535">
+              </div>
+              <div class="col-7">
+                <label class="form-label">Topic prefix</label>
+                <input type="text" class="form-control" name="MQTT_PREFIX"
+                       value="{{ config.MQTT_PREFIX }}">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Gebruikersnaam</label>
+              <input type="text" class="form-control" name="MQTT_USER"
+                     value="{{ config.MQTT_USER }}" autocomplete="off">
+            </div>
+            <div>
+              <label class="form-label">Wachtwoord</label>
+              <div class="input-group">
+                <input type="password" class="form-control" name="MQTT_PASS"
+                       placeholder="{{ '●●●●●●●● (ingesteld)' if config.MQTT_PASS else 'Laat leeg om ongewijzigd te laten' }}">
+                <span class="input-group-text toggle-pw">Toon</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg w-100 py-3" style="font-size:1.1rem;">
+      Opslaan
+    </button>
+
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // ── Show/hide password fields ──
+  document.querySelectorAll('.toggle-pw').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const inp = btn.previousElementSibling;
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+      btn.textContent = inp.type === 'password' ? 'Toon' : 'Verberg';
+    });
+  });
+
+  // ── Live/Paper toggle label ──
+  const liveToggle = document.getElementById('live_toggle');
+  const colTrading  = document.getElementById('col-trading');
+  const tradingName = document.getElementById('trading-name');
+  const tradingDesc = document.getElementById('trading-desc');
+
+  function updateTrading() {
+    const live = liveToggle.checked;
+    colTrading.className = 'mode-col ' + (live ? 'mode-col-live' : 'mode-col-paper');
+    tradingName.textContent = live ? 'LIVE TRADING'  : 'PAPER TRADING';
+    tradingName.style.color = live ? '#f85149'       : '#3fb950';
+    tradingDesc.textContent = live ? 'Echte orders op Bitvavo' : 'Virtueel geld, geen risico';
+  }
+  liveToggle.addEventListener('change', updateTrading);
+
+  // ── AI/Regel toggle label ──
+  const aiToggle    = document.getElementById('ai_toggle');
+  const colStrategy  = document.getElementById('col-strategy');
+  const strategyName = document.getElementById('strategy-name');
+  const strategyDesc = document.getElementById('strategy-desc');
+
+  function updateStrategy() {
+    const ai = aiToggle.checked;
+    colStrategy.className = 'mode-col ' + (ai ? 'mode-col-ai' : 'mode-col-regel');
+    strategyName.textContent = ai ? 'CLAUDE AI'                     : 'REGEL-GEBASEERD';
+    strategyName.style.color = ai ? '#58a6ff'                       : '#8b949e';
+    strategyDesc.textContent = ai ? 'claude-opus-4-7 analyseert markt' : 'MA crossover + RSI regels';
+  }
+  aiToggle.addEventListener('change', updateStrategy);
+</script>
+</body>
+</html>
