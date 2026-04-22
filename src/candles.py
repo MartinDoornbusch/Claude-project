@@ -3,19 +3,16 @@
 from __future__ import annotations
 
 import pandas as pd
-import pandas_ta as ta
+import ta.trend as ta_trend
+import ta.momentum as ta_momentum
+import ta.volatility as ta_volatility
 from python_bitvavo_api.bitvavo import Bitvavo
 
-# Bitvavo interval opties: 1m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d
 DEFAULT_INTERVAL = "1h"
 DEFAULT_LIMIT = 200
 
 
 def get_candles(client: Bitvavo, market: str, interval: str = DEFAULT_INTERVAL, limit: int = DEFAULT_LIMIT) -> pd.DataFrame:
-    """
-    Haal OHLCV candles op en retourneer als DataFrame.
-    Kolommen: timestamp, open, high, low, close, volume
-    """
     result = client.candles(market, interval, {"limit": limit})
 
     if isinstance(result, dict) and "error" in result:
@@ -32,37 +29,27 @@ def get_candles(client: Bitvavo, market: str, interval: str = DEFAULT_INTERVAL, 
 
 
 def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Voeg basis technische indicatoren toe aan een candle DataFrame.
-    - SMA 20 en SMA 50  (trend)
-    - RSI 14            (momentum / overbought-oversold)
-    - MACD              (trendkracht)
-    - Bollinger Bands   (volatiliteit)
-    """
     df = df.copy()
+    close = df["close"]
 
-    df["sma_20"] = ta.sma(df["close"], length=20)
-    df["sma_50"] = ta.sma(df["close"], length=50)
+    df["sma_20"] = ta_trend.sma_indicator(close, window=20)
+    df["sma_50"] = ta_trend.sma_indicator(close, window=50)
+    df["rsi_14"] = ta_momentum.rsi(close, window=14)
 
-    df["rsi_14"] = ta.rsi(df["close"], length=14)
+    macd = ta_trend.MACD(close)
+    df["macd"] = macd.macd()
+    df["macd_signal"] = macd.macd_signal()
+    df["macd_hist"] = macd.macd_diff()
 
-    macd = ta.macd(df["close"])
-    if macd is not None:
-        df["macd"] = macd["MACD_12_26_9"]
-        df["macd_signal"] = macd["MACDs_12_26_9"]
-        df["macd_hist"] = macd["MACDh_12_26_9"]
-
-    bbands = ta.bbands(df["close"], length=20)
-    if bbands is not None:
-        df["bb_lower"] = bbands["BBL_20_2.0"]
-        df["bb_mid"] = bbands["BBM_20_2.0"]
-        df["bb_upper"] = bbands["BBU_20_2.0"]
+    bb = ta_volatility.BollingerBands(close, window=20, window_dev=2)
+    df["bb_lower"] = bb.bollinger_lband()
+    df["bb_mid"] = bb.bollinger_mavg()
+    df["bb_upper"] = bb.bollinger_hband()
 
     return df
 
 
 def latest_signals(df: pd.DataFrame) -> dict:
-    """Geef de meest recente indicator-waarden terug als dict."""
     last = df.iloc[-1]
     prev = df.iloc[-2] if len(df) > 1 else last
 
