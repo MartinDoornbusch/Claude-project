@@ -13,9 +13,10 @@ from apscheduler.triggers.interval import IntervalTrigger
 from src.bitvavo_client import get_client
 from src.candles import get_candles, latest_signals, add_indicators
 from src.database import init_db
-from src.paper_trader import buy, sell, portfolio_value
+from src.paper_trader import portfolio_value
 from src.strategy import evaluate
 from src.mqtt_publisher import publish_all
+from src.trade_manager import execute_buy, execute_sell, mode
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,7 @@ CHECK_MINUTES = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
 
 
 def run_cycle() -> None:
-    """Één cyclus: haal data op, evalueer, handel op papier, publiceer naar MQTT."""
-    logger.info("=== Cyclus gestart (%s) ===", ", ".join(MARKETS))
+    logger.info("=== Cyclus gestart [%s] (%s) ===", mode(), ", ".join(MARKETS))
     client = get_client()
     market_signals: dict[str, dict] = {}
     market_prices: dict[str, float] = {}
@@ -42,16 +42,16 @@ def run_cycle() -> None:
             market_prices[market] = sig["close"]
 
             if signal == "BUY":
-                buy(market, sig["close"], reason="Strategie: " + signal)
+                execute_buy(client, market, sig["close"], reason="MA crossover / RSI")
             elif signal == "SELL":
-                sell(market, sig["close"], reason="Strategie: " + signal)
+                execute_sell(client, market, sig["close"], reason="MA crossover / RSI")
 
         except Exception as exc:
             logger.error("[%s] Fout tijdens cyclus: %s", market, exc, exc_info=True)
 
     pf = portfolio_value(market_prices)
     logger.info(
-        "Portfolio: €%.2f cash + €%.2f posities = €%.2f totaal",
+        "Paper portfolio: €%.2f cash + €%.2f posities = €%.2f totaal",
         pf["cash_eur"],
         pf["total_eur"] - pf["cash_eur"],
         pf["total_eur"],
@@ -70,12 +70,20 @@ def start() -> None:
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    logger.info("Bot gestart | markten: %s | interval: %s | check: elke %d min",
-                ", ".join(MARKETS), INTERVAL, CHECK_MINUTES)
+    logger.info(
+        "Bot gestart | modus: %s | markten: %s | interval: %s | check: elke %d min",
+        mode(), ", ".join(MARKETS), INTERVAL, CHECK_MINUTES,
+    )
+
+    if mode() == "LIVE":
+        logger.warning("=" * 60)
+        logger.warning("  LIVE TRADING ACTIEF — ECHTE ORDERS WORDEN GEPLAATST")
+        logger.warning("  MAX_TRADE_EUR=%.2f  MAX_EXPOSURE_EUR=%.2f",
+                       float(os.getenv("MAX_TRADE_EUR", "25")),
+                       float(os.getenv("MAX_EXPOSURE_EUR", "100")))
+        logger.warning("=" * 60)
 
     init_db()
-
-    # Draai direct één keer bij opstarten
     run_cycle()
 
     scheduler = BlockingScheduler(timezone="Europe/Amsterdam")
