@@ -1,0 +1,84 @@
+title: Bitvavo Trading Bot
+views:
+  - title: Overzicht
+    path: bitvavo
+    icon: mdi:chart-line
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: stat
+            entity: sensor.bitvavo_portfolio_total
+            name: Portfolio Waarde
+            icon: mdi:wallet
+          - type: stat
+            entity: sensor.bitvavo_portfolio_cash
+            name: Cash
+            icon: mdi:cash
+
+      - type: horizontal-stack
+        cards:
+          - type: entity
+            entity: sensor.bitvavo_btc_eur_signal
+            name: BTC-EUR Signaal
+            icon: mdi:signal
+          - type: entity
+            entity: sensor.bitvavo_eth_eur_signal
+            name: ETH-EUR Signaal
+            icon: mdi:signal
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.bitvavo_btc_eur_rsi
+            name: BTC RSI
+            min: 0
+            max: 100
+            severity:
+              green: 30
+              yellow: 70
+              red: 85
+          - type: gauge
+            entity: sensor.bitvavo_eth_eur_rsi
+            name: ETH RSI
+            min: 0
+            max: 100
+            severity:
+              green: 30
+              yellow: 70
+              red: 85
+
+      - type: horizontal-stack
+        cards:
+          - type: stat
+            entity: sensor.bitvavo_btc_eur_price
+            name: BTC Prijs
+            icon: mdi:bitcoin
+          - type: stat
+            entity: sensor.bitvavo_eth_eur_price
+            name: ETH Prijs
+            icon: mdi:ethereum
+
+      - type: horizontal-stack
+        cards:
+          - type: stat
+            entity: sensor.bitvavo_btc_eur_pnl
+            name: BTC Paper PnL
+            icon: mdi:trending-up
+          - type: stat
+            entity: sensor.bitvavo_eth_eur_pnl
+            name: ETH Paper PnL
+            icon: mdi:trending-up
+
+      - type: history-graph
+        title: Portfolio Waarde (laatste 24u)
+        hours_to_show: 24
+        entities:
+          - entity: sensor.bitvavo_portfolio_total
+            name: Totaal
+
+      - type: history-graph
+        title: BTC Prijs
+        hours_to_show: 24
+        entities:
+          - entity: sensor.bitvavo_btc_eur_price
+            name: BTC-EUR

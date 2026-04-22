@@ -1,14 +1,18 @@
-"""Bitvavo AI Trading Bot — Fase 1 & 2."""
+"""Bitvavo AI Trading Bot."""
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from src.bitvavo_client import get_client
 from src.portfolio import get_portfolio_value_eur
 from src.candles import get_candles, add_indicators, latest_signals
-from src.database import init_db, get_paper_trades, get_latest_signals, get_cash, get_position
+from src.database import (
+    init_db, get_paper_trades, get_latest_signals,
+    get_cash, get_position, get_live_trades, get_daily_loss,
+)
 from src.paper_trader import portfolio_value
 
 
@@ -66,6 +70,14 @@ def cmd_run(_args) -> None:
     start()
 
 
+def cmd_web(args) -> None:
+    from src.web_dashboard import start
+    port = int(args.port)
+    print(f"\nWeb dashboard gestart op http://0.0.0.0:{port}")
+    print("Bereikbaar via http://192.168.178.80:{port} op je netwerk\n")
+    start(port=port)
+
+
 def cmd_paper_status(args) -> None:
     init_db()
     import os
@@ -111,6 +123,34 @@ def cmd_paper_status(args) -> None:
     print()
 
 
+def cmd_live_status(_args) -> None:
+    init_db()
+    live_enabled = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
+    markets = [m.strip() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",")]
+
+    print("\n=== Live trading status ===")
+    print(f"  Modus:              {'LIVE' if live_enabled else 'PAPER (live uitgeschakeld)'}")
+    print(f"  MAX_TRADE_EUR:      €{os.getenv('MAX_TRADE_EUR', '25')}")
+    print(f"  MAX_EXPOSURE_EUR:   €{os.getenv('MAX_EXPOSURE_EUR', '100')}")
+    print(f"  DAILY_LOSS_LIMIT:   €{os.getenv('DAILY_LOSS_LIMIT_EUR', '50')}")
+
+    print("\n=== Dagelijks verlies ===")
+    for market in markets:
+        loss = get_daily_loss(market)
+        print(f"  {market}: €{loss:+.2f}")
+
+    print("\n=== Laatste live orders ===")
+    trades = get_live_trades(limit=10)
+    if trades:
+        for t in trades:
+            print(f"  {t['ts'][:16]}  {t['market']}  {t['side']:<4}  "
+                  f"status: {t['status']:<8}  "
+                  f"prijs: €{t['price'] or 0:.4f}  €{t['eur_total'] or 0:.2f}")
+    else:
+        print("  Nog geen live orders geplaatst.")
+    print()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Bitvavo AI Trading Bot"
@@ -127,8 +167,12 @@ def main() -> None:
         help="Candle interval (standaard: 1h)"
     )
 
-    sub.add_parser("run", help="Start de paper trading bot (blijft draaien)")
+    sub.add_parser("run", help="Start de bot (paper of live, afhankelijk van .env)")
     sub.add_parser("status", help="Toon paper portfolio, signalen en trades")
+    sub.add_parser("live-status", help="Toon live trading status en orders")
+
+    web_parser = sub.add_parser("web", help="Start het web dashboard")
+    web_parser.add_argument("--port", default="5000", help="Poort (standaard: 5000)")
 
     args = parser.parse_args()
 
@@ -141,6 +185,10 @@ def main() -> None:
             cmd_run(args)
         elif args.command == "status":
             cmd_paper_status(args)
+        elif args.command == "live-status":
+            cmd_live_status(args)
+        elif args.command == "web":
+            cmd_web(args)
     except EnvironmentError as e:
         print(f"\nFout: {e}", file=sys.stderr)
         sys.exit(1)

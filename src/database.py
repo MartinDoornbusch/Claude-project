@@ -61,6 +61,36 @@ def init_db() -> None:
                 id          INTEGER PRIMARY KEY CHECK (id = 1),
                 eur         REAL NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS live_trades (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts          TEXT NOT NULL,
+                market      TEXT NOT NULL,
+                side        TEXT NOT NULL,
+                order_id    TEXT,
+                price       REAL,
+                amount      REAL,
+                eur_total   REAL,
+                status      TEXT NOT NULL DEFAULT 'pending',
+                reason      TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS daily_pnl (
+                date        TEXT NOT NULL,
+                market      TEXT NOT NULL,
+                realized_eur REAL NOT NULL DEFAULT 0,
+                PRIMARY KEY (date, market)
+            );
+
+            CREATE TABLE IF NOT EXISTS ai_decisions (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts          TEXT NOT NULL,
+                market      TEXT NOT NULL,
+                decision    TEXT NOT NULL,
+                confidence  REAL NOT NULL,
+                reasoning   TEXT,
+                executed    INTEGER NOT NULL DEFAULT 0
+            );
         """)
 
 
@@ -151,3 +181,102 @@ def get_paper_trades(market: str | None = None, limit: int = 50) -> list[dict]:
                 "SELECT * FROM paper_trades ORDER BY ts DESC LIMIT ?", (limit,)
             ).fetchall()
     return [dict(r) for r in rows]
+
+
+# --- Live trades ---
+
+def save_live_trade(
+    market: str, side: str, order_id: str | None,
+    price: float | None, amount: float | None,
+    eur_total: float | None, status: str = "pending", reason: str = ""
+) -> int:
+    with get_conn() as conn:
+        cur = conn.execute("""
+            INSERT INTO live_trades (ts, market, side, order_id, price, amount, eur_total, status, reason)
+            VALUES (?,?,?,?,?,?,?,?,?)
+        """, (
+            datetime.utcnow().isoformat(),
+            market, side, order_id, price, amount, eur_total, status, reason,
+        ))
+        return cur.lastrowid
+
+
+def update_live_trade(trade_id: int, price: float, amount: float, eur_total: float, status: str) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            UPDATE live_trades SET price=?, amount=?, eur_total=?, status=? WHERE id=?
+        """, (price, amount, eur_total, status, trade_id))
+
+
+def get_live_trades(market: str | None = None, limit: int = 50) -> list[dict]:
+    with get_conn() as conn:
+        if market:
+            rows = conn.execute(
+                "SELECT * FROM live_trades WHERE market=? ORDER BY ts DESC LIMIT ?",
+                (market, limit)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM live_trades ORDER BY ts DESC LIMIT ?", (limit,)
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_daily_loss(market: str) -> float:
+    today = datetime.utcnow().date().isoformat()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT realized_eur FROM daily_pnl WHERE date=? AND market=?",
+            (today, market)
+        ).fetchone()
+    return row["realized_eur"] if row else 0.0
+
+
+def add_daily_pnl(market: str, pnl_eur: float) -> None:
+    today = datetime.utcnow().date().isoformat()
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO daily_pnl (date, market, realized_eur) VALUES (?,?,?)
+            ON CONFLICT(date, market) DO UPDATE SET realized_eur = realized_eur + ?
+        """, (today, market, pnl_eur, pnl_eur))
+
+
+# --- AI decisions ---
+
+def save_ai_decision(
+    market: str, decision: str, confidence: float, reasoning: str, executed: bool = False
+) -> int:
+    with get_conn() as conn:
+        cur = conn.execute("""
+            INSERT INTO ai_decisions (ts, market, decision, confidence, reasoning, executed)
+            VALUES (?,?,?,?,?,?)
+        """, (
+            datetime.utcnow().isoformat(),
+            market, decision, confidence, reasoning, 1 if executed else 0,
+        ))
+        return cur.lastrowid
+
+
+def get_ai_decisions(market: str | None = None, limit: int = 20) -> list[dict]:
+    with get_conn() as conn:
+        if market:
+            rows = conn.execute(
+                "SELECT * FROM ai_decisions WHERE market=? ORDER BY ts DESC LIMIT ?",
+                (market, limit)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM ai_decisions ORDER BY ts DESC LIMIT ?", (limit,)
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_ai_decisions_today(market: str) -> int:
+    today = datetime.utcnow().date().isoformat()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM ai_decisions "
+            "WHERE market=? AND DATE(ts)=? AND executed=1",
+            (market, today)
+        ).fetchone()
+    return row["cnt"] if row else 0
