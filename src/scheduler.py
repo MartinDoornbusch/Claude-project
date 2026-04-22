@@ -12,9 +12,10 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from src.bitvavo_client import get_client
 from src.candles import get_candles, latest_signals, add_indicators
-from src.database import init_db
+from src.database import init_db, save_ai_decision
 from src.paper_trader import portfolio_value
 from src.strategy import evaluate
+from src.ai_strategy import AI_ENABLED, ai_evaluate
 from src.mqtt_publisher import publish_all
 from src.trade_manager import execute_buy, execute_sell, mode
 
@@ -36,15 +37,24 @@ def run_cycle() -> None:
             df = get_candles(client, market, INTERVAL, limit=200)
             df = add_indicators(df)
             sig = latest_signals(df)
-            signal = evaluate(market, INTERVAL, df)
+
+            if AI_ENABLED:
+                decision, confidence, reasoning = ai_evaluate(market, sig)
+                executed = decision in ("BUY", "SELL")
+                save_ai_decision(market, decision, confidence, reasoning, executed=executed)
+                signal = decision
+                reason = f"AI ({confidence:.0%}): {reasoning}"
+            else:
+                signal = evaluate(market, INTERVAL, df)
+                reason = "MA crossover / RSI"
 
             market_signals[market] = {**sig, "signal": signal}
             market_prices[market] = sig["close"]
 
             if signal == "BUY":
-                execute_buy(client, market, sig["close"], reason="MA crossover / RSI")
+                execute_buy(client, market, sig["close"], reason=reason)
             elif signal == "SELL":
-                execute_sell(client, market, sig["close"], reason="MA crossover / RSI")
+                execute_sell(client, market, sig["close"], reason=reason)
 
         except Exception as exc:
             logger.error("[%s] Fout tijdens cyclus: %s", market, exc, exc_info=True)
