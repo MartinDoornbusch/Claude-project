@@ -66,6 +66,14 @@ def cmd_run(_args) -> None:
     start()
 
 
+def cmd_web(args) -> None:
+    from src.web_dashboard import start
+    port = int(args.port)
+    print(f"\nWeb dashboard gestart op http://0.0.0.0:{port}")
+    print("Bereikbaar via http://192.168.178.80:{port} op je netwerk\n")
+    start(port=port)
+
+
 def cmd_paper_status(args) -> None:
     init_db()
     import os
@@ -130,6 +138,9 @@ def main() -> None:
     sub.add_parser("run", help="Start de paper trading bot (blijft draaien)")
     sub.add_parser("status", help="Toon paper portfolio, signalen en trades")
 
+    web_parser = sub.add_parser("web", help="Start het web dashboard")
+    web_parser.add_argument("--port", default="5000", help="Poort (standaard: 5000)")
+
     args = parser.parse_args()
 
     try:
@@ -141,6 +152,8 @@ def main() -> None:
             cmd_run(args)
         elif args.command == "status":
             cmd_paper_status(args)
+        elif args.command == "web":
+            cmd_web(args)
     except EnvironmentError as e:
         print(f"\nFout: {e}", file=sys.stderr)
         sys.exit(1)

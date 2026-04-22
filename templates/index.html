@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bitvavo Trading Bot</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    body { background: #0d1117; color: #e6edf3; }
+    .card { background: #161b22; border: 1px solid #30363d; }
+    .card-header { background: #21262d; border-bottom: 1px solid #30363d; font-weight: 600; }
+    .signal-BUY  { color: #3fb950; font-weight: 700; }
+    .signal-SELL { color: #f85149; font-weight: 700; }
+    .signal-HOLD { color: #8b949e; }
+    .pnl-pos { color: #3fb950; }
+    .pnl-neg { color: #f85149; }
+    .stat-value { font-size: 1.6rem; font-weight: 700; }
+    .stat-label { font-size: 0.8rem; color: #8b949e; text-transform: uppercase; letter-spacing: .05em; }
+    .rsi-bar { height: 6px; border-radius: 3px; background: #30363d; }
+    .rsi-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+    table { font-size: 0.88rem; }
+    thead th { color: #8b949e; font-weight: 500; border-color: #30363d; }
+    tbody td { border-color: #21262d; }
+    .navbar { background: #161b22 !important; border-bottom: 1px solid #30363d; }
+    .refresh-note { font-size: 0.75rem; color: #8b949e; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark px-3 mb-4">
+  <span class="navbar-brand fw-bold">Bitvavo Trading Bot</span>
+  <span class="refresh-note">Ververst elke 60s &nbsp;<span id="clock"></span></span>
+</nav>
+
+<div class="container-fluid px-3">
+
+  <!-- Portfolio samenvatting -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card p-3 text-center">
+        <div class="stat-label">Totaal</div>
+        <div class="stat-value">€{{ "%.2f"|format(portfolio.total_eur) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card p-3 text-center">
+        <div class="stat-label">Cash</div>
+        <div class="stat-value">€{{ "%.2f"|format(portfolio.cash_eur) }}</div>
+      </div>
+    </div>
+    {% for market, pos in portfolio.positions.items() %}
+    <div class="col-6 col-md-3">
+      <div class="card p-3 text-center">
+        <div class="stat-label">{{ market }} positie</div>
+        <div class="stat-value">€{{ "%.2f"|format(pos.eur_value) }}</div>
+        <div class="{% if pos.pnl >= 0 %}pnl-pos{% else %}pnl-neg{% endif %} small">
+          PnL: {{ "%+.2f"|format(pos.pnl) }} EUR
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Markt indicatoren -->
+  <div class="row g-3 mb-4">
+    {% for m in market_data %}
+    <div class="col-12 col-md-6">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>{{ m.market }}</span>
+          <span class="signal-{{ m.signal }}">{{ m.signal }}</span>
+        </div>
+        <div class="card-body">
+          <div class="row text-center mb-3">
+            <div class="col-4">
+              <div class="stat-label">Prijs</div>
+              <div class="fw-bold">{% if m.price %}€{{ "%.2f"|format(m.price) }}{% else %}—{% endif %}</div>
+            </div>
+            <div class="col-4">
+              <div class="stat-label">SMA 20</div>
+              <div class="fw-bold">{% if m.sma_20 %}€{{ "%.2f"|format(m.sma_20) }}{% else %}—{% endif %}</div>
+            </div>
+            <div class="col-4">
+              <div class="stat-label">SMA 50</div>
+              <div class="fw-bold">{% if m.sma_50 %}€{{ "%.2f"|format(m.sma_50) }}{% else %}—{% endif %}</div>
+            </div>
+          </div>
+          {% if m.rsi %}
+          <div class="mb-1 d-flex justify-content-between">
+            <small class="stat-label">RSI 14</small>
+            <small class="fw-bold {% if m.rsi > 70 %}pnl-neg{% elif m.rsi < 30 %}pnl-pos{% endif %}">
+              {{ "%.1f"|format(m.rsi) }}
+              {% if m.rsi > 70 %} · Overbought{% elif m.rsi < 30 %} · Oversold{% endif %}
+            </small>
+          </div>
+          <div class="rsi-bar">
+            <div class="rsi-fill {% if m.rsi > 70 %}bg-danger{% elif m.rsi < 30 %}bg-success{% else %}bg-primary{% endif %}"
+                 style="width: {{ m.rsi }}%"></div>
+          </div>
+          {% endif %}
+          <canvas id="chart-{{ loop.index }}" height="80" class="mt-3"></canvas>
+        </div>
+        <div class="card-footer text-end refresh-note">{{ m.ts[:16] if m.ts != '—' else '—' }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Trades tabel -->
+  <div class="card mb-4">
+    <div class="card-header">Laatste paper trades</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-dark table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Tijd</th><th>Markt</th><th>Side</th>
+              <th class="text-end">Prijs</th><th class="text-end">Bedrag</th><th class="text-end">EUR</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in trades %}
+            <tr>
+              <td>{{ t.ts[:16] }}</td>
+              <td>{{ t.market }}</td>
+              <td class="signal-{{ t.side }}">{{ t.side }}</td>
+              <td class="text-end">€{{ "%.4f"|format(t.price) }}</td>
+              <td class="text-end">{{ "%.6f"|format(t.amount) }}</td>
+              <td class="text-end">€{{ "%.2f"|format(t.eur_total) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-center text-muted py-3">Nog geen trades</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Klok
+  function updateClock() {
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('nl-NL');
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // Auto-refresh pagina
+  setTimeout(() => location.reload(), 60000);
+
+  // RSI grafieken per markt
+  const markets = {{ markets | tojson }};
+  markets.forEach((market, i) => {
+    const canvas = document.getElementById('chart-' + (i + 1));
+    if (!canvas) return;
+    fetch('/api/signals/' + market)
+      .then(r => r.json())
+      .then(data => {
+        const reversed = data.slice().reverse();
+        const labels = reversed.map(d => d.ts ? d.ts.slice(11, 16) : '');
+        const prices = reversed.map(d => d.close);
+        const sma20  = reversed.map(d => d.sma_20);
+        const sma50  = reversed.map(d => d.sma_50);
+
+        new Chart(canvas, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              { label: 'Prijs', data: prices, borderColor: '#58a6ff', borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
+              { label: 'SMA 20', data: sma20, borderColor: '#f0883e', borderWidth: 1, pointRadius: 0, borderDash: [4,2], tension: 0.3 },
+              { label: 'SMA 50', data: sma50, borderColor: '#bc8cff', borderWidth: 1, pointRadius: 0, borderDash: [4,2], tension: 0.3 },
+            ]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#8b949e', boxWidth: 12, font: { size: 11 } } } },
+            scales: {
+              x: { ticks: { color: '#8b949e', maxTicksLimit: 8, font: { size: 10 } }, grid: { color: '#21262d' } },
+              y: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21262d' } }
+            }
+          }
+        });
+      })
+      .catch(() => {});
+  });
+</script>
+</body>
+</html>
