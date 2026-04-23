@@ -55,10 +55,20 @@ def index():
     except Exception:
         pf = {"cash_eur": 0, "total_eur": 0, "positions": {}}
 
-    market_data = _build_market_data()
-    trades = get_paper_trades(limit=20)
+    try:
+        market_data = _build_market_data()
+    except Exception:
+        market_data = []
 
-    ai_decisions = get_ai_decisions(limit=10) if AI_ENABLED else []
+    try:
+        trades = get_paper_trades(limit=20)
+    except Exception:
+        trades = []
+
+    try:
+        ai_decisions = get_ai_decisions(limit=10) if AI_ENABLED else []
+    except Exception:
+        ai_decisions = []
 
     return render_template(
         "index.html",

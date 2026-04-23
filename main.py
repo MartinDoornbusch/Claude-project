@@ -72,9 +72,10 @@ def cmd_run(_args) -> None:
 
 def cmd_web(args) -> None:
     from src.web_dashboard import start
+    init_db()
     port = int(args.port)
     print(f"\nWeb dashboard gestart op http://0.0.0.0:{port}")
-    print("Bereikbaar via http://192.168.178.80:{port} op je netwerk\n")
+    print(f"Bereikbaar via http://192.168.178.80:{port} op je netwerk\n")
     start(port=port)
 
 
