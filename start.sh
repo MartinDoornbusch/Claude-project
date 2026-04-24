@@ -1,6 +1,6 @@
 #!/bin/sh
 # Startscript voor de Bitvavo trading bot op Home Assistant OS (Alpine Linux).
-# Python en venv worden automatisch opgebouwd; de venv in /config/ blijft bewaard.
+# Draait de scheduler (run) in de achtergrond en het web dashboard op de voorgrond.
 cd /config/bitvavo-bot
 
 # Python 3 ontbreekt na herstart van de Terminal & SSH add-on — installeer opnieuw.
@@ -19,6 +19,14 @@ if [ "$REINSTALLED" = "1" ] || [ ! -f venv/bin/activate ]; then
     venv/bin/pip install --quiet -r requirements.txt
 fi
 
-echo "[start.sh] Bot starten..."
 . venv/bin/activate
-exec python3 main.py bot
+
+echo "[start.sh] Trading bot starten (achtergrond)..."
+python3 main.py run &
+BOT_PID=$!
+
+# Zorg dat de bot ook stopt als het dashboard wordt afgesloten.
+trap "kill $BOT_PID 2>/dev/null; exit 0" INT TERM EXIT
+
+echo "[start.sh] Web dashboard starten op poort 5000..."
+exec python3 main.py web
