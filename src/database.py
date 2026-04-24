@@ -104,6 +104,31 @@ def init_db() -> None:
                 volume_eur      REAL,
                 last_scanned    TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts        TEXT NOT NULL,
+                cash_eur  REAL NOT NULL,
+                pos_eur   REAL NOT NULL,
+                total_eur REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS backtest_runs (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts          TEXT NOT NULL,
+                market      TEXT NOT NULL,
+                interval    TEXT NOT NULL,
+                sma_short   INTEGER,
+                sma_long    INTEGER,
+                rsi_buy     REAL,
+                rsi_sell    REAL,
+                capital     REAL,
+                return_pct  REAL,
+                sharpe      REAL,
+                max_dd      REAL,
+                win_rate    REAL,
+                num_trades  INTEGER
+            );
         """)
 
 
@@ -338,6 +363,61 @@ def upsert_market_stats(market: str, price: float, change_24h: float, volume_eur
         """, (market, price, change_24h, volume_eur, now))
 
 
+# --- Analytics & AI context helpers ---
+
+def get_last_buy_ts(market: str) -> str | None:
+    """Tijdstip van de meest recente BUY paper trade voor deze markt."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT ts FROM paper_trades WHERE market=? AND side='BUY' ORDER BY ts DESC LIMIT 1",
+            (market,)
+        ).fetchone()
+    return row["ts"] if row else None
+
+
+def get_recent_trade_pairs(market: str, limit: int = 5) -> list[dict]:
+    """
+    Retourneert de laatste N afgesloten BUY→SELL paren voor deze markt.
+    Gebruikt FIFO-matching op chronologische volgorde.
+    """
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM paper_trades WHERE market=? ORDER BY ts ASC",
+            (market,)
+        ).fetchall()
+
+    trades = [dict(r) for r in rows]
+    open_buys: list[dict] = []
+    pairs: list[dict] = []
+
+    for t in trades:
+        if t["side"] == "BUY":
+            open_buys.append(t)
+        elif t["side"] == "SELL" and open_buys:
+            buy = open_buys.pop(0)
+            pnl_eur = t["eur_total"] - buy["eur_total"]
+            pnl_pct = (t["price"] - buy["price"]) / buy["price"] * 100 if buy["price"] else 0
+            pairs.append({
+                "buy_ts":    buy["ts"],
+                "sell_ts":   t["ts"],
+                "buy_price": buy["price"],
+                "sell_price": t["price"],
+                "pnl_eur":   round(pnl_eur, 4),
+                "pnl_pct":   round(pnl_pct, 2),
+            })
+
+    return pairs[-limit:]
+
+
+def get_market_change_24h(market: str) -> float | None:
+    """24u prijsverandering (%) uit de market_watchlist, of None als onbekend."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT change_24h FROM market_watchlist WHERE market=?", (market,)
+        ).fetchone()
+    return row["change_24h"] if row else None
+
+
 # --- Analytics ---
 
 def get_all_paper_trades_asc(market: str | None = None) -> list[dict]:
@@ -362,6 +442,41 @@ def get_daily_pnl_series() -> list[dict]:
             "SELECT date, SUM(realized_eur) AS pnl FROM daily_pnl GROUP BY date ORDER BY date ASC"
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def save_portfolio_snapshot(cash_eur: float, pos_eur: float, total_eur: float) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO portfolio_snapshots (ts, cash_eur, pos_eur, total_eur) VALUES (?,?,?,?)",
+            (datetime.utcnow().isoformat(), cash_eur, pos_eur, total_eur)
+        )
+
+
+def get_portfolio_snapshots(limit: int = 200) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM portfolio_snapshots ORDER BY ts DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in reversed(rows)]
+
+
+def save_backtest_run(
+    market: str, interval: str, sma_short: int, sma_long: int,
+    rsi_buy: float, rsi_sell: float, capital: float,
+    return_pct: float, sharpe: float | None, max_dd: float,
+    win_rate: float, num_trades: int,
+) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO backtest_runs
+              (ts, market, interval, sma_short, sma_long, rsi_buy, rsi_sell,
+               capital, return_pct, sharpe, max_dd, win_rate, num_trades)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            datetime.utcnow().isoformat(),
+            market, interval, sma_short, sma_long, rsi_buy, rsi_sell,
+            capital, return_pct, sharpe, max_dd, win_rate, num_trades,
+        ))
 
 
 def save_market_advice(market: str, recommended: bool, confidence: float | None, reasoning: str) -> None:

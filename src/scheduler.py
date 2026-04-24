@@ -12,7 +12,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from src.bitvavo_client import get_client
 from src.candles import get_candles, latest_signals, add_indicators, get_atr_fraction
-from src.database import init_db, save_ai_decision, get_enabled_markets
+from src.database import init_db, save_ai_decision, get_enabled_markets, save_portfolio_snapshot
 from src.paper_trader import portfolio_value, TRADE_FRACTION
 from src.strategy import evaluate
 from src.ai_strategy import AI_ENABLED, ai_evaluate
@@ -98,6 +98,15 @@ def run_cycle() -> None:
         pf["total_eur"] - pf["cash_eur"],
         pf["total_eur"],
     )
+
+    try:
+        save_portfolio_snapshot(
+            cash_eur=pf["cash_eur"],
+            pos_eur=pf["total_eur"] - pf["cash_eur"],
+            total_eur=pf["total_eur"],
+        )
+    except Exception:
+        pass
 
     try:
         publish_all(pf, market_signals)

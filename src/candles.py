@@ -134,6 +134,12 @@ def latest_signals(df: pd.DataFrame) -> dict:
     ts = last.get("timestamp")
     ts_str = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
 
+    volume     = float(last["volume"]) if pd.notna(last.get("volume")) else None
+    vol_avg_20 = float(df["volume"].tail(20).mean()) if len(df) >= 20 else None
+    atr_14     = float(last["atr_14"]) if pd.notna(last.get("atr_14")) else None
+    macd_hist  = float(last["macd_hist"]) if pd.notna(last.get("macd_hist")) else None
+    macd_hist_prev = float(df.iloc[-2]["macd_hist"]) if len(df) > 1 and pd.notna(df.iloc[-2].get("macd_hist")) else None
+
     return {
         "ts": ts_str,
         "close": last["close"],
@@ -142,7 +148,12 @@ def latest_signals(df: pd.DataFrame) -> dict:
         "rsi_14": last.get("rsi_14"),
         "macd": last.get("macd"),
         "macd_signal": last.get("macd_signal"),
+        "macd_hist": macd_hist,
+        "macd_hist_prev": macd_hist_prev,
         "bb_lower": last.get("bb_lower"),
         "bb_upper": last.get("bb_upper"),
         "ma_cross": ma_cross,
+        "volume": volume,
+        "volume_avg_20": vol_avg_20,
+        "atr_14": atr_14,
     }

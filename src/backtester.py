@@ -142,7 +142,7 @@ def run_backtest(
         if sell_reason and pos_amount > 0:
             gross = pos_amount * price
             net   = gross * (1 - FEE_RATE)
-            pnl   = net - (pos_amount * pos_price)
+            pnl   = net - (pos_amount * pos_price / (1 - FEE_RATE))
             cash += net
             if open_trade:
                 open_trade.sell_ts    = ts
@@ -169,7 +169,7 @@ def run_backtest(
         last_price = float(rows[-1]["close"])
         gross = pos_amount * last_price
         net   = gross * (1 - FEE_RATE)
-        pnl   = net - (pos_amount * pos_price)
+        pnl   = net - (pos_amount * pos_price / (1 - FEE_RATE))
         cash += net
         if open_trade:
             open_trade.sell_ts     = str(rows[-1].get("timestamp", "—"))
