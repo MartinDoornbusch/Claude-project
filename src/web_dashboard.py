@@ -20,6 +20,14 @@ from src.config_manager import read_config, write_config, config_from_form
 
 app = Flask(__name__, template_folder="../templates")
 
+
+@app.after_request
+def allow_iframe(response):
+    """Sta embedding in HA dashboard iframe toe."""
+    response.headers.pop("X-Frame-Options", None)
+    response.headers["Content-Security-Policy"] = "frame-ancestors *"
+    return response
+
 _ENV_MARKETS = [m.strip() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",")]
 
 
