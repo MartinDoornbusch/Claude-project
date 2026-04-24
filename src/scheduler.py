@@ -11,9 +11,9 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from src.bitvavo_client import get_client
-from src.candles import get_candles, latest_signals, add_indicators
+from src.candles import get_candles, latest_signals, add_indicators, get_atr_fraction
 from src.database import init_db, save_ai_decision, get_enabled_markets
-from src.paper_trader import portfolio_value
+from src.paper_trader import portfolio_value, TRADE_FRACTION
 from src.strategy import evaluate
 from src.ai_strategy import AI_ENABLED, ai_evaluate
 from src.mqtt_publisher import publish_all
@@ -21,9 +21,11 @@ from src.trade_manager import execute_buy, execute_sell, check_sl_tp, mode
 
 logger = logging.getLogger(__name__)
 
-INTERVAL = os.getenv("CANDLE_INTERVAL", "1h")
-CHECK_MINUTES = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
-_ENV_MARKETS = [m.strip() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",")]
+INTERVAL       = os.getenv("CANDLE_INTERVAL", "1h")
+CHECK_MINUTES  = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
+VOL_SIZING     = os.getenv("VOL_SIZING_ENABLED", "false").lower() == "true"
+CORR_CHECK     = os.getenv("CORR_CHECK_ENABLED", "false").lower() == "true"
+_ENV_MARKETS   = [m.strip() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",")]
 
 
 def _active_markets() -> list[str]:
@@ -68,7 +70,21 @@ def run_cycle() -> None:
             # Sla strategie-signal over als SL/TP al heeft verkocht
             if not sl_tp_triggered:
                 if signal == "BUY":
-                    execute_buy(client, market, current_price, reason=reason)
+                    # Correlatie-check: voorkom dubbele blootstelling
+                    if CORR_CHECK:
+                        from src.correlation import has_correlated_position
+                        blocked, corr_market = has_correlated_position(client, market, markets)
+                        if blocked:
+                            logger.info(
+                                "[%s] BUY geblokkeerd: gecorreleerde positie open in %s",
+                                market, corr_market,
+                            )
+                            signal = "HOLD"
+
+                    if signal == "BUY":
+                        # Volatiliteits-gebaseerde positiegroottes
+                        fraction = get_atr_fraction(df, TRADE_FRACTION) if VOL_SIZING else None
+                        execute_buy(client, market, current_price, reason=reason, fraction=fraction)
                 elif signal == "SELL":
                     execute_sell(client, market, current_price, reason=reason)
 

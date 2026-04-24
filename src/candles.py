@@ -46,7 +46,42 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["bb_mid"] = bb.bollinger_mavg()
     df["bb_upper"] = bb.bollinger_hband()
 
+    atr = ta_volatility.AverageTrueRange(df["high"], df["low"], close, window=14)
+    df["atr_14"] = atr.average_true_range()
+
     return df
+
+
+def add_indicators_custom(
+    df: pd.DataFrame,
+    sma_short: int = 20,
+    sma_long: int = 50,
+    rsi_window: int = 14,
+) -> pd.DataFrame:
+    """Berekent indicators met aangepaste venstergroottes (voor optimizer/backtester)."""
+    df = df.copy()
+    close = df["close"]
+    df["sma_short"] = ta_trend.sma_indicator(close, window=sma_short)
+    df["sma_long"]  = ta_trend.sma_indicator(close, window=sma_long)
+    df["rsi_14"]    = ta_momentum.rsi(close, window=rsi_window)
+    return df
+
+
+def get_atr_fraction(df: pd.DataFrame, base_fraction: float = 0.95, target_vol_pct: float = 2.0) -> float:
+    """
+    Berekent een volatiliteits-aangepaste positiefractie op basis van ATR.
+    Bij hoge volatiliteit kleiner inzetten, bij lage volatiliteit tot base_fraction.
+    """
+    last = df.iloc[-1]
+    atr   = last.get("atr_14")
+    price = float(last["close"])
+    if atr is None or pd.isna(atr) or price <= 0:
+        return base_fraction
+    atr_pct = float(atr) / price * 100
+    if atr_pct <= 0:
+        return base_fraction
+    fraction = base_fraction * (target_vol_pct / atr_pct)
+    return round(min(max(fraction, 0.2), base_fraction), 3)
 
 
 _HTF_MAP: dict[str, str] = {

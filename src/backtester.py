@@ -8,7 +8,7 @@ from typing import Optional
 
 import pandas as pd
 
-from src.candles import add_indicators
+from src.candles import add_indicators_custom
 
 FEE_RATE = 0.0025  # Bitvavo taker fee
 
@@ -47,23 +47,23 @@ class BacktestResult:
     timestamps: list[str] = field(default_factory=list)
 
 
-def _signal(prev: dict, curr: dict) -> tuple[str, str]:
+def _signal(prev: dict, curr: dict, rsi_buy: float = 25.0, rsi_sell: float = 75.0) -> tuple[str, str]:
     """Retourneert (signal, reason) op basis van twee opeenvolgende candle-rijen."""
-    s20p = prev.get("sma_20")
-    s50p = prev.get("sma_50")
-    s20c = curr.get("sma_20")
-    s50c = curr.get("sma_50")
-    rsi  = curr.get("rsi_14")
+    sp = prev.get("sma_short")
+    lp = prev.get("sma_long")
+    sc = curr.get("sma_short")
+    lc = curr.get("sma_long")
+    rsi = curr.get("rsi_14")
 
-    if None in (s20p, s50p, s20c, s50c):
+    if None in (sp, lp, sc, lc):
         return "HOLD", ""
-    if s20p < s50p and s20c > s50c:
+    if sp < lp and sc > lc:
         return "BUY",  "Golden cross"
-    if s20p > s50p and s20c < s50c:
+    if sp > lp and sc < lc:
         return "SELL", "Death cross"
-    if rsi is not None and rsi > 75:
+    if rsi is not None and rsi > rsi_sell:
         return "SELL", f"RSI overbought ({rsi:.1f})"
-    if rsi is not None and rsi < 25:
+    if rsi is not None and rsi < rsi_buy:
         return "BUY",  f"RSI oversold ({rsi:.1f})"
     return "HOLD", ""
 
@@ -76,6 +76,11 @@ def run_backtest(
     trade_fraction: float = 0.95,
     stop_loss_pct: float | None = None,
     take_profit_pct: float | None = None,
+    sma_short: int = 20,
+    sma_long: int = 50,
+    rsi_window: int = 14,
+    rsi_buy: float = 25.0,
+    rsi_sell: float = 75.0,
 ) -> BacktestResult:
     """
     Simuleert de strategie op historische data.
@@ -88,8 +93,15 @@ def run_backtest(
         trade_fraction:   Deel van cash per BUY (0.95 = 95%).
         stop_loss_pct:    Optionele stop-loss als negatief percentage, bijv. -5.0.
         take_profit_pct:  Optionele take-profit als positief percentage, bijv. 10.0.
+        sma_short:        Korte SMA venster (default 20).
+        sma_long:         Lange SMA venster (default 50).
+        rsi_window:       RSI venster (default 14).
+        rsi_buy:          RSI oversold drempel voor BUY (default 25).
+        rsi_sell:         RSI overbought drempel voor SELL (default 75).
     """
-    df = add_indicators(df.copy()).dropna(subset=["sma_20", "sma_50"]).reset_index(drop=True)
+    df = add_indicators_custom(
+        df.copy(), sma_short=sma_short, sma_long=sma_long, rsi_window=rsi_window
+    ).dropna(subset=["sma_short", "sma_long"]).reset_index(drop=True)
 
     if len(df) < 2:
         raise ValueError(f"Te weinig candles voor backtesting: {len(df)} (min. 52 nodig)")
@@ -122,7 +134,7 @@ def run_backtest(
                 sell_reason = f"Take-profit ({chg_pct:.1f}%)"
 
         # ── Strategy signal ──
-        sig, sig_reason = _signal(prev, curr)
+        sig, sig_reason = _signal(prev, curr, rsi_buy=rsi_buy, rsi_sell=rsi_sell)
         if not sell_reason and sig == "SELL" and pos_amount > 0:
             sell_reason = sig_reason
 

@@ -208,6 +208,35 @@ def api_markets_toggle():
         return jsonify({"ok": False, "error": str(e)}), 400
 
 
+@app.route("/optimize")
+def optimize_page():
+    markets = _dashboard_markets()
+    return render_template("optimize.html", markets=markets)
+
+
+@app.route("/api/optimize", methods=["POST"])
+def api_optimize():
+    try:
+        from src.optimizer import run_optimization
+        from src.candles import get_candles
+
+        data     = request.get_json()
+        market   = str(data.get("market", "BTC-EUR")).upper()
+        interval = str(data.get("interval", "1h"))
+        limit    = int(data.get("limit", 500))
+        capital  = float(data.get("capital", 1000.0))
+
+        client = get_client()
+        df = get_candles(client, market, interval, limit=limit)
+        if df is None or df.empty:
+            return jsonify({"error": f"Geen candle-data voor {market}"}), 400
+
+        results = run_optimization(df, market, interval, capital=capital)
+        return jsonify({"results": results, "total": len(results)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/analytics")
 def analytics_page():
     markets = _dashboard_markets()
