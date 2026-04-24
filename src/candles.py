@@ -49,6 +49,42 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+_HTF_MAP: dict[str, str] = {
+    "1m": "15m", "5m": "1h", "15m": "4h", "30m": "4h",
+    "1h": "1d", "2h": "1d", "4h": "1d", "6h": "1d",
+    "8h": "1d", "12h": "1d", "1d": "1d",
+}
+
+
+def get_higher_timeframe(interval: str) -> str:
+    """Retourneert een hoger timeframe voor trendbevestiging."""
+    return _HTF_MAP.get(interval, "1d")
+
+
+def get_htf_trend(client: Bitvavo, market: str, interval: str) -> str:
+    """
+    Bepaalt de trendrichting op het hogere timeframe.
+    Geeft 'UP', 'DOWN' of 'NEUTRAL' terug.
+    """
+    htf = get_higher_timeframe(interval)
+    if htf == interval:
+        return "NEUTRAL"
+    try:
+        df = get_candles(client, market, htf, limit=60)
+        df = add_indicators(df)
+        last = df.iloc[-1]
+        sma20 = last.get("sma_20")
+        sma50 = last.get("sma_50")
+        if pd.notna(sma20) and pd.notna(sma50):
+            if sma20 > sma50:
+                return "UP"
+            elif sma20 < sma50:
+                return "DOWN"
+    except Exception:
+        pass
+    return "NEUTRAL"
+
+
 def latest_signals(df: pd.DataFrame) -> dict:
     last = df.iloc[-1]
     prev = df.iloc[-2] if len(df) > 1 else last
@@ -60,7 +96,11 @@ def latest_signals(df: pd.DataFrame) -> dict:
         elif prev["sma_20"] > prev["sma_50"] and last["sma_20"] <= last["sma_50"]:
             ma_cross = "death_cross"
 
+    ts = last.get("timestamp")
+    ts_str = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+
     return {
+        "ts": ts_str,
         "close": last["close"],
         "sma_20": last.get("sma_20"),
         "sma_50": last.get("sma_50"),

@@ -338,6 +338,32 @@ def upsert_market_stats(market: str, price: float, change_24h: float, volume_eur
         """, (market, price, change_24h, volume_eur, now))
 
 
+# --- Analytics ---
+
+def get_all_paper_trades_asc(market: str | None = None) -> list[dict]:
+    """Alle paper trades chronologisch, voor PnL-pairing."""
+    with get_conn() as conn:
+        if market:
+            rows = conn.execute(
+                "SELECT * FROM paper_trades WHERE market=? ORDER BY ts ASC",
+                (market,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM paper_trades ORDER BY ts ASC"
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_daily_pnl_series() -> list[dict]:
+    """Geaggregeerde daily PnL uit de daily_pnl tabel."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT date, SUM(realized_eur) AS pnl FROM daily_pnl GROUP BY date ORDER BY date ASC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def save_market_advice(market: str, recommended: bool, confidence: float | None, reasoning: str) -> None:
     now = datetime.utcnow().isoformat()
     with get_conn() as conn:

@@ -10,6 +10,7 @@ from flask import Flask, render_template, jsonify, request, redirect, url_for
 from src.database import (
     get_latest_signals, get_paper_trades, get_cash, get_position, get_ai_decisions,
     get_watchlist, get_enabled_markets, set_market_enabled, upsert_market_stats, save_market_advice,
+    get_all_paper_trades_asc, get_daily_pnl_series,
 )
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
@@ -205,6 +206,119 @@ def api_markets_toggle():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.route("/analytics")
+def analytics_page():
+    markets = _dashboard_markets()
+    return render_template("analytics.html", markets=markets)
+
+
+@app.route("/api/analytics")
+def api_analytics():
+    """Berekent PnL-pairs uit paper trades voor de analytics pagina."""
+    try:
+        market = request.args.get("market")
+        trades = get_all_paper_trades_asc(market.upper() if market else None)
+        daily  = get_daily_pnl_series()
+
+        # Match BUY→SELL pairs per market (FIFO)
+        open_buys: dict[str, list] = {}
+        pairs = []
+        for t in trades:
+            m = t["market"]
+            if t["side"] == "BUY":
+                open_buys.setdefault(m, []).append(t)
+            elif t["side"] == "SELL" and open_buys.get(m):
+                buy = open_buys[m].pop(0)
+                pnl_eur = t["eur_total"] - buy["eur_total"]
+                pnl_pct = (t["price"] - buy["price"]) / buy["price"] * 100
+                pairs.append({
+                    "market":      m,
+                    "buy_ts":      buy["ts"],
+                    "sell_ts":     t["ts"],
+                    "buy_price":   buy["price"],
+                    "sell_price":  t["price"],
+                    "amount":      buy["amount"],
+                    "pnl_eur":     round(pnl_eur, 4),
+                    "pnl_pct":     round(pnl_pct, 3),
+                })
+
+        # Build cumulative equity from pairs (sorted by sell_ts)
+        pairs_sorted = sorted(pairs, key=lambda x: x["sell_ts"])
+        cum = 0.0
+        equity = []
+        for p in pairs_sorted:
+            cum += p["pnl_eur"]
+            equity.append({"ts": p["sell_ts"][:10], "cum_pnl": round(cum, 4)})
+
+        # Summary stats
+        total_pnl  = sum(p["pnl_eur"] for p in pairs)
+        wins       = [p for p in pairs if p["pnl_eur"] > 0]
+        losses     = [p for p in pairs if p["pnl_eur"] <= 0]
+        win_rate   = round(len(wins) / len(pairs) * 100, 1) if pairs else 0.0
+        avg_win    = round(sum(p["pnl_eur"] for p in wins) / len(wins), 2) if wins else 0.0
+        avg_loss   = round(sum(p["pnl_eur"] for p in losses) / len(losses), 2) if losses else 0.0
+
+        return jsonify({
+            "pairs":        pairs_sorted,
+            "equity":       equity,
+            "daily":        daily,
+            "total_pnl":    round(total_pnl, 4),
+            "num_trades":   len(pairs),
+            "num_wins":     len(wins),
+            "num_losses":   len(losses),
+            "win_rate_pct": win_rate,
+            "avg_win_eur":  avg_win,
+            "avg_loss_eur": avg_loss,
+            "best_trade":   round(max((p["pnl_eur"] for p in pairs), default=0), 2),
+            "worst_trade":  round(min((p["pnl_eur"] for p in pairs), default=0), 2),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/backtest")
+def backtest_page():
+    markets = _dashboard_markets()
+    return render_template("backtest.html", markets=markets)
+
+
+@app.route("/api/backtest", methods=["POST"])
+def api_backtest():
+    try:
+        from src.backtester import run_backtest
+        from src.candles import get_candles
+        import dataclasses
+
+        data = request.get_json()
+        market   = str(data.get("market", "BTC-EUR")).upper()
+        interval = str(data.get("interval", "1h"))
+        limit    = int(data.get("limit", 500))
+        capital  = float(data.get("capital", 1000.0))
+        sl       = data.get("stop_loss_pct")
+        tp       = data.get("take_profit_pct")
+
+        client = get_client()
+        df = get_candles(client, market, interval, limit=limit)
+        if df is None or df.empty:
+            return jsonify({"error": f"Geen candle-data beschikbaar voor {market}"}), 400
+
+        result = run_backtest(
+            df, market, interval,
+            initial_capital=capital,
+            stop_loss_pct=float(sl) if sl is not None else None,
+            take_profit_pct=float(tp) if tp is not None else None,
+        )
+
+        # Serialize dataclass to dict
+        d = dataclasses.asdict(result)
+        # Trades: convert nested dataclasses already handled by asdict
+        return jsonify(d)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 def start(host: str = "0.0.0.0", port: int = 5000, debug: bool = False) -> None:

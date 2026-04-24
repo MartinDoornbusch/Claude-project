@@ -23,6 +23,10 @@ DEFAULTS: dict[str, str] = {
     "MAX_TRADE_EUR":            "25",
     "MAX_EXPOSURE_EUR":         "100",
     "DAILY_LOSS_LIMIT_EUR":     "50",
+    # Risk management
+    "STOP_LOSS_PCT":            "",
+    "TAKE_PROFIT_PCT":          "",
+    "MTF_ENABLED":              "true",
     # Claude AI
     "ANTHROPIC_API_KEY":        "",
     "AI_STRATEGY_ENABLED":      "false",
@@ -41,7 +45,7 @@ DEFAULTS: dict[str, str] = {
 SENSITIVE_KEYS = {"BITVAVO_API_KEY", "BITVAVO_API_SECRET", "ANTHROPIC_API_KEY", "MQTT_PASS"}
 
 # Keys that map to HTML checkboxes (absent in POST = false)
-BOOL_KEYS = {"LIVE_TRADING_ENABLED", "AI_STRATEGY_ENABLED"}
+BOOL_KEYS = {"LIVE_TRADING_ENABLED", "AI_STRATEGY_ENABLED", "MTF_ENABLED"}
 
 
 def read_config() -> dict[str, str]:

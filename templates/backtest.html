@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backtester — Bitvavo Bot</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    body { background: #0d1117; color: #e6edf3; }
+    .card { background: #161b22; border: 1px solid #30363d; }
+    .card-header { background: #21262d; border-bottom: 1px solid #30363d; font-weight: 600; }
+    .navbar { background: #161b22 !important; border-bottom: 1px solid #30363d; }
+    .form-control, .form-select { background: #0d1117; border-color: #30363d; color: #e6edf3; }
+    .form-control:focus, .form-select:focus { background: #0d1117; border-color: #58a6ff; color: #e6edf3; box-shadow: none; }
+    .form-label { font-size: .8rem; color: #8b949e; text-transform: uppercase; letter-spacing: .05em; }
+    .stat-label { font-size: .75rem; color: #8b949e; text-transform: uppercase; }
+    .stat-value { font-size: 1.45rem; font-weight: 700; }
+    .pos { color: #3fb950; } .neg { color: #f85149; }
+    table { font-size: .83rem; }
+    thead th { color: #8b949e; font-weight: 500; border-color: #30363d; }
+    tbody td { border-color: #21262d; vertical-align: middle; }
+    .spinner-wrap { display:none; }
+    .spinner-wrap.active { display:flex; }
+    option { background: #21262d; }
+    .kpi-card { transition: border-color .2s; }
+    .kpi-card.pos-border { border-color: rgba(63,185,80,.4) !important; }
+    .kpi-card.neg-border { border-color: rgba(248,81,73,.4) !important; }
+    @media (max-width:576px) { .hide-sm { display:none; } }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark px-3 mb-4">
+  <a class="navbar-brand fw-bold text-decoration-none" href="/">← Dashboard</a>
+  <span style="font-size:.85rem; color:#8b949e;">Backtester</span>
+</nav>
+
+<div class="container-fluid px-3 pb-5" style="max-width:960px;">
+
+  <!-- Configuratie -->
+  <div class="card mb-4">
+    <div class="card-header">Configuratie</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-6 col-md-3">
+          <label class="form-label">Markt</label>
+          <input type="text" class="form-control" id="cfg-market"
+                 value="{{ markets[0] if markets else 'BTC-EUR' }}" placeholder="BTC-EUR">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Interval</label>
+          <select class="form-select" id="cfg-interval">
+            {% for iv in ['1h','4h','1d','15m','30m','2h','6h','12h'] %}
+            <option value="{{ iv }}" {{ 'selected' if iv == '1h' }}>{{ iv }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Candles</label>
+          <select class="form-select" id="cfg-limit">
+            <option value="200">200</option>
+            <option value="500" selected>500</option>
+            <option value="1000">1000</option>
+            <option value="1440">1440 (max)</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Startkapitaal €</label>
+          <input type="number" class="form-control" id="cfg-capital" value="1000" min="10">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Stop-loss % (optioneel)</label>
+          <input type="number" class="form-control" id="cfg-sl" placeholder="bijv. -5" step="0.5">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Take-profit % (optioneel)</label>
+          <input type="number" class="form-control" id="cfg-tp" placeholder="bijv. 10" step="0.5">
+        </div>
+        <div class="col-12 col-md-6 d-flex align-items-end">
+          <button class="btn btn-primary w-100 py-2" onclick="runBacktest()">
+            ▶ Backtest uitvoeren
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Laden -->
+  <div class="spinner-wrap justify-content-center align-items-center gap-3 mb-4" id="spinner">
+    <div class="spinner-border text-primary"></div>
+    <span style="color:#8b949e;">Candles ophalen en simuleren...</span>
+  </div>
+
+  <!-- Fout -->
+  <div class="alert mb-4" id="error-box" role="alert"
+       style="display:none; background:rgba(248,81,73,.1); border-color:rgba(248,81,73,.3); color:#f85149;"></div>
+
+  <!-- Resultaten -->
+  <div id="results" style="display:none;">
+
+    <div class="mb-3" style="color:#8b949e; font-size:.85rem;" id="result-meta"></div>
+
+    <!-- KPI kaartjes -->
+    <div class="row g-3 mb-4" id="kpi-row">
+      <div class="col-6 col-md-3"><div class="card p-3 text-center kpi-card" id="kpi-return">
+        <div class="stat-label">Totaal rendement</div>
+        <div class="stat-value" id="v-return">—</div>
+      </div></div>
+      <div class="col-6 col-md-3"><div class="card p-3 text-center kpi-card" id="kpi-winrate">
+        <div class="stat-label">Win rate</div>
+        <div class="stat-value" id="v-winrate">—</div>
+      </div></div>
+      <div class="col-6 col-md-3"><div class="card p-3 text-center">
+        <div class="stat-label">Max drawdown</div>
+        <div class="stat-value neg" id="v-drawdown">—</div>
+      </div></div>
+      <div class="col-6 col-md-3"><div class="card p-3 text-center">
+        <div class="stat-label">Sharpe ratio</div>
+        <div class="stat-value" id="v-sharpe">—</div>
+      </div></div>
+      <div class="col-6 col-md-3"><div class="card p-3 text-center">
+        <div class="stat-label">Aantal trades</div>
+        <div class="stat-value" id="v-trades">—</div>
+      </div></div>
+      <div class="col-6 col-md-3"><div class="card p-3 text-center">
+        <div class="stat-label">Eindkapitaal</div>
+        <div class="stat-value" id="v-final">—</div>
+      </div></div>
+      <div class="col-6 col-md-3"><div class="card p-3 text-center">
+        <div class="stat-label">Beste trade</div>
+        <div class="stat-value pos" id="v-best">—</div>
+      </div></div>
+      <div class="col-6 col-md-3"><div class="card p-3 text-center">
+        <div class="stat-label">Slechtste trade</div>
+        <div class="stat-value neg" id="v-worst">—</div>
+      </div></div>
+    </div>
+
+    <!-- Equity curve -->
+    <div class="card mb-4">
+      <div class="card-header">Equity curve</div>
+      <div class="card-body"><canvas id="equity-chart" height="100"></canvas></div>
+    </div>
+
+    <!-- Trades tabel -->
+    <div class="card mb-4">
+      <div class="card-header" id="trades-header">Trades</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-dark table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Koop tijdstip</th>
+                <th class="text-end">Koop prijs</th>
+                <th class="text-end hide-sm">Verkoop prijs</th>
+                <th class="text-end">PnL %</th>
+                <th class="text-end hide-sm">PnL EUR</th>
+                <th class="hide-sm">Reden koop</th>
+                <th class="hide-sm">Reden verkoop</th>
+              </tr>
+            </thead>
+            <tbody id="trades-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let equityChart = null;
+
+  async function runBacktest() {
+    const market  = document.getElementById('cfg-market').value.toUpperCase().trim();
+    const interval= document.getElementById('cfg-interval').value;
+    const limit   = parseInt(document.getElementById('cfg-limit').value);
+    const capital = parseFloat(document.getElementById('cfg-capital').value);
+    const slRaw   = document.getElementById('cfg-sl').value;
+    const tpRaw   = document.getElementById('cfg-tp').value;
+    const sl      = slRaw !== '' ? parseFloat(slRaw) : null;
+    const tp      = tpRaw !== '' ? parseFloat(tpRaw) : null;
+
+    document.getElementById('spinner').classList.add('active');
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('error-box').style.display = 'none';
+
+    try {
+      const r = await fetch('/api/backtest', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({market, interval, limit, capital, stop_loss_pct: sl, take_profit_pct: tp})
+      });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      showResults(d, market, interval, capital);
+    } catch(e) {
+      const eb = document.getElementById('error-box');
+      eb.textContent = 'Fout: ' + e.message;
+      eb.style.display = 'block';
+    } finally {
+      document.getElementById('spinner').classList.remove('active');
+    }
+  }
+
+  function showResults(d, market, interval, capital) {
+    document.getElementById('result-meta').textContent =
+      `${market} · ${interval} · ${d.candles_tested} candles getest · startkapitaal €${capital.toFixed(2)}`;
+
+    const ret = d.total_return_pct;
+    setKpi('v-return',  (ret >= 0 ? '+' : '') + ret.toFixed(2) + '%', ret >= 0 ? 'pos' : 'neg');
+    setKpi('v-winrate', d.win_rate_pct.toFixed(1) + '%', d.win_rate_pct >= 50 ? 'pos' : 'neg');
+    document.getElementById('v-drawdown').textContent = d.max_drawdown_pct.toFixed(2) + '%';
+    document.getElementById('v-sharpe').textContent   = d.sharpe_ratio !== null ? d.sharpe_ratio.toFixed(2) : '—';
+    document.getElementById('v-trades').textContent   = `${d.num_wins}W / ${d.num_trades - d.num_wins}L (${d.num_trades})`;
+    document.getElementById('v-final').textContent    = '€' + d.final_capital.toFixed(2);
+    document.getElementById('v-best').textContent     = '+' + d.best_trade_pct.toFixed(2) + '%';
+    document.getElementById('v-worst').textContent    = d.worst_trade_pct.toFixed(2) + '%';
+
+    // Border colors on KPI cards
+    document.getElementById('kpi-return').className  = 'card p-3 text-center kpi-card ' + (ret >= 0 ? 'pos-border' : 'neg-border');
+    document.getElementById('kpi-winrate').className = 'card p-3 text-center kpi-card ' + (d.win_rate_pct >= 50 ? 'pos-border' : 'neg-border');
+
+    // Equity chart
+    if (equityChart) equityChart.destroy();
+    equityChart = new Chart(document.getElementById('equity-chart'), {
+      type: 'line',
+      data: {
+        labels: d.timestamps,
+        datasets: [{
+          label: 'Portfolio waarde (EUR)',
+          data: d.equity_curve,
+          borderColor: ret >= 0 ? '#3fb950' : '#f85149',
+          backgroundColor: ret >= 0 ? 'rgba(63,185,80,.08)' : 'rgba(248,81,73,.08)',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: true,
+          tension: 0.2
+        }, {
+          label: 'Startkapitaal',
+          data: Array(d.equity_curve.length).fill(capital),
+          borderColor: '#484f58',
+          borderWidth: 1,
+          borderDash: [4, 3],
+          pointRadius: 0,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#8b949e', font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: '#8b949e', maxTicksLimit: 8, font: { size: 10 } }, grid: { color: '#21262d' } },
+          y: { ticks: { color: '#8b949e', font: { size: 10 }, callback: v => '€' + v.toFixed(0) }, grid: { color: '#21262d' } }
+        }
+      }
+    });
+
+    // Trades table
+    document.getElementById('trades-header').textContent = `Trades (${d.trades.length})`;
+    const tbody = document.getElementById('trades-tbody');
+    if (!d.trades.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">Geen trades uitgevoerd in deze periode.</td></tr>';
+    } else {
+      tbody.innerHTML = d.trades.slice().reverse().map(t => {
+        const cls = t.pnl_pct >= 0 ? 'pos' : 'neg';
+        return `<tr>
+          <td class="font-monospace" style="font-size:.78rem;">${t.buy_ts.slice(0,16)}</td>
+          <td class="text-end">€${t.buy_price.toFixed(4)}</td>
+          <td class="text-end hide-sm">${t.sell_price ? '€' + t.sell_price.toFixed(4) : '—'}</td>
+          <td class="text-end ${cls} fw-semibold">${t.pnl_pct >= 0 ? '+' : ''}${t.pnl_pct.toFixed(2)}%</td>
+          <td class="text-end ${cls} hide-sm">${t.pnl_eur >= 0 ? '+' : ''}€${t.pnl_eur.toFixed(2)}</td>
+          <td class="hide-sm" style="font-size:.78rem; color:#8b949e;">${t.reason_buy}</td>
+          <td class="hide-sm" style="font-size:.78rem; color:#8b949e;">${t.reason_sell}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    document.getElementById('results').style.display = 'block';
+  }
+
+  function setKpi(id, text, cls) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'stat-value ' + (cls || '');
+  }
+</script>
+</body>
+</html>

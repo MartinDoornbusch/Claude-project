@@ -17,7 +17,7 @@ from src.paper_trader import portfolio_value
 from src.strategy import evaluate
 from src.ai_strategy import AI_ENABLED, ai_evaluate
 from src.mqtt_publisher import publish_all
-from src.trade_manager import execute_buy, execute_sell, mode
+from src.trade_manager import execute_buy, execute_sell, check_sl_tp, mode
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,10 @@ def run_cycle() -> None:
             df = get_candles(client, market, INTERVAL, limit=200)
             df = add_indicators(df)
             sig = latest_signals(df)
+            current_price = sig["close"]
+
+            # Stop-loss / take-profit check vóór strategie-evaluatie
+            sl_tp_triggered = check_sl_tp(client, market, current_price)
 
             if AI_ENABLED:
                 decision, confidence, reasoning = ai_evaluate(market, sig)
@@ -55,16 +59,18 @@ def run_cycle() -> None:
                 signal = decision
                 reason = f"AI ({confidence:.0%}): {reasoning}"
             else:
-                signal = evaluate(market, INTERVAL, df)
+                signal = evaluate(market, INTERVAL, df, client=client)
                 reason = "MA crossover / RSI"
 
             market_signals[market] = {**sig, "signal": signal}
-            market_prices[market] = sig["close"]
+            market_prices[market] = current_price
 
-            if signal == "BUY":
-                execute_buy(client, market, sig["close"], reason=reason)
-            elif signal == "SELL":
-                execute_sell(client, market, sig["close"], reason=reason)
+            # Sla strategie-signal over als SL/TP al heeft verkocht
+            if not sl_tp_triggered:
+                if signal == "BUY":
+                    execute_buy(client, market, current_price, reason=reason)
+                elif signal == "SELL":
+                    execute_sell(client, market, current_price, reason=reason)
 
         except Exception as exc:
             logger.error("[%s] Fout tijdens cyclus: %s", market, exc, exc_info=True)
