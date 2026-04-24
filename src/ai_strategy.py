@@ -10,7 +10,10 @@ from datetime import datetime
 
 import anthropic
 
-from src.database import get_latest_signals, get_cash, get_position, get_paper_trades
+from src.database import (
+    get_latest_signals, get_cash, get_position, get_paper_trades,
+    get_last_buy_ts, get_recent_trade_pairs, get_market_change_24h,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -73,19 +76,25 @@ def _last_trade_minutes_ago(market: str) -> float | None:
 
 
 def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_str: str = "") -> str:
-    pos = get_position(market)
-    cash = get_cash()
+    pos   = get_position(market)
+    cash  = get_cash()
+    price = float(signals.get("close", 0))
 
     lines = [
         f"Market: {market}",
-        f"Current price: €{signals.get('close', 0):.4f}",
+        f"Current price: €{price:.4f}",
     ]
+
+    # 24u koersverandering
+    change_24h = get_market_change_24h(market)
+    if change_24h is not None:
+        direction = "▲" if change_24h >= 0 else "▼"
+        lines.append(f"24h price change: {direction} {change_24h:+.2f}%")
+
     if fg_str:
         lines.append(fg_str)
-    lines += [
-        "",
-        "=== Technical Indicators ===",
-    ]
+
+    lines += ["", "=== Technical Indicators ==="]
 
     if signals.get("sma_20") is not None:
         lines.append(f"SMA 20: €{signals['sma_20']:.4f}")
@@ -93,22 +102,24 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
         lines.append(f"SMA 50: €{signals['sma_50']:.4f}")
     if signals.get("rsi_14") is not None:
         rsi = signals["rsi_14"]
-        label = " (OVERBOUGHT)" if rsi > 70 else (" (OVERSOLD)" if rsi < 30 else "")
+        label = " (OVERBOUGHT ⚠)" if rsi > 70 else (" (OVERSOLD ⚠)" if rsi < 30 else "")
         lines.append(f"RSI 14: {rsi:.2f}{label}")
     if signals.get("macd") is not None:
-        diff = signals["macd"] - signals["macd_signal"]
+        hist      = signals.get("macd_hist", 0) or 0
+        hist_prev = signals.get("macd_hist_prev", 0) or 0
+        hist_dir  = "increasing ↑" if hist > hist_prev else "decreasing ↓"
         lines.append(
             f"MACD: {signals['macd']:.6f}  Signal: {signals['macd_signal']:.6f}  "
-            f"Histogram: {diff:.6f} ({'bullish' if diff > 0 else 'bearish'})"
+            f"Histogram: {hist:.6f} ({'bullish' if hist > 0 else 'bearish'}, {hist_dir})"
         )
     if signals.get("bb_lower") is not None:
-        price = signals.get("close", 0)
         if price < signals["bb_lower"]:
-            bb_pos = "below lower band (potential oversold)"
+            bb_pos = "BELOW lower band (oversold zone)"
         elif price > signals["bb_upper"]:
-            bb_pos = "above upper band (potential overbought)"
+            bb_pos = "ABOVE upper band (overbought zone)"
         else:
-            bb_pos = "inside bands"
+            bb_mid   = (signals["bb_lower"] + signals["bb_upper"]) / 2
+            bb_pos   = f"inside bands ({'upper half' if price > bb_mid else 'lower half'})"
         lines.append(
             f"Bollinger Bands: €{signals['bb_lower']:.4f} — €{signals['bb_upper']:.4f}  ({bb_pos})"
         )
@@ -118,17 +129,61 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
         cross_label = "GOLDEN CROSS (bullish)" if ma_cross == "golden_cross" else "DEATH CROSS (bearish)"
         lines.append(f"MA Cross signal: {cross_label}")
 
-    lines += [
-        "",
-        "=== Portfolio State ===",
-        f"Available cash: €{cash:.2f}",
-        f"Open position in {market}: {pos['amount']:.6f} units @ avg €{pos['avg_price']:.4f}",
-    ]
+    # Volume vs gemiddelde
+    vol     = signals.get("volume")
+    vol_avg = signals.get("volume_avg_20")
+    if vol is not None and vol_avg and vol_avg > 0:
+        vol_ratio = vol / vol_avg
+        vol_label = "HIGH ↑↑" if vol_ratio > 1.5 else ("above average ↑" if vol_ratio > 1.1 else
+                    ("below average ↓" if vol_ratio < 0.9 else "average"))
+        lines.append(f"Volume: {vol:,.0f}  ({vol_ratio:.1f}× 20-period avg — {vol_label})")
 
-    if pos["amount"] > 0:
-        current_price = signals.get("close", pos["avg_price"])
-        pnl = (current_price - pos["avg_price"]) * pos["amount"]
-        lines.append(f"Unrealized PnL: €{pnl:+.2f}")
+    # ATR / volatiliteit
+    atr = signals.get("atr_14")
+    if atr is not None and price > 0:
+        atr_pct = atr / price * 100
+        vol_level = "HIGH volatility ⚠" if atr_pct > 4 else ("elevated" if atr_pct > 2 else "low/normal")
+        lines.append(f"ATR-14: €{atr:.4f} ({atr_pct:.2f}% of price — {vol_level})")
+
+    lines += ["", "=== Portfolio State ===",
+              f"Available cash: €{cash:.2f}",
+              f"Open position: {pos['amount']:.6f} units @ avg €{pos['avg_price']:.4f}"]
+
+    if pos["amount"] > 0 and pos["avg_price"] > 0:
+        pnl_eur = (price - pos["avg_price"]) * pos["amount"]
+        pnl_pct = (price - pos["avg_price"]) / pos["avg_price"] * 100
+        lines.append(f"Unrealized PnL: €{pnl_eur:+.2f} ({pnl_pct:+.2f}%)")
+
+        # Tijd in huidige positie
+        buy_ts = get_last_buy_ts(market)
+        if buy_ts:
+            try:
+                elapsed = datetime.utcnow() - datetime.fromisoformat(buy_ts[:19])
+                hours   = int(elapsed.total_seconds() / 3600)
+                days    = hours // 24
+                duration_str = f"{days}d {hours % 24}h" if days > 0 else f"{hours}h"
+                lines.append(f"Position open for: {duration_str}")
+            except Exception:
+                pass
+
+    # Terugkoppeling: recente afgesloten trades
+    past_pairs = get_recent_trade_pairs(market, limit=5)
+    if past_pairs:
+        wins   = sum(1 for p in past_pairs if p["pnl_eur"] > 0)
+        total  = len(past_pairs)
+        avg_pnl = sum(p["pnl_eur"] for p in past_pairs) / total
+        lines += [
+            "",
+            f"=== Recent Closed Trades ({total} most recent) ===",
+            f"Win rate: {wins}/{total}  |  Avg PnL: €{avg_pnl:+.2f}",
+        ]
+        for p in reversed(past_pairs):
+            outcome = "WIN ✓" if p["pnl_eur"] > 0 else "LOSS ✗"
+            lines.append(
+                f"  {p['sell_ts'][:16]}  {outcome}  "
+                f"buy €{p['buy_price']:.4f} → sell €{p['sell_price']:.4f}  "
+                f"PnL: €{p['pnl_eur']:+.2f} ({p['pnl_pct']:+.2f}%)"
+            )
 
     if recent_signals:
         lines += ["", "=== Recent Signal History (newest first) ==="]

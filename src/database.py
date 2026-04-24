@@ -338,6 +338,61 @@ def upsert_market_stats(market: str, price: float, change_24h: float, volume_eur
         """, (market, price, change_24h, volume_eur, now))
 
 
+# --- Analytics & AI context helpers ---
+
+def get_last_buy_ts(market: str) -> str | None:
+    """Tijdstip van de meest recente BUY paper trade voor deze markt."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT ts FROM paper_trades WHERE market=? AND side='BUY' ORDER BY ts DESC LIMIT 1",
+            (market,)
+        ).fetchone()
+    return row["ts"] if row else None
+
+
+def get_recent_trade_pairs(market: str, limit: int = 5) -> list[dict]:
+    """
+    Retourneert de laatste N afgesloten BUY→SELL paren voor deze markt.
+    Gebruikt FIFO-matching op chronologische volgorde.
+    """
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM paper_trades WHERE market=? ORDER BY ts ASC",
+            (market,)
+        ).fetchall()
+
+    trades = [dict(r) for r in rows]
+    open_buys: list[dict] = []
+    pairs: list[dict] = []
+
+    for t in trades:
+        if t["side"] == "BUY":
+            open_buys.append(t)
+        elif t["side"] == "SELL" and open_buys:
+            buy = open_buys.pop(0)
+            pnl_eur = t["eur_total"] - buy["eur_total"]
+            pnl_pct = (t["price"] - buy["price"]) / buy["price"] * 100 if buy["price"] else 0
+            pairs.append({
+                "buy_ts":    buy["ts"],
+                "sell_ts":   t["ts"],
+                "buy_price": buy["price"],
+                "sell_price": t["price"],
+                "pnl_eur":   round(pnl_eur, 4),
+                "pnl_pct":   round(pnl_pct, 2),
+            })
+
+    return pairs[-limit:]
+
+
+def get_market_change_24h(market: str) -> float | None:
+    """24u prijsverandering (%) uit de market_watchlist, of None als onbekend."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT change_24h FROM market_watchlist WHERE market=?", (market,)
+        ).fetchone()
+    return row["change_24h"] if row else None
+
+
 # --- Analytics ---
 
 def get_all_paper_trades_asc(market: str | None = None) -> list[dict]:
