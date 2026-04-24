@@ -12,7 +12,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from src.bitvavo_client import get_client
 from src.candles import get_candles, latest_signals, add_indicators
-from src.database import init_db, save_ai_decision
+from src.database import init_db, save_ai_decision, get_enabled_markets
 from src.paper_trader import portfolio_value
 from src.strategy import evaluate
 from src.ai_strategy import AI_ENABLED, ai_evaluate
@@ -21,18 +21,28 @@ from src.trade_manager import execute_buy, execute_sell, mode
 
 logger = logging.getLogger(__name__)
 
-MARKETS = [m.strip() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",")]
 INTERVAL = os.getenv("CANDLE_INTERVAL", "1h")
 CHECK_MINUTES = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
+_ENV_MARKETS = [m.strip() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",")]
+
+
+def _active_markets() -> list[str]:
+    """Geeft ingeschakelde markten uit de DB terug; valt terug op TRADING_MARKETS env-var."""
+    try:
+        markets = get_enabled_markets()
+        return markets if markets else _ENV_MARKETS
+    except Exception:
+        return _ENV_MARKETS
 
 
 def run_cycle() -> None:
-    logger.info("=== Cyclus gestart [%s] (%s) ===", mode(), ", ".join(MARKETS))
+    markets = _active_markets()
+    logger.info("=== Cyclus gestart [%s] (%s) ===", mode(), ", ".join(markets))
     client = get_client()
     market_signals: dict[str, dict] = {}
     market_prices: dict[str, float] = {}
 
-    for market in MARKETS:
+    for market in markets:
         try:
             df = get_candles(client, market, INTERVAL, limit=200)
             df = add_indicators(df)
@@ -82,7 +92,7 @@ def start() -> None:
 
     logger.info(
         "Bot gestart | modus: %s | markten: %s | interval: %s | check: elke %d min",
-        mode(), ", ".join(MARKETS), INTERVAL, CHECK_MINUTES,
+        mode(), ", ".join(_active_markets()), INTERVAL, CHECK_MINUTES,
     )
 
     if mode() == "LIVE":

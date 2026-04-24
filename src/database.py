@@ -91,6 +91,19 @@ def init_db() -> None:
                 reasoning   TEXT,
                 executed    INTEGER NOT NULL DEFAULT 0
             );
+
+            CREATE TABLE IF NOT EXISTS market_watchlist (
+                market          TEXT PRIMARY KEY,
+                enabled         INTEGER NOT NULL DEFAULT 0,
+                ai_recommended  INTEGER NOT NULL DEFAULT 0,
+                ai_confidence   REAL,
+                ai_reasoning    TEXT,
+                last_advised    TEXT,
+                last_price      REAL,
+                change_24h      REAL,
+                volume_eur      REAL,
+                last_scanned    TEXT
+            );
         """)
 
 
@@ -280,3 +293,60 @@ def get_ai_decisions_today(market: str) -> int:
             (market, today)
         ).fetchone()
     return row["cnt"] if row else 0
+
+
+# --- Market watchlist ---
+
+def get_watchlist() -> list[dict]:
+    """Retourneert alle markten in de watchlist, gesorteerd op volume."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM market_watchlist ORDER BY volume_eur DESC NULLS LAST"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_enabled_markets() -> list[str]:
+    """Retourneert de lijst van ingeschakelde markten."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT market FROM market_watchlist WHERE enabled=1 ORDER BY volume_eur DESC NULLS LAST"
+        ).fetchall()
+    return [r["market"] for r in rows]
+
+
+def set_market_enabled(market: str, enabled: bool) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO market_watchlist (market, enabled)
+            VALUES (?, ?)
+            ON CONFLICT(market) DO UPDATE SET enabled=excluded.enabled
+        """, (market, 1 if enabled else 0))
+
+
+def upsert_market_stats(market: str, price: float, change_24h: float, volume_eur: float) -> None:
+    now = datetime.utcnow().isoformat()
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO market_watchlist (market, last_price, change_24h, volume_eur, last_scanned)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(market) DO UPDATE SET
+                last_price=excluded.last_price,
+                change_24h=excluded.change_24h,
+                volume_eur=excluded.volume_eur,
+                last_scanned=excluded.last_scanned
+        """, (market, price, change_24h, volume_eur, now))
+
+
+def save_market_advice(market: str, recommended: bool, confidence: float | None, reasoning: str) -> None:
+    now = datetime.utcnow().isoformat()
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO market_watchlist (market, ai_recommended, ai_confidence, ai_reasoning, last_advised)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(market) DO UPDATE SET
+                ai_recommended=excluded.ai_recommended,
+                ai_confidence=excluded.ai_confidence,
+                ai_reasoning=excluded.ai_reasoning,
+                last_advised=excluded.last_advised
+        """, (market, 1 if recommended else 0, confidence, reasoning, now))
