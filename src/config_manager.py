@@ -27,6 +27,13 @@ DEFAULTS: dict[str, str] = {
     "STOP_LOSS_PCT":            "",
     "TAKE_PROFIT_PCT":          "",
     "MTF_ENABLED":              "true",
+    "VOL_SIZING_ENABLED":       "false",
+    "CORR_CHECK_ENABLED":       "false",
+    "CORR_THRESHOLD":           "0.8",
+    # Home Assistant notificaties
+    "HA_URL":                   "",
+    "HA_TOKEN":                 "",
+    "HA_NOTIFY_SERVICE":        "notify",
     # Claude AI
     "ANTHROPIC_API_KEY":        "",
     "AI_STRATEGY_ENABLED":      "false",
@@ -42,10 +49,10 @@ DEFAULTS: dict[str, str] = {
 }
 
 # Keys whose values should never be overwritten with an empty string via the UI
-SENSITIVE_KEYS = {"BITVAVO_API_KEY", "BITVAVO_API_SECRET", "ANTHROPIC_API_KEY", "MQTT_PASS"}
+SENSITIVE_KEYS = {"BITVAVO_API_KEY", "BITVAVO_API_SECRET", "ANTHROPIC_API_KEY", "MQTT_PASS", "HA_TOKEN"}
 
 # Keys that map to HTML checkboxes (absent in POST = false)
-BOOL_KEYS = {"LIVE_TRADING_ENABLED", "AI_STRATEGY_ENABLED", "MTF_ENABLED"}
+BOOL_KEYS = {"LIVE_TRADING_ENABLED", "AI_STRATEGY_ENABLED", "MTF_ENABLED", "VOL_SIZING_ENABLED", "CORR_CHECK_ENABLED"}
 
 
 def read_config() -> dict[str, str]:

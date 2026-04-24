@@ -220,7 +220,7 @@
               </div>
               <div class="form-text">Verkoopt automatisch bij dit % winst t.o.v. koop. Positief getal, bijv. 10</div>
             </div>
-            <div>
+            <div class="mb-3">
               <div class="d-flex align-items-center justify-content-between">
                 <div>
                   <label class="form-label mb-0">Multi-timeframe filter</label>
@@ -232,6 +232,38 @@
                          {{ 'checked' if config.MTF_ENABLED != 'false' }}>
                 </div>
               </div>
+            </div>
+            <div class="mb-3">
+              <div class="d-flex align-items-center justify-content-between">
+                <div>
+                  <label class="form-label mb-0">Volatiliteits-sizing</label>
+                  <div class="form-text mt-0">Kleinere positie bij hoge volatiliteit (ATR)</div>
+                </div>
+                <div class="form-check form-switch m-0">
+                  <input class="form-check-input" type="checkbox" role="switch"
+                         name="VOL_SIZING_ENABLED"
+                         {{ 'checked' if config.VOL_SIZING_ENABLED == 'true' }}>
+                </div>
+              </div>
+            </div>
+            <div class="mb-3">
+              <div class="d-flex align-items-center justify-content-between">
+                <div>
+                  <label class="form-label mb-0">Correlatie-bewaking</label>
+                  <div class="form-text mt-0">Blokkeer BUY bij gecorreleerde open positie</div>
+                </div>
+                <div class="form-check form-switch m-0">
+                  <input class="form-check-input" type="checkbox" role="switch"
+                         name="CORR_CHECK_ENABLED"
+                         {{ 'checked' if config.CORR_CHECK_ENABLED == 'true' }}>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="form-label">Correlatie drempel (0.0–1.0)</label>
+              <input type="number" class="form-control" name="CORR_THRESHOLD"
+                     value="{{ config.CORR_THRESHOLD }}" step="0.05" min="0.5" max="1.0">
+              <div class="form-text">Markten boven deze correlatie gelden als één risico</div>
             </div>
           </div>
         </div>
@@ -342,6 +374,34 @@
                        placeholder="{{ '●●●●●●●● (ingesteld)' if config.MQTT_PASS else 'Laat leeg om ongewijzigd te laten' }}">
                 <span class="input-group-text toggle-pw">Toon</span>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Home Assistant Notificaties -->
+        <div class="card mb-4" style="border-color: rgba(63,185,80,.4);">
+          <div class="card-header" style="color:#3fb950;">Home Assistant Notificaties</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label">HA URL</label>
+              <input type="text" class="form-control" name="HA_URL"
+                     value="{{ config.HA_URL }}" placeholder="http://192.168.178.50:8123">
+              <div class="form-text">URL van je Home Assistant instantie</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Long-lived Access Token</label>
+              <div class="input-group">
+                <input type="password" class="form-control font-monospace" name="HA_TOKEN"
+                       placeholder="{{ '●●●●●●●● (ingesteld)' if config.HA_TOKEN else 'Profiel → Beveiliging → Token aanmaken' }}">
+                <span class="input-group-text toggle-pw">Toon</span>
+              </div>
+              <div class="form-text">HA profiel → Beveiliging → Langdurige toegangstokens</div>
+            </div>
+            <div>
+              <label class="form-label">Notify service naam</label>
+              <input type="text" class="form-control" name="HA_NOTIFY_SERVICE"
+                     value="{{ config.HA_NOTIFY_SERVICE }}" placeholder="notify">
+              <div class="form-text">bijv. <code>notify</code> of <code>mobile_app_iphone</code> voor specifiek apparaat</div>
             </div>
           </div>
         </div>

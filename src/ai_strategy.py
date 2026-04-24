@@ -72,13 +72,17 @@ def _last_trade_minutes_ago(market: str) -> float | None:
     return (datetime.utcnow() - ts).total_seconds() / 60
 
 
-def _build_context(market: str, signals: dict, recent_signals: list[dict]) -> str:
+def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_str: str = "") -> str:
     pos = get_position(market)
     cash = get_cash()
 
     lines = [
         f"Market: {market}",
         f"Current price: €{signals.get('close', 0):.4f}",
+    ]
+    if fg_str:
+        lines.append(fg_str)
+    lines += [
         "",
         "=== Technical Indicators ===",
     ]
@@ -182,7 +186,11 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         return "HOLD", 0.0, f"Cooldown: wacht nog {remaining} minuten"
 
     recent_signals = get_latest_signals(market, limit=5)
-    context = _build_context(market, signals, recent_signals)
+
+    from src.sentiment import get_fear_greed, fmt_fear_greed
+    fg_str = fmt_fear_greed(get_fear_greed())
+
+    context = _build_context(market, signals, recent_signals, fg_str)
 
     try:
         client = _get_client()

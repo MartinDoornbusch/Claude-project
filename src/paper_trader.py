@@ -19,10 +19,10 @@ TRADE_FRACTION = float(os.getenv("PAPER_TRADE_FRACTION", "0.95"))
 FEE_RATE = 0.0025
 
 
-def buy(market: str, price: float, reason: str = "") -> dict | None:
+def buy(market: str, price: float, reason: str = "", fraction: float | None = None) -> dict | None:
     """
     Simuleer een marktorder koop.
-    Gebruikt TRADE_FRACTION van beschikbaar cash.
+    Gebruikt fraction (of TRADE_FRACTION als None) van beschikbaar cash.
     Retourneert trade-info of None als er niets te besteden is.
     """
     cash = get_cash()
@@ -35,7 +35,8 @@ def buy(market: str, price: float, reason: str = "") -> dict | None:
         logger.info("[%s] BUY overgeslagen — positie al open (%.6f)", market, position["amount"])
         return None
 
-    spend_eur = cash * TRADE_FRACTION
+    used_fraction = fraction if fraction is not None else TRADE_FRACTION
+    spend_eur = cash * used_fraction
     fee = spend_eur * FEE_RATE
     net_eur = spend_eur - fee
     amount = net_eur / price
@@ -45,8 +46,8 @@ def buy(market: str, price: float, reason: str = "") -> dict | None:
     save_paper_trade(market, "BUY", price, amount, reason)
 
     logger.info(
-        "[%s] PAPER BUY  — prijs: €%.4f | bedrag: %.6f | kosten: €%.2f | fee: €%.4f",
-        market, price, amount, spend_eur, fee,
+        "[%s] PAPER BUY  — prijs: €%.4f | bedrag: %.6f | kosten: €%.2f | fee: €%.4f | fractie: %.0f%%",
+        market, price, amount, spend_eur, fee, used_fraction * 100,
     )
     return {"side": "BUY", "price": price, "amount": amount, "eur": spend_eur}
 
