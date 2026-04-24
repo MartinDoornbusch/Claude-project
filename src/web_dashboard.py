@@ -240,6 +240,23 @@ def api_optimize():
             return jsonify({"error": f"Geen candle-data voor {market}"}), 400
 
         results = run_optimization(df, market, interval, capital=capital)
+
+        # Sla top-10 resultaten op in DB
+        try:
+            from src.database import save_backtest_run
+            for r in results[:10]:
+                save_backtest_run(
+                    market=market, interval=interval,
+                    sma_short=r["sma_short"], sma_long=r["sma_long"],
+                    rsi_buy=r["rsi_buy"], rsi_sell=r["rsi_sell"],
+                    capital=capital,
+                    return_pct=r["return_pct"], sharpe=r["sharpe"],
+                    max_dd=r["max_dd"], win_rate=r["win_rate"],
+                    num_trades=r["num_trades"],
+                )
+        except Exception:
+            pass
+
         return jsonify({"results": results, "total": len(results)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500

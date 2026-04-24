@@ -9,6 +9,7 @@ from src.database import (
     get_cash, set_cash,
     get_position, set_position,
     save_paper_trade,
+    add_daily_pnl,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,11 +69,13 @@ def sell(market: str, price: float, reason: str = "") -> dict | None:
     net_eur = gross_eur - fee
 
     avg_price = position["avg_price"]
-    pnl = net_eur - (amount * avg_price)
+    cost_basis = amount * avg_price / (1 - FEE_RATE)
+    pnl = net_eur - cost_basis
 
     cash = get_cash()
     set_cash(cash + net_eur)
     set_position(market, 0.0, 0.0)
+    add_daily_pnl(market, pnl)
     save_paper_trade(market, "SELL", price, amount, reason)
 
     logger.info(

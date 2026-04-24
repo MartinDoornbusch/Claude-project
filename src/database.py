@@ -104,6 +104,31 @@ def init_db() -> None:
                 volume_eur      REAL,
                 last_scanned    TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts        TEXT NOT NULL,
+                cash_eur  REAL NOT NULL,
+                pos_eur   REAL NOT NULL,
+                total_eur REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS backtest_runs (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts          TEXT NOT NULL,
+                market      TEXT NOT NULL,
+                interval    TEXT NOT NULL,
+                sma_short   INTEGER,
+                sma_long    INTEGER,
+                rsi_buy     REAL,
+                rsi_sell    REAL,
+                capital     REAL,
+                return_pct  REAL,
+                sharpe      REAL,
+                max_dd      REAL,
+                win_rate    REAL,
+                num_trades  INTEGER
+            );
         """)
 
 
@@ -417,6 +442,41 @@ def get_daily_pnl_series() -> list[dict]:
             "SELECT date, SUM(realized_eur) AS pnl FROM daily_pnl GROUP BY date ORDER BY date ASC"
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def save_portfolio_snapshot(cash_eur: float, pos_eur: float, total_eur: float) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO portfolio_snapshots (ts, cash_eur, pos_eur, total_eur) VALUES (?,?,?,?)",
+            (datetime.utcnow().isoformat(), cash_eur, pos_eur, total_eur)
+        )
+
+
+def get_portfolio_snapshots(limit: int = 200) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM portfolio_snapshots ORDER BY ts DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in reversed(rows)]
+
+
+def save_backtest_run(
+    market: str, interval: str, sma_short: int, sma_long: int,
+    rsi_buy: float, rsi_sell: float, capital: float,
+    return_pct: float, sharpe: float | None, max_dd: float,
+    win_rate: float, num_trades: int,
+) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO backtest_runs
+              (ts, market, interval, sma_short, sma_long, rsi_buy, rsi_sell,
+               capital, return_pct, sharpe, max_dd, win_rate, num_trades)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            datetime.utcnow().isoformat(),
+            market, interval, sma_short, sma_long, rsi_buy, rsi_sell,
+            capital, return_pct, sharpe, max_dd, win_rate, num_trades,
+        ))
 
 
 def save_market_advice(market: str, recommended: bool, confidence: float | None, reasoning: str) -> None:

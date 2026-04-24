@@ -185,6 +185,29 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
                 f"PnL: €{p['pnl_eur']:+.2f} ({p['pnl_pct']:+.2f}%)"
             )
 
+    # Dagelijks verlies vs limiet
+    from src.database import get_daily_loss
+    daily_loss = get_daily_loss(market)
+    daily_limit = float(os.getenv("DAILY_LOSS_LIMIT_EUR", "50"))
+    if daily_loss < 0:
+        lines.append(f"Daily realized loss: €{daily_loss:.2f} / €{daily_limit:.0f} limit ({abs(daily_loss)/daily_limit*100:.0f}% used)")
+
+    # Aaneensluitende verliezen waarschuwing
+    if past_pairs:
+        recent_5 = past_pairs[-5:]
+        loss_streak = 0
+        for p in reversed(recent_5):
+            if p["pnl_eur"] < 0:
+                loss_streak += 1
+            else:
+                break
+        if loss_streak >= 2:
+            lines.append(f"⚠️ LOSS STREAK: {loss_streak} consecutive losses — consider HOLD")
+
+    # Orders vandaag vs maximum
+    orders_today = _orders_executed_today(market)
+    lines.append(f"AI orders today: {orders_today}/{MAX_ORDERS_PER_DAY}")
+
     if recent_signals:
         lines += ["", "=== Recent Signal History (newest first) ==="]
         for s in recent_signals[:5]:
