@@ -16,4 +16,4 @@ echo "[addon] Trading bot starten..."
 python3 main.py run &
 
 echo "[addon] Web dashboard starten op poort 5000..."
-exec python3 main.py web
+exec python3 main.py web --port 5001

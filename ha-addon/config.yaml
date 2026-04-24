@@ -9,9 +9,9 @@ arch:
   - armhf
   - amd64
 ports:
-  5000/tcp: 5000
+  5001/tcp: 5001
 ports_description:
-  5000/tcp: "Web dashboard"
+  5001/tcp: "Web dashboard"
 map:
   - config:rw
 options: {}
