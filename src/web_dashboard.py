@@ -20,6 +20,22 @@ from src.config_manager import read_config, write_config, config_from_form
 
 app = Flask(__name__, template_folder="../templates")
 
+# HA Add-on Ingress: strip het pad-prefix zodat Flask op / blijft werken.
+_INGRESS_PATH = os.getenv("INGRESS_PATH", "").rstrip("/")
+if _INGRESS_PATH:
+    class _IngressMiddleware:
+        def __init__(self, wsgi_app):
+            self._app = wsgi_app
+
+        def __call__(self, environ, start_response):
+            path = environ.get("PATH_INFO", "")
+            if path.startswith(_INGRESS_PATH):
+                environ["PATH_INFO"] = path[len(_INGRESS_PATH):] or "/"
+            environ["SCRIPT_NAME"] = _INGRESS_PATH
+            return self._app(environ, start_response)
+
+    app.wsgi_app = _IngressMiddleware(app.wsgi_app)
+
 
 @app.after_request
 def allow_iframe(response):
