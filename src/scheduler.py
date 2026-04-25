@@ -13,7 +13,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from src.bitvavo_client import get_client
 from src.candles import get_candles, latest_signals, add_indicators, get_atr_fraction
 from src.database import init_db, save_ai_decision, save_signal, get_enabled_markets, save_portfolio_snapshot, get_trading_paused
-from src.paper_trader import portfolio_value, TRADE_FRACTION
+from src.paper_trader import portfolio_value
 from src.strategy import evaluate
 from src.ai_strategy import ai_enabled, ai_evaluate
 from src.mqtt_publisher import publish_all
@@ -21,8 +21,7 @@ from src.trade_manager import execute_buy, execute_sell, check_sl_tp, mode
 
 logger = logging.getLogger(__name__)
 
-_ENV_MARKETS   = [m.strip() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",")]
-_scheduler     = None   # globale referentie voor herplanning
+_scheduler = None   # globale referentie voor herplanning
 
 
 def _env_markets() -> list[str]:
@@ -120,7 +119,7 @@ def run_cycle() -> None:
 
                     if signal == "BUY":
                         # Volatiliteits-gebaseerde positiegroottes
-                        fraction = get_atr_fraction(df, TRADE_FRACTION) if vol_sizing else None
+                        fraction = get_atr_fraction(df, float(os.getenv("PAPER_TRADE_FRACTION", "0.95"))) if vol_sizing else None
                         execute_buy(client, market, current_price, reason=reason, fraction=fraction)
                 elif signal == "SELL":
                     execute_sell(client, market, current_price, reason=reason)

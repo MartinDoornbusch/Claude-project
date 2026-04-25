@@ -142,7 +142,10 @@
     <!-- Equity curve -->
     <div class="card mb-4">
       <div class="card-header">Equity curve</div>
-      <div class="card-body"><canvas id="equity-chart" height="100"></canvas></div>
+      <div class="card-body">
+        <div id="equity-empty" class="text-center text-muted py-4" style="display:none">Geen trades uitgevoerd — geen equity curve beschikbaar.</div>
+        <canvas id="equity-chart" height="100"></canvas>
+      </div>
     </div>
 
     <!-- Trades tabel -->
@@ -226,7 +229,16 @@
 
     // Equity chart
     if (equityChart) equityChart.destroy();
-    equityChart = new Chart(document.getElementById('equity-chart'), {
+    const equityCanvas = document.getElementById('equity-chart');
+    const equityEmpty  = document.getElementById('equity-empty');
+    if (!d.equity_curve || !d.equity_curve.length) {
+      equityCanvas.style.display = 'none';
+      equityEmpty.style.display  = 'block';
+    } else {
+      equityCanvas.style.display = 'block';
+      equityEmpty.style.display  = 'none';
+    }
+    equityChart = new Chart(equityCanvas, {
       type: 'line',
       data: {
         labels: d.timestamps,

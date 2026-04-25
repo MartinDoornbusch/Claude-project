@@ -8,12 +8,8 @@ import os
 import pandas as pd
 
 from src.candles import add_indicators, latest_signals, get_htf_trend, get_higher_timeframe
-from src.database import save_signal
 
 logger = logging.getLogger(__name__)
-
-MTF_ENABLED = os.getenv("MTF_ENABLED", "true").lower() == "true"
-
 
 def evaluate(market: str, interval: str, df: pd.DataFrame, client=None) -> str | None:
     """
@@ -56,7 +52,8 @@ def evaluate(market: str, interval: str, df: pd.DataFrame, client=None) -> str |
         reason = f"RSI oversold ({rsi:.1f})"
 
     # ── Multi-timeframe filter ──
-    if MTF_ENABLED and client is not None and signal in ("BUY", "SELL"):
+    mtf_enabled = os.getenv("MTF_ENABLED", "true").lower() == "true"
+    if mtf_enabled and client is not None and signal in ("BUY", "SELL"):
         htf = get_higher_timeframe(interval)
         if htf != interval:
             htf_trend = get_htf_trend(client, market, interval)
@@ -72,8 +69,6 @@ def evaluate(market: str, interval: str, df: pd.DataFrame, client=None) -> str |
                 )
                 signal = "HOLD"
                 reason = ""
-
-    save_signal(market, interval, signals, signal)
 
     logger.info(
         "[%s] Signaal: %s | Prijs: €%.4f | RSI: %s | Reden: %s",
