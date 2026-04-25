@@ -15,6 +15,11 @@
     table { font-size: .85rem; }
     thead th { color: #475569; font-weight: 500; border-color: #e2e8f0; background: #f8fafc; }
     tbody td { border-color: #e2e8f0; vertical-align: middle; }
+    .trend-hot    { background:#fef9c3; color:#854d0e; font-weight:600; border-radius:4px; padding:1px 6px; white-space:nowrap; }
+    .trend-up     { background:#dcfce7; color:#166534; border-radius:4px; padding:1px 6px; white-space:nowrap; }
+    .trend-flat   { background:#f1f5f9; color:#475569; border-radius:4px; padding:1px 6px; white-space:nowrap; }
+    .trend-down   { background:#fee2e2; color:#991b1b; border-radius:4px; padding:1px 6px; white-space:nowrap; }
+    .trend-crash  { background:#fca5a5; color:#7f1d1d; font-weight:600; border-radius:4px; padding:1px 6px; white-space:nowrap; }
     tbody tr:hover td { background: #f8fafc; }
     .change-pos { color: #16a34a; }
     .change-neg { color: #dc2626; }
@@ -100,11 +105,15 @@
   </div>
 
   <!-- Filter -->
-  <div class="d-flex gap-2 mb-3 flex-wrap">
-    <button class="btn btn-sm btn-outline-secondary active" id="filter-all"    onclick="setFilter('all')">Alle</button>
-    <button class="btn btn-sm btn-outline-success"          id="filter-enabled" onclick="setFilter('enabled')">Alleen actief</button>
+  <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+    <button class="btn btn-sm btn-outline-secondary active" id="filter-all"     onclick="setFilter('all')">Alle</button>
+    <button class="btn btn-sm btn-outline-success"          id="filter-enabled"  onclick="setFilter('enabled')">Alleen actief</button>
     <button class="btn btn-sm" id="filter-ai"               onclick="setFilter('ai')"
-            style="border-color:#3b82f6; color:#2563eb;">Alleen AI aanbevolen</button>
+            style="border-color:#3b82f6; color:#2563eb;">AI aanbevolen</button>
+    <span class="text-muted" style="font-size:.8rem;">|</span>
+    <button class="btn btn-sm" id="filter-hot"    onclick="setFilter('hot')"   style="background:#fef9c3;color:#854d0e;border-color:#fde047;">🔥 Stijgers</button>
+    <button class="btn btn-sm" id="filter-flat"   onclick="setFilter('flat')"  style="background:#f1f5f9;color:#475569;border-color:#cbd5e1;">➡ Stabiel</button>
+    <button class="btn btn-sm" id="filter-down"   onclick="setFilter('down')"  style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;">📉 Dalers</button>
     <div class="ms-auto">
       <input type="text" class="form-control form-control-sm" id="search-input"
              placeholder="Zoeken..." oninput="filterTable()"
@@ -121,6 +130,7 @@
             <tr>
               <th>Markt</th>
               <th class="text-end">Prijs</th>
+              <th class="text-center">Trend</th>
               <th class="text-end hide-sm">24u %</th>
               <th class="text-end hide-sm">Volume EUR</th>
               <th class="text-center">AI Advies</th>
@@ -129,14 +139,27 @@
           </thead>
           <tbody id="markets-tbody">
             {% for m in watchlist %}
+            {% set ch = m.change_24h %}
+            {% if ch is not none %}
+              {% if ch >= 5 %}{% set tcat = 'hot' %}{% set thtml = '<span class="trend-hot">🔥 +' + "%.1f"|format(ch) + '%</span>' %}
+              {% elif ch >= 2 %}{% set tcat = 'hot' %}{% set thtml = '<span class="trend-up">📈 +' + "%.1f"|format(ch) + '%</span>' %}
+              {% elif ch >= -2 %}{% set tcat = 'flat' %}{% set thtml = '<span class="trend-flat">➡ ' + "%+.1f"|format(ch) + '%</span>' %}
+              {% elif ch >= -5 %}{% set tcat = 'down' %}{% set thtml = '<span class="trend-down">📉 ' + "%.1f"|format(ch) + '%</span>' %}
+              {% else %}{% set tcat = 'down' %}{% set thtml = '<span class="trend-crash">🔻 ' + "%.1f"|format(ch) + '%</span>' %}
+              {% endif %}
+            {% else %}
+              {% set tcat = '' %}{% set thtml = '<span class="text-muted">—</span>' %}
+            {% endif %}
             <tr class="market-row"
                 data-market="{{ m.market }}"
                 data-enabled="{{ '1' if m.enabled else '0' }}"
-                data-ai="{{ '1' if m.ai_recommended else '0' }}">
+                data-ai="{{ '1' if m.ai_recommended else '0' }}"
+                data-trend="{{ tcat }}">
               <td class="fw-semibold">{{ m.market }}</td>
               <td class="text-end font-monospace">
                 {% if m.last_price %}€{{ "%.4f"|format(m.last_price) }}{% else %}<span class="text-muted">—</span>{% endif %}
               </td>
+              <td class="text-center">{{ thtml }}</td>
               <td class="text-end hide-sm">
                 {% if m.change_24h is not none %}
                 <span class="{{ 'change-pos' if m.change_24h >= 0 else 'change-neg' }}">
@@ -264,6 +287,16 @@
     }
   }
 
+  // ── Trendklasse bepalen op basis van 24u % ──
+  function trendInfo(change) {
+    if (change === null || change === undefined) return {cat: '', html: '<span class="text-muted">—</span>'};
+    if (change >= 5)  return {cat: 'hot',  html: `<span class="trend-hot">🔥 +${change.toFixed(1)}%</span>`};
+    if (change >= 2)  return {cat: 'hot',  html: `<span class="trend-up">📈 +${change.toFixed(1)}%</span>`};
+    if (change >= -2) return {cat: 'flat', html: `<span class="trend-flat">➡ ${change >= 0 ? '+' : ''}${change.toFixed(1)}%</span>`};
+    if (change >= -5) return {cat: 'down', html: `<span class="trend-down">📉 ${change.toFixed(1)}%</span>`};
+    return {cat: 'down', html: `<span class="trend-crash">🔻 ${change.toFixed(1)}%</span>`};
+  }
+
   // ── Tabel herbouwen na scan ──
   function rebuildTable(markets) {
     const tbody = document.getElementById('markets-tbody');
@@ -273,16 +306,17 @@
       const existing = document.querySelector(`tr[data-market="${m.market}"]`);
       const enabled  = existing ? existing.dataset.enabled === '1' : 0;
       const ai       = existing ? existing.dataset.ai       === '1' : 0;
-      const aiReas   = existing ? existing.querySelector('.reasoning-tip')?.textContent || '' : '';
       const aiBadge  = existing ? existing.querySelector('.ai-badge')?.outerHTML || '<span class="ai-badge badge-ai-none">? Onbekend</span>' : '<span class="ai-badge badge-ai-none">? Onbekend</span>';
       const change   = m.change_24h;
+      const trend    = trendInfo(change);
       const changeHtml = change !== null
         ? `<span class="${change >= 0 ? 'change-pos' : 'change-neg'}">${change >= 0 ? '+' : ''}${change.toFixed(2)}%</span>`
         : '<span class="text-muted">—</span>';
 
-      return `<tr class="market-row" data-market="${m.market}" data-enabled="${enabled}" data-ai="${ai}">
+      return `<tr class="market-row" data-market="${m.market}" data-enabled="${enabled}" data-ai="${ai}" data-trend="${trend.cat}">
         <td class="fw-semibold">${m.market}</td>
         <td class="text-end font-monospace">${m.price ? '€' + m.price.toFixed(4) : '<span class="text-muted">—</span>'}</td>
+        <td class="text-center">${trend.html}</td>
         <td class="text-end hide-sm">${changeHtml}</td>
         <td class="text-end hide-sm">${m.volume_eur ? '€' + Math.round(m.volume_eur).toLocaleString('nl-NL') : '<span class="text-muted">—</span>'}</td>
         <td class="text-center" style="min-width:110px;">${aiBadge}</td>
@@ -303,8 +337,9 @@
   // ── Filter ──
   function setFilter(f) {
     currentFilter = f;
-    ['all','enabled','ai'].forEach(id => {
-      document.getElementById('filter-' + id).classList.toggle('active', id === f);
+    ['all','enabled','ai','hot','flat','down'].forEach(id => {
+      const el = document.getElementById('filter-' + id);
+      if (el) el.classList.toggle('active', id === f);
     });
     applyFilter();
   }
@@ -315,10 +350,14 @@
       const market  = row.dataset.market.toLowerCase();
       const enabled = row.dataset.enabled === '1';
       const ai      = row.dataset.ai === '1';
-      const matchSearch  = !q || market.includes(q);
-      const matchFilter  = currentFilter === 'all'
+      const trend   = row.dataset.trend || '';
+      const matchSearch = !q || market.includes(q);
+      const matchFilter = currentFilter === 'all'
         || (currentFilter === 'enabled' && enabled)
-        || (currentFilter === 'ai' && ai);
+        || (currentFilter === 'ai'      && ai)
+        || (currentFilter === 'hot'     && trend === 'hot')
+        || (currentFilter === 'flat'    && trend === 'flat')
+        || (currentFilter === 'down'    && trend === 'down');
       row.style.display = matchSearch && matchFilter ? '' : 'none';
     });
   }

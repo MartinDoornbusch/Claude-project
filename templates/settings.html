@@ -290,57 +290,129 @@
           <div class="card-header" style="color:#2563eb;">AI Strategie</div>
           <div class="card-body">
 
-            <!-- Provider keuze -->
-            <div class="mb-3">
-              <label class="form-label">AI Provider</label>
-              <select class="form-select" name="AI_PROVIDER" id="ai_provider_sel" onchange="updateAiProviderUI()">
-                <option value="anthropic" {{ 'selected' if config.AI_PROVIDER == 'anthropic' or not config.AI_PROVIDER }}>Anthropic (Claude) — betaald</option>
-                <option value="google"    {{ 'selected' if config.AI_PROVIDER == 'google' }}>Google (Gemini) — gratis tier</option>
-                <option value="groq"      {{ 'selected' if config.AI_PROVIDER == 'groq' }}>Groq (Llama / Mixtral) — gratis</option>
-              </select>
-            </div>
+            <div class="form-text mb-3">Schakel meerdere providers in voor <strong>consensus-trading</strong> — de meerderheid beslist. Eén provider = enkel dat model.</div>
 
-            <!-- Model keuze -->
-            <div class="mb-3">
-              <label class="form-label">Model</label>
-              <select class="form-select" name="AI_MODEL" id="ai_model_sel"></select>
-              <div class="form-text" id="ai_model_hint"></div>
-            </div>
-
-            <!-- Anthropic API Key -->
-            <div class="mb-3 ai-key-row" id="key-row-anthropic">
-              <label class="form-label">Anthropic API Key {% if config.ANTHROPIC_API_KEY %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
-              <div class="input-group">
-                <input type="password" class="form-control font-monospace" name="ANTHROPIC_API_KEY"
-                       placeholder="{{ '●●●●●●●● (ingesteld)' if config.ANTHROPIC_API_KEY else 'sk-ant-...' }}">
-                <span class="input-group-text toggle-pw">Toon</span>
+            <!-- ── Anthropic ── -->
+            <div class="card mb-2" style="border-color:#e0e7ff;">
+              <div class="card-body py-2 px-3">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div>
+                    <span class="fw-semibold">Anthropic (Claude)</span>
+                    <span class="text-muted ms-2" style="font-size:.8rem;">betaald per token</span>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="AI_ANTHROPIC_ENABLED" id="ai_anthropic_chk"
+                           {{ 'checked' if config.AI_ANTHROPIC_ENABLED != 'false' }}
+                           onchange="toggleProviderRow('anthropic', this.checked)">
+                  </div>
+                </div>
+                <div id="prov-row-anthropic" {% if config.AI_ANTHROPIC_ENABLED == 'false' %}style="display:none"{% endif %}>
+                  <div class="row g-2 mt-1">
+                    <div class="col-md-5">
+                      <select class="form-select form-select-sm" name="AI_MODEL_ANTHROPIC">
+                        {% set am = config.AI_MODEL_ANTHROPIC or config.AI_MODEL %}
+                        <option value="claude-opus-4-7"   {{ 'selected' if am == 'claude-opus-4-7'   or not am }}>Claude Opus 4.7 — beste kwaliteit</option>
+                        <option value="claude-sonnet-4-6" {{ 'selected' if am == 'claude-sonnet-4-6' }}>Claude Sonnet 4.6 — goede balans</option>
+                        <option value="claude-haiku-4-5"  {{ 'selected' if am == 'claude-haiku-4-5'  }}>Claude Haiku 4.5 — snel & goedkoop</option>
+                      </select>
+                    </div>
+                    <div class="col-md-7">
+                      <div class="input-group input-group-sm">
+                        <input type="password" class="form-control font-monospace" name="ANTHROPIC_API_KEY"
+                               placeholder="{{ '●●●●●●●● (ingesteld)' if config.ANTHROPIC_API_KEY else 'sk-ant-...' }}">
+                        <span class="input-group-text toggle-pw">Toon</span>
+                      </div>
+                      <div class="form-text">
+                        {% if config.ANTHROPIC_API_KEY %}<span style="color:#16a34a;">✓ Ingesteld</span> · {% endif %}
+                        <a href="https://console.anthropic.com" target="_blank" style="color:#2563eb;">console.anthropic.com</a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="form-text">Aanmaken via <a href="https://console.anthropic.com" target="_blank" style="color:#2563eb;">console.anthropic.com</a></div>
             </div>
 
-            <!-- Google API Key -->
-            <div class="mb-3 ai-key-row" id="key-row-google">
-              <label class="form-label">Google API Key {% if config.GOOGLE_API_KEY %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
-              <div class="input-group">
-                <input type="password" class="form-control font-monospace" name="GOOGLE_API_KEY"
-                       placeholder="{{ '●●●●●●●● (ingesteld)' if config.GOOGLE_API_KEY else 'AIza...' }}">
-                <span class="input-group-text toggle-pw">Toon</span>
+            <!-- ── Google Gemini ── -->
+            <div class="card mb-2" style="border-color:#e0e7ff;">
+              <div class="card-body py-2 px-3">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div>
+                    <span class="fw-semibold">Google (Gemini)</span>
+                    <span class="text-muted ms-2" style="font-size:.8rem;">gratis tot 1500 req/dag</span>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="AI_GOOGLE_ENABLED" id="ai_google_chk"
+                           {{ 'checked' if config.AI_GOOGLE_ENABLED != 'false' }}
+                           onchange="toggleProviderRow('google', this.checked)">
+                  </div>
+                </div>
+                <div id="prov-row-google" {% if config.AI_GOOGLE_ENABLED == 'false' %}style="display:none"{% endif %}>
+                  <div class="row g-2 mt-1">
+                    <div class="col-md-5">
+                      {% set gm = config.AI_MODEL_GOOGLE %}
+                      <select class="form-select form-select-sm" name="AI_MODEL_GOOGLE">
+                        <option value="gemini-2.5-flash-preview-05-20" {{ 'selected' if gm == 'gemini-2.5-flash-preview-05-20' }}>Gemini 2.5 Flash — nieuwste (preview)</option>
+                        <option value="gemini-1.5-flash"               {{ 'selected' if gm == 'gemini-1.5-flash' or not gm }}>Gemini 1.5 Flash — stabiel (aanbevolen)</option>
+                        <option value="gemini-1.5-pro"                 {{ 'selected' if gm == 'gemini-1.5-pro' }}>Gemini 1.5 Pro — meest capabel</option>
+                      </select>
+                    </div>
+                    <div class="col-md-7">
+                      <div class="input-group input-group-sm">
+                        <input type="password" class="form-control font-monospace" name="GOOGLE_API_KEY"
+                               placeholder="{{ '●●●●●●●● (ingesteld)' if config.GOOGLE_API_KEY else 'AIza...' }}">
+                        <span class="input-group-text toggle-pw">Toon</span>
+                      </div>
+                      <div class="form-text">
+                        {% if config.GOOGLE_API_KEY %}<span style="color:#16a34a;">✓ Ingesteld</span> · {% endif %}
+                        <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#2563eb;">aistudio.google.com/apikey</a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="form-text">Gratis aanmaken via <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#2563eb;">aistudio.google.com/apikey</a> — tot 1500 verzoeken/dag gratis</div>
             </div>
 
-            <!-- Groq API Key -->
-            <div class="mb-3 ai-key-row" id="key-row-groq">
-              <label class="form-label">Groq API Key {% if config.GROQ_API_KEY %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
-              <div class="input-group">
-                <input type="password" class="form-control font-monospace" name="GROQ_API_KEY"
-                       placeholder="{{ '●●●●●●●● (ingesteld)' if config.GROQ_API_KEY else 'gsk_...' }}">
-                <span class="input-group-text toggle-pw">Toon</span>
+            <!-- ── Groq ── -->
+            <div class="card mb-3" style="border-color:#e0e7ff;">
+              <div class="card-body py-2 px-3">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div>
+                    <span class="fw-semibold">Groq (Llama / Mixtral)</span>
+                    <span class="text-muted ms-2" style="font-size:.8rem;">volledig gratis</span>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="AI_GROQ_ENABLED" id="ai_groq_chk"
+                           {{ 'checked' if config.AI_GROQ_ENABLED != 'false' }}
+                           onchange="toggleProviderRow('groq', this.checked)">
+                  </div>
+                </div>
+                <div id="prov-row-groq" {% if config.AI_GROQ_ENABLED == 'false' %}style="display:none"{% endif %}>
+                  <div class="row g-2 mt-1">
+                    <div class="col-md-5">
+                      {% set rm = config.AI_MODEL_GROQ %}
+                      <select class="form-select form-select-sm" name="AI_MODEL_GROQ">
+                        <option value="llama-3.3-70b-versatile" {{ 'selected' if rm == 'llama-3.3-70b-versatile' or not rm }}>Llama 3.3 70B — beste kwaliteit</option>
+                        <option value="llama-3.1-8b-instant"    {{ 'selected' if rm == 'llama-3.1-8b-instant' }}>Llama 3.1 8B — snelst</option>
+                        <option value="mixtral-8x7b-32768"      {{ 'selected' if rm == 'mixtral-8x7b-32768' }}>Mixtral 8x7B</option>
+                      </select>
+                    </div>
+                    <div class="col-md-7">
+                      <div class="input-group input-group-sm">
+                        <input type="password" class="form-control font-monospace" name="GROQ_API_KEY"
+                               placeholder="{{ '●●●●●●●● (ingesteld)' if config.GROQ_API_KEY else 'gsk_...' }}">
+                        <span class="input-group-text toggle-pw">Toon</span>
+                      </div>
+                      <div class="form-text">
+                        {% if config.GROQ_API_KEY %}<span style="color:#16a34a;">✓ Ingesteld</span> · {% endif %}
+                        <a href="https://console.groq.com/keys" target="_blank" style="color:#2563eb;">console.groq.com</a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="form-text">Gratis aanmaken via <a href="https://console.groq.com/keys" target="_blank" style="color:#2563eb;">console.groq.com</a> — volledig gratis</div>
             </div>
 
-            <div class="border-top pt-3 mt-1">
+            <div class="border-top pt-3">
               <div class="mb-3">
                 <label class="form-label">Minimum confidence (0.5–1.0)</label>
                 <input type="number" class="form-control" name="AI_MIN_CONFIDENCE"
@@ -552,44 +624,11 @@
     btn.disabled = false;
   }
 
-  // ── AI Provider / Model UI ──
-  const _AI_MODELS = {
-    anthropic: [
-      {v:'claude-opus-4-7',          l:'Claude Opus 4.7 — beste kwaliteit (betaald)'},
-      {v:'claude-sonnet-4-6',        l:'Claude Sonnet 4.6 — goede balans (betaald)'},
-      {v:'claude-haiku-4-5',         l:'Claude Haiku 4.5 — snel & goedkoop (betaald)'},
-    ],
-    google: [
-      {v:'gemini-2.0-flash',         l:'Gemini 2.0 Flash — aanbevolen (gratis tier)'},
-      {v:'gemini-2.0-flash-lite',    l:'Gemini 2.0 Flash Lite — snelst (gratis tier)'},
-      {v:'gemini-1.5-flash',         l:'Gemini 1.5 Flash (gratis tier)'},
-    ],
-    groq: [
-      {v:'llama-3.3-70b-versatile',  l:'Llama 3.3 70B — beste kwaliteit (gratis)'},
-      {v:'llama-3.1-8b-instant',     l:'Llama 3.1 8B — snelst (gratis)'},
-      {v:'mixtral-8x7b-32768',       l:'Mixtral 8x7B (gratis)'},
-    ],
-  };
-  const _AI_HINTS = {
-    anthropic: 'Betaald per token. Haiku ≈ €0,01–0,05 per analyse.',
-    google:    'Gratis tot ±1500 verzoeken/dag. Geen creditcard nodig.',
-    groq:      'Volledig gratis, open-source Llama modellen.',
-  };
-  const _currentModel = '{{ config.AI_MODEL }}';
-
-  function updateAiProviderUI() {
-    const provider = document.getElementById('ai_provider_sel').value;
-    const sel = document.getElementById('ai_model_sel');
-    sel.innerHTML = (_AI_MODELS[provider] || []).map(m =>
-      `<option value="${m.v}"${_currentModel === m.v ? ' selected' : ''}>${m.l}</option>`
-    ).join('');
-    document.getElementById('ai_model_hint').textContent = _AI_HINTS[provider] || '';
-    ['anthropic', 'google', 'groq'].forEach(p => {
-      const row = document.getElementById('key-row-' + p);
-      if (row) row.style.display = p === provider ? '' : 'none';
-    });
+  // ── AI Provider toggles ──
+  function toggleProviderRow(provider, enabled) {
+    const row = document.getElementById('prov-row-' + provider);
+    if (row) row.style.display = enabled ? '' : 'none';
   }
-  updateAiProviderUI();
 
   // ── Beschikbare markten laden ──
   let _allMarkets = [];

@@ -263,40 +263,51 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
     context = _build_context(market, signals, recent_signals, fg_str)
 
     try:
-        from src.ai_provider import complete, get_active
-        provider, model = get_active()
-        logger.debug("[%s] AI provider=%s model=%s", market, provider, model)
+        from src.ai_provider import get_configured_providers, complete_for
+        providers = get_configured_providers()
+        if not providers:
+            return "HOLD", 0.0, "Geen AI provider geconfigureerd of ingeschakeld"
 
-        text = complete(
-            _SYSTEM_PROMPT,
-            "Analyze the following market data and return your trading decision:\n\n" + context,
-            max_tokens=1024,
-        )
-        logger.debug("[%s] AI raw response: %.300s", market, text)
+        prompt = "Analyze the following market data and return your trading decision:\n\n" + context
+        decisions: list[dict] = []
 
-        parsed = _parse_decision(text)
-        if not parsed:
-            logger.warning("[%s] AI: kon besluit niet parsen uit respons: %.200s", market, text)
-            return "HOLD", 0.0, "Kon AI respons niet parsen"
+        for prov, mdl in providers:
+            try:
+                text = complete_for(prov, mdl, _SYSTEM_PROMPT, prompt, max_tokens=1024)
+                logger.debug("[%s] %s raw: %.300s", market, prov, text)
+                parsed = _parse_decision(text)
+                if parsed:
+                    decisions.append({**parsed, "provider": prov})
+                    logger.debug("[%s] %s: %s %.0f%%", market, prov, parsed["decision"], parsed["confidence"] * 100)
+                else:
+                    logger.warning("[%s] %s: kon besluit niet parsen", market, prov)
+            except Exception as exc:
+                logger.warning("[%s] Provider %s fout: %s", market, prov, exc)
 
-        decision   = parsed["decision"]
-        confidence = parsed["confidence"]
-        reasoning  = parsed["reasoning"]
+        if not decisions:
+            return "HOLD", 0.0, "Alle providers gaven geen geldig antwoord"
+
+        if len(decisions) > 1:
+            vote_count: dict[str, int] = {}
+            for d in decisions:
+                vote_count[d["decision"]] = vote_count.get(d["decision"], 0) + 1
+            majority = max(vote_count, key=vote_count.__getitem__)
+            majority_d = [d for d in decisions if d["decision"] == majority]
+            confidence = sum(d["confidence"] for d in majority_d) / len(majority_d)
+            reasoning = " | ".join(f"[{d['provider']}] {d['reasoning']}" for d in majority_d)
+            decision = majority
+            logger.info("[%s] AI consensus %s (%d/%d providers, %.0f%%)", market, decision, len(majority_d), len(decisions), confidence * 100)
+        else:
+            decision   = decisions[0]["decision"]
+            confidence = decisions[0]["confidence"]
+            reasoning  = decisions[0]["reasoning"]
 
         if confidence < min_confidence:
-            logger.info(
-                "[%s] AI advies %s afgewezen: confidence %.0f%% < minimum %.0f%%",
-                market, decision, confidence * 100, min_confidence * 100,
-            )
-            return (
-                "HOLD", confidence,
-                f"Confidence {confidence:.0%} onder minimum {min_confidence:.0%}: {reasoning}",
-            )
+            logger.info("[%s] AI advies %s afgewezen: confidence %.0f%% < minimum %.0f%%",
+                        market, decision, confidence * 100, min_confidence * 100)
+            return "HOLD", confidence, f"Confidence {confidence:.0%} onder minimum {min_confidence:.0%}: {reasoning}"
 
-        logger.info(
-            "[%s] AI besluit: %s (%.0f%%) — %s",
-            market, decision, confidence * 100, reasoning,
-        )
+        logger.info("[%s] AI besluit: %s (%.0f%%) — %s", market, decision, confidence * 100, reasoning)
         return decision, confidence, reasoning
 
     except EnvironmentError as exc:
