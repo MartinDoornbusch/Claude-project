@@ -1,17 +1,12 @@
-"""AI marktadviseur — vraagt Claude welke EUR-markten geschikt zijn voor automatisch traden."""
+"""AI marktadviseur — vraagt de geconfigureerde AI welke EUR-markten geschikt zijn voor automatisch traden."""
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 
-import anthropic
-
 logger = logging.getLogger(__name__)
-
-_client: anthropic.Anthropic | None = None
 
 _SYSTEM_PROMPT = """\
 You are an expert crypto portfolio analyst for the Bitvavo exchange (Netherlands, EUR pairs).
@@ -40,16 +35,6 @@ Respond ONLY with a JSON block in this exact format (no extra text):
 ```
 Rules: include only analyzed markets in "markets". "confidence" (0.0–1.0) only for included=true markets.\
 """
-
-
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise EnvironmentError("ANTHROPIC_API_KEY niet ingesteld in .env")
-        _client = anthropic.Anthropic(api_key=api_key)
-    return _client
 
 
 def _build_market_table(market_stats: list[dict], limit: int = 40) -> str:
@@ -87,7 +72,7 @@ def _parse_advice(text: str) -> dict | None:
 
 def advise_markets(market_stats: list[dict]) -> dict:
     """
-    Vraagt Claude welke markten het meest geschikt zijn voor automatisch traden.
+    Vraagt de geconfigureerde AI welke markten het meest geschikt zijn voor automatisch traden.
 
     Returns dict with:
       recommended: list[str]       — aanbevolen marktparen
@@ -97,28 +82,17 @@ def advise_markets(market_stats: list[dict]) -> dict:
     if not market_stats:
         return {"recommended": [], "summary": "Geen marktdata beschikbaar.", "markets": {}}
 
-    client = _get_client()
+    from src.ai_provider import complete, get_active
+    provider, model = get_active()
+    logger.info("AI marktadvies via provider=%s model=%s", provider, model)
+
     table = _build_market_table(market_stats)
-
-    response = client.messages.create(
-        model="claude-opus-4-7",
+    text = complete(
+        _SYSTEM_PROMPT,
+        "Analyze these markets and recommend which ones to include "
+        "in an automated EUR trading portfolio:\n\n" + table,
         max_tokens=2048,
-        thinking={"type": "adaptive"},
-        system=[{
-            "type": "text",
-            "text": _SYSTEM_PROMPT,
-            "cache_control": {"type": "ephemeral"},
-        }],
-        messages=[{
-            "role": "user",
-            "content": (
-                "Analyze these markets and recommend which ones to include "
-                "in an automated EUR trading portfolio:\n\n" + table
-            ),
-        }],
     )
-
-    text = next((b.text for b in response.content if b.type == "text"), "")
     logger.debug("AI marktadvies raw: %.500s", text)
 
     parsed = _parse_advice(text)

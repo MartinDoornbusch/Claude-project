@@ -1,4 +1,4 @@
-"""AI strategie — gebruikt Claude claude-opus-4-7 als trading brein met guardrails."""
+"""AI strategie — gebruikt een configureerbare AI provider als trading brein met guardrails."""
 
 from __future__ import annotations
 
@@ -8,8 +8,6 @@ import os
 import re
 from datetime import datetime
 
-import anthropic
-
 from src.database import (
     get_latest_signals, get_cash, get_position, get_paper_trades,
     get_last_buy_ts, get_recent_trade_pairs, get_market_change_24h,
@@ -17,12 +15,11 @@ from src.database import (
 
 logger = logging.getLogger(__name__)
 
-AI_ENABLED         = os.getenv("AI_STRATEGY_ENABLED", "false").lower() == "true"
-MIN_CONFIDENCE     = float(os.getenv("AI_MIN_CONFIDENCE", "0.7"))
-MAX_ORDERS_PER_DAY = int(os.getenv("AI_MAX_ORDERS_PER_DAY", "3"))
-COOLDOWN_MINUTES   = int(os.getenv("AI_COOLDOWN_MINUTES", "60"))
+def ai_enabled() -> bool:
+    return os.getenv("AI_STRATEGY_ENABLED", "false").lower() == "true"
 
-_client: anthropic.Anthropic | None = None
+# Backwards-compat alias — gebruik ai_enabled() voor live-waarden
+AI_ENABLED = ai_enabled()
 
 _SYSTEM_PROMPT = """\
 You are an expert crypto trading analyst for the Bitvavo exchange.
@@ -50,16 +47,6 @@ decision must be one of: BUY, SELL, HOLD
 confidence must be a float between 0.0 and 1.0
 reasoning must be a single concise sentence in English\
 """
-
-
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise EnvironmentError("ANTHROPIC_API_KEY niet ingesteld in .env")
-        _client = anthropic.Anthropic(api_key=api_key)
-    return _client
 
 
 def _orders_executed_today(market: str) -> int:
@@ -243,23 +230,28 @@ def _parse_decision(text: str) -> dict | None:
 
 def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
     """
-    Vraagt Claude om een trading beslissing voor de opgegeven markt.
+    Vraagt de geconfigureerde AI om een trading beslissing voor de opgegeven markt.
 
     Retourneert: (decision, confidence, reasoning)
     - decision:   "BUY" | "SELL" | "HOLD"
     - confidence: 0.0–1.0
     - reasoning:  uitleg van de beslissing
     """
-    if not AI_ENABLED:
+    # Lees config dynamisch zodat wijzigingen zonder herstart actief zijn
+    min_confidence     = float(os.getenv("AI_MIN_CONFIDENCE", "0.7"))
+    max_orders_per_day = int(os.getenv("AI_MAX_ORDERS_PER_DAY", "3"))
+    cooldown_minutes   = int(os.getenv("AI_COOLDOWN_MINUTES", "60"))
+
+    if not ai_enabled():
         return "HOLD", 0.0, "AI strategie uitgeschakeld"
 
-    if _orders_executed_today(market) >= MAX_ORDERS_PER_DAY:
-        logger.info("[%s] AI: dagelijks maximum van %d orders bereikt", market, MAX_ORDERS_PER_DAY)
-        return "HOLD", 0.0, f"Max {MAX_ORDERS_PER_DAY} orders per dag bereikt"
+    if _orders_executed_today(market) >= max_orders_per_day:
+        logger.info("[%s] AI: dagelijks maximum van %d orders bereikt", market, max_orders_per_day)
+        return "HOLD", 0.0, f"Max {max_orders_per_day} orders per dag bereikt"
 
     minutes_ago = _last_trade_minutes_ago(market)
-    if minutes_ago is not None and minutes_ago < COOLDOWN_MINUTES:
-        remaining = int(COOLDOWN_MINUTES - minutes_ago)
+    if minutes_ago is not None and minutes_ago < cooldown_minutes:
+        remaining = int(cooldown_minutes - minutes_ago)
         logger.info("[%s] AI: cooldown actief, nog %d minuten", market, remaining)
         return "HOLD", 0.0, f"Cooldown: wacht nog {remaining} minuten"
 
@@ -271,28 +263,14 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
     context = _build_context(market, signals, recent_signals, fg_str)
 
     try:
-        client = _get_client()
-        response = client.messages.create(
-            model="claude-opus-4-7",
-            max_tokens=1024,
-            thinking={"type": "adaptive"},
-            system=[{
-                "type": "text",
-                "text": _SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"},
-            }],
-            messages=[{
-                "role": "user",
-                "content": (
-                    "Analyze the following market data and return your trading decision:\n\n"
-                    + context
-                ),
-            }],
-        )
+        from src.ai_provider import complete, get_active
+        provider, model = get_active()
+        logger.debug("[%s] AI provider=%s model=%s", market, provider, model)
 
-        text = next(
-            (block.text for block in response.content if block.type == "text"),
-            "",
+        text = complete(
+            _SYSTEM_PROMPT,
+            "Analyze the following market data and return your trading decision:\n\n" + context,
+            max_tokens=1024,
         )
         logger.debug("[%s] AI raw response: %.300s", market, text)
 
@@ -305,17 +283,14 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         confidence = parsed["confidence"]
         reasoning  = parsed["reasoning"]
 
-        cache_hit = getattr(response.usage, "cache_read_input_tokens", 0) or 0
-        logger.debug("[%s] AI cache_read_tokens=%d", market, cache_hit)
-
-        if confidence < MIN_CONFIDENCE:
+        if confidence < min_confidence:
             logger.info(
                 "[%s] AI advies %s afgewezen: confidence %.0f%% < minimum %.0f%%",
-                market, decision, confidence * 100, MIN_CONFIDENCE * 100,
+                market, decision, confidence * 100, min_confidence * 100,
             )
             return (
                 "HOLD", confidence,
-                f"Confidence {confidence:.0%} onder minimum {MIN_CONFIDENCE:.0%}: {reasoning}",
+                f"Confidence {confidence:.0%} onder minimum {min_confidence:.0%}: {reasoning}",
             )
 
         logger.info(
@@ -324,15 +299,6 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         )
         return decision, confidence, reasoning
 
-    except anthropic.AuthenticationError:
-        logger.error("AI: Anthropic API key ongeldig")
-        return "HOLD", 0.0, "Anthropic API key ongeldig"
-    except anthropic.RateLimitError:
-        logger.warning("AI: Anthropic rate limit bereikt")
-        return "HOLD", 0.0, "Anthropic rate limit bereikt"
-    except anthropic.APIConnectionError:
-        logger.warning("AI: geen verbinding met Anthropic API")
-        return "HOLD", 0.0, "Geen verbinding met Anthropic API"
     except EnvironmentError as exc:
         logger.error("AI configuratiefout: %s", exc)
         return "HOLD", 0.0, str(exc)

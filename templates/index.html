@@ -52,6 +52,22 @@
 
 <div class="container-fluid px-3">
 
+  <!-- Trading Guardrail -->
+  <div class="d-flex align-items-center justify-content-between rounded px-4 py-3 mb-4"
+       id="guardrail-bar" style="border: 2px solid #86efac; background:#f0fdf4; transition: all .3s;">
+    <div class="d-flex align-items-center gap-3">
+      <span id="guardrail-dot" style="font-size:1.4rem; line-height:1;">●</span>
+      <div>
+        <div class="fw-bold" id="guardrail-label" style="font-size:1rem;">Laden...</div>
+        <div style="font-size:.78rem; color:#64748b;" id="guardrail-desc"></div>
+      </div>
+    </div>
+    <button class="btn btn-sm fw-semibold px-3" id="guardrail-btn"
+            style="min-width:120px;" onclick="toggleTrading()" disabled>
+      ...
+    </button>
+  </div>
+
   <!-- Portfolio samenvatting -->
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
@@ -77,6 +93,24 @@
       </div>
     </div>
     {% endfor %}
+  </div>
+
+  <!-- Echt Bitvavo Portfolio -->
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>Bitvavo Portfolio (live)</span>
+      <div class="d-flex align-items-center gap-2">
+        <span id="real-pf-total" class="fw-bold" style="color:#1e40af;"></span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadRealPortfolio()" id="real-pf-btn">
+          ⟳ Ververs
+        </button>
+      </div>
+    </div>
+    <div class="card-body p-0" id="real-pf-body">
+      <div class="text-center text-muted py-3" style="font-size:.85rem;">
+        Klik op Ververs om je echte Bitvavo saldo op te halen.
+      </div>
+    </div>
   </div>
 
   <!-- Markt indicatoren -->
@@ -209,6 +243,130 @@
 </div>
 
 <script>
+  // ── Echt Bitvavo Portfolio ──
+  async function loadRealPortfolio() {
+    const btn  = document.getElementById('real-pf-btn');
+    const body = document.getElementById('real-pf-body');
+    const tot  = document.getElementById('real-pf-total');
+    btn.disabled = true;
+    btn.textContent = '...';
+    body.innerHTML = '<div class="text-center text-muted py-3" style="font-size:.85rem;">Ophalen...</div>';
+    try {
+      const r = await fetch(BASE_URL + '/api/real_portfolio');
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+
+      tot.textContent = '€' + d.total_eur.toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+      if (!d.balances || d.balances.length === 0) {
+        body.innerHTML = '<div class="text-center text-muted py-3">Geen saldo gevonden.</div>';
+        return;
+      }
+
+      const rows = d.balances.map(b => {
+        const eurFmt = b.eurValue.toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2});
+        const pct    = d.total_eur > 0 ? (b.eurValue / d.total_eur * 100).toFixed(1) : '0.0';
+        const amtFmt = b.symbol === 'EUR'
+          ? b.total.toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2})
+          : b.total.toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:8});
+        const inOrder = b.inOrder > 0
+          ? `<span class="text-muted" style="font-size:.78rem;"> (${b.inOrder.toFixed(4)} in order)</span>` : '';
+        return `<tr>
+          <td class="fw-semibold">${b.symbol}</td>
+          <td class="text-end font-monospace">${amtFmt}${inOrder}</td>
+          <td class="text-end fw-semibold">€${eurFmt}</td>
+          <td class="text-end" style="min-width:90px;">
+            <div class="d-flex align-items-center gap-1 justify-content-end">
+              <div style="width:60px;height:6px;border-radius:3px;background:#e2e8f0;">
+                <div style="width:${Math.min(parseFloat(pct),100)}%;height:100%;border-radius:3px;background:#1e40af;"></div>
+              </div>
+              <small class="text-muted">${pct}%</small>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+
+      body.innerHTML = `<div class="table-responsive">
+        <table class="table table-hover mb-0" style="font-size:.88rem;">
+          <thead><tr>
+            <th>Coin</th>
+            <th class="text-end">Hoeveelheid</th>
+            <th class="text-end">EUR waarde</th>
+            <th class="text-end">Aandeel</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    } catch(e) {
+      body.innerHTML = `<div class="text-center text-danger py-3" style="font-size:.85rem;">
+        Fout: ${e.message}
+      </div>`;
+      tot.textContent = '';
+    }
+    btn.disabled = false;
+    btn.textContent = '⟳ Ververs';
+  }
+
+  // Automatisch laden bij pagina-open
+  loadRealPortfolio();
+
+  // ── Trading Guardrail ──
+  function applyGuardrailState(paused) {
+    const bar   = document.getElementById('guardrail-bar');
+    const dot   = document.getElementById('guardrail-dot');
+    const label = document.getElementById('guardrail-label');
+    const desc  = document.getElementById('guardrail-desc');
+    const btn   = document.getElementById('guardrail-btn');
+
+    if (paused) {
+      bar.style.borderColor   = '#fca5a5';
+      bar.style.background    = '#fff1f2';
+      dot.style.color         = '#dc2626';
+      label.textContent       = 'Trading Gepauzeerd';
+      label.style.color       = '#dc2626';
+      desc.textContent        = 'Signalen worden berekend maar geen orders uitgevoerd';
+      btn.textContent         = 'Herstart Trading';
+      btn.style.background    = '#16a34a';
+      btn.style.borderColor   = '#16a34a';
+      btn.style.color         = '#fff';
+    } else {
+      bar.style.borderColor   = '#86efac';
+      bar.style.background    = '#f0fdf4';
+      dot.style.color         = '#16a34a';
+      label.textContent       = 'Trading Actief';
+      label.style.color       = '#16a34a';
+      desc.textContent        = 'Bot voert BUY/SELL orders uit bij signalen';
+      btn.textContent         = 'Stop Trading';
+      btn.style.background    = '#dc2626';
+      btn.style.borderColor   = '#dc2626';
+      btn.style.color         = '#fff';
+    }
+    btn.disabled = false;
+  }
+
+  async function toggleTrading() {
+    const btn = document.getElementById('guardrail-btn');
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+      const r = await fetch(BASE_URL + '/api/trading/toggle', {method: 'POST'});
+      const d = await r.json();
+      applyGuardrailState(d.paused);
+    } catch(e) {
+      btn.disabled = false;
+      alert('Fout: ' + e.message);
+    }
+  }
+
+  // Laad initiële status
+  fetch(BASE_URL + '/api/trading/status')
+    .then(r => r.json())
+    .then(d => applyGuardrailState(d.paused))
+    .catch(() => {
+      document.getElementById('guardrail-label').textContent = 'Status onbekend';
+      document.getElementById('guardrail-btn').disabled = false;
+    });
+
   // Klok
   function updateClock() {
     document.getElementById('clock').textContent = new Date().toLocaleTimeString('nl-NL');

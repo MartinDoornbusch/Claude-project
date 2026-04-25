@@ -10,12 +10,12 @@ from flask import Flask, render_template, jsonify, request, redirect, url_for
 from src.database import (
     get_latest_signals, get_paper_trades, get_cash, get_position, get_ai_decisions,
     get_watchlist, get_enabled_markets, set_market_enabled, upsert_market_stats, save_market_advice,
-    get_all_paper_trades_asc, get_daily_pnl_series,
+    get_all_paper_trades_asc, get_daily_pnl_series, get_trading_paused, set_trading_paused,
 )
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
 from src.portfolio import get_ticker_price
-from src.ai_strategy import AI_ENABLED
+from src.ai_strategy import ai_enabled
 from src.config_manager import read_config, write_config, config_from_form
 
 app = Flask(__name__, template_folder="../templates")
@@ -42,15 +42,13 @@ def allow_iframe(response):
     response.headers["Content-Security-Policy"] = "frame-ancestors *"
     return response
 
-_ENV_MARKETS = [m.strip() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",")]
-
-
 def _dashboard_markets() -> list[str]:
+    env_markets = [m.strip() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",")]
     try:
         m = get_enabled_markets()
-        return m if m else _ENV_MARKETS
+        return m if m else env_markets
     except Exception:
-        return _ENV_MARKETS
+        return env_markets
 
 
 def _build_portfolio() -> dict:
@@ -100,7 +98,7 @@ def index():
         trades = []
 
     try:
-        ai_decisions = get_ai_decisions(limit=10) if AI_ENABLED else []
+        ai_decisions = get_ai_decisions(limit=10) if ai_enabled() else []
     except Exception:
         ai_decisions = []
 
@@ -110,7 +108,7 @@ def index():
         market_data=market_data,
         trades=trades,
         markets=_dashboard_markets(),
-        ai_enabled=AI_ENABLED,
+        ai_enabled=ai_enabled(),
         ai_decisions=ai_decisions,
     )
 
@@ -148,6 +146,10 @@ def settings_page():
 def settings_save():
     updates = config_from_form(request.form)
     write_config(updates)
+    # Herlaad .env direct in dit proces zodat API-aanroepen meteen de nieuwe waarden gebruiken
+    from dotenv import load_dotenv
+    from src.config_manager import ENV_PATH
+    load_dotenv(dotenv_path=str(ENV_PATH), override=True)
     return redirect(url_for("settings_page", saved=1))
 
 
@@ -218,9 +220,33 @@ def api_markets_advise():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/real_portfolio")
+def api_real_portfolio():
+    try:
+        from src.portfolio import get_portfolio_value_eur
+        client = get_client()
+        balances, total_eur = get_portfolio_value_eur(client)
+        return jsonify({"balances": balances, "total_eur": round(total_eur, 2)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/trading/status")
+def api_trading_status():
+    return jsonify({"paused": get_trading_paused()})
+
+
+@app.route("/api/trading/toggle", methods=["POST"])
+def api_trading_toggle():
+    paused = not get_trading_paused()
+    set_trading_paused(paused)
+    return jsonify({"paused": paused})
+
+
 @app.route("/api/test_connection")
 def api_test_connection():
-    result: dict = {"bitvavo": False, "anthropic": False, "errors": {}}
+    result: dict = {"bitvavo": False, "ai": False, "ai_provider": "", "ai_model": "", "errors": {}}
+
     try:
         client = get_client()
         t = client.time()
@@ -231,17 +257,15 @@ def api_test_connection():
     except Exception as e:
         result["errors"]["bitvavo"] = str(e)
 
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
-    if anthropic_key:
-        try:
-            import anthropic as _anthropic
-            ac = _anthropic.Anthropic(api_key=anthropic_key)
-            ac.models.list()
-            result["anthropic"] = True
-        except Exception as e:
-            result["errors"]["anthropic"] = str(e)
-    else:
-        result["errors"]["anthropic"] = "API key niet ingesteld"
+    try:
+        from src.ai_provider import complete, get_active
+        provider, model = get_active()
+        result["ai_provider"] = provider
+        result["ai_model"] = model
+        text = complete("Reply with the word OK and nothing else.", "ping", max_tokens=16)
+        result["ai"] = bool(text.strip())
+    except Exception as e:
+        result["errors"]["ai"] = str(e)
 
     return jsonify(result)
 
@@ -325,33 +349,67 @@ def analytics_page():
 def api_analytics():
     """Berekent PnL-pairs uit paper trades voor de analytics pagina."""
     try:
+        from collections import defaultdict
+
         market = request.args.get("market")
-        trades = get_all_paper_trades_asc(market.upper() if market else None)
         daily  = get_daily_pnl_series()
 
-        # Match BUY→SELL pairs per market (FIFO)
-        open_buys: dict[str, list] = {}
-        pairs = []
-        for t in trades:
-            m = t["market"]
-            if t["side"] == "BUY":
-                open_buys.setdefault(m, []).append(t)
-            elif t["side"] == "SELL" and open_buys.get(m):
-                buy = open_buys[m].pop(0)
-                pnl_eur = t["eur_total"] - buy["eur_total"]
-                pnl_pct = (t["price"] - buy["price"]) / buy["price"] * 100
-                pairs.append({
-                    "market":      m,
-                    "buy_ts":      buy["ts"],
-                    "sell_ts":     t["ts"],
-                    "buy_price":   buy["price"],
-                    "sell_price":  t["price"],
-                    "amount":      buy["amount"],
-                    "pnl_eur":     round(pnl_eur, 4),
-                    "pnl_pct":     round(pnl_pct, 3),
-                })
+        def _build_pairs(trades: list) -> list:
+            open_buys: dict[str, list] = {}
+            result = []
+            for t in trades:
+                m = t["market"]
+                if t["side"] == "BUY":
+                    open_buys.setdefault(m, []).append(t)
+                elif t["side"] == "SELL" and open_buys.get(m):
+                    buy = open_buys[m].pop(0)
+                    pnl_eur = t["eur_total"] - buy["eur_total"]
+                    pnl_pct = (t["price"] - buy["price"]) / buy["price"] * 100
+                    result.append({
+                        "market":     m,
+                        "buy_ts":     buy["ts"],
+                        "sell_ts":    t["ts"],
+                        "buy_price":  buy["price"],
+                        "sell_price": t["price"],
+                        "amount":     buy["amount"],
+                        "pnl_eur":    round(pnl_eur, 4),
+                        "pnl_pct":    round(pnl_pct, 3),
+                    })
+            return result
 
-        # Build cumulative equity from pairs (sorted by sell_ts)
+        # Alle pairs voor per-coin vergelijking (altijd ongefilterd)
+        all_pairs = _build_pairs(get_all_paper_trades_asc(None))
+
+        # Gefilterde pairs voor KPIs / grafiek
+        pairs = _build_pairs(
+            get_all_paper_trades_asc(market.upper() if market else None)
+        ) if market else all_pairs
+
+        # ── Per-coin breakdown ──────────────────────────────────────────────
+        mkt_bucket: dict[str, list] = defaultdict(list)
+        for p in all_pairs:
+            mkt_bucket[p["market"]].append(p)
+
+        per_market = []
+        for mkt, mps in mkt_bucket.items():
+            wins_m   = [p for p in mps if p["pnl_eur"] > 0]
+            losses_m = [p for p in mps if p["pnl_eur"] <= 0]
+            total    = sum(p["pnl_eur"] for p in mps)
+            per_market.append({
+                "market":      mkt,
+                "num_trades":  len(mps),
+                "total_pnl":   round(total, 2),
+                "win_rate":    round(len(wins_m) / len(mps) * 100, 1) if mps else 0.0,
+                "num_wins":    len(wins_m),
+                "num_losses":  len(losses_m),
+                "avg_pnl_eur": round(total / len(mps), 2) if mps else 0.0,
+                "avg_pnl_pct": round(sum(p["pnl_pct"] for p in mps) / len(mps), 2) if mps else 0.0,
+                "best_trade":  round(max((p["pnl_eur"] for p in mps), default=0), 2),
+                "worst_trade": round(min((p["pnl_eur"] for p in mps), default=0), 2),
+            })
+        per_market.sort(key=lambda x: x["total_pnl"], reverse=True)
+
+        # ── Cumulatieve equity curve ────────────────────────────────────────
         pairs_sorted = sorted(pairs, key=lambda x: x["sell_ts"])
         cum = 0.0
         equity = []
@@ -359,25 +417,22 @@ def api_analytics():
             cum += p["pnl_eur"]
             equity.append({"ts": p["sell_ts"][:10], "cum_pnl": round(cum, 4)})
 
-        # Summary stats
-        total_pnl  = sum(p["pnl_eur"] for p in pairs)
-        wins       = [p for p in pairs if p["pnl_eur"] > 0]
-        losses     = [p for p in pairs if p["pnl_eur"] <= 0]
-        win_rate   = round(len(wins) / len(pairs) * 100, 1) if pairs else 0.0
-        avg_win    = round(sum(p["pnl_eur"] for p in wins) / len(wins), 2) if wins else 0.0
-        avg_loss   = round(sum(p["pnl_eur"] for p in losses) / len(losses), 2) if losses else 0.0
+        # ── Totaal-samenvatting ─────────────────────────────────────────────
+        wins   = [p for p in pairs if p["pnl_eur"] > 0]
+        losses = [p for p in pairs if p["pnl_eur"] <= 0]
 
         return jsonify({
             "pairs":        pairs_sorted,
             "equity":       equity,
             "daily":        daily,
-            "total_pnl":    round(total_pnl, 4),
+            "per_market":   per_market,
+            "total_pnl":    round(sum(p["pnl_eur"] for p in pairs), 4),
             "num_trades":   len(pairs),
             "num_wins":     len(wins),
             "num_losses":   len(losses),
-            "win_rate_pct": win_rate,
-            "avg_win_eur":  avg_win,
-            "avg_loss_eur": avg_loss,
+            "win_rate_pct": round(len(wins) / len(pairs) * 100, 1) if pairs else 0.0,
+            "avg_win_eur":  round(sum(p["pnl_eur"] for p in wins)   / len(wins),   2) if wins   else 0.0,
+            "avg_loss_eur": round(sum(p["pnl_eur"] for p in losses) / len(losses), 2) if losses else 0.0,
             "best_trade":   round(max((p["pnl_eur"] for p in pairs), default=0), 2),
             "worst_trade":  round(min((p["pnl_eur"] for p in pairs), default=0), 2),
         })
