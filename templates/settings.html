@@ -532,13 +532,20 @@
         const msg = (d.errors && d.errors.bitvavo) ? d.errors.bitvavo : 'Onbekende fout';
         html += `<span style="color:#dc2626;">✗ Bitvavo: ${msg}</span><br>`;
       }
-      if (d.ai) {
-        html += `<span style="color:#16a34a;">✓ AI OK (${d.ai_provider} / ${d.ai_model})</span>`;
+      const provs = d.providers || {};
+      if (Object.keys(provs).length === 0 && d.errors && d.errors.ai) {
+        html += `<span style="color:#dc2626;">✗ AI: ${d.errors.ai}</span>`;
       } else {
-        const msg = (d.errors && d.errors.ai) ? d.errors.ai : 'Niet getest';
-        html += `<span style="color:#dc2626;">✗ AI (${d.ai_provider || '?'}): ${msg}</span>`;
+        for (const [prov, info] of Object.entries(provs)) {
+          if (info.ok) {
+            html += `<span style="color:#16a34a;">✓ AI OK (${prov} / ${info.model})</span><br>`;
+          } else {
+            const msg = info.error || 'Onbekende fout';
+            html += `<span style="color:#dc2626;">✗ AI (${prov}): ${msg}</span><br>`;
+          }
+        }
       }
-      res.innerHTML = html;
+      res.innerHTML = html || '<span style="color:#64748b;">Geen providers geconfigureerd</span>';
     } catch(e) {
       res.innerHTML = `<span style="color:#dc2626;">Fout: ${e.message}</span>`;
     }

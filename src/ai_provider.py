@@ -32,12 +32,40 @@ _DEFAULT_MODEL: dict[str, str] = {
     "groq":      "llama-3.3-70b-versatile",
 }
 
+_KEY_ENV: dict[str, str] = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "google":    "GOOGLE_API_KEY",
+    "groq":      "GROQ_API_KEY",
+}
+
 
 def get_active() -> tuple[str, str]:
     """Geeft (provider, model) terug op basis van de huidige omgevingsvariabelen."""
     provider = os.getenv("AI_PROVIDER", "anthropic").lower()
     model    = os.getenv("AI_MODEL", "").strip() or _DEFAULT_MODEL.get(provider, "")
     return provider, model
+
+
+def get_configured_providers() -> list[tuple[str, str]]:
+    """Geeft [(provider, model)] voor alle providers met een ingevulde API key."""
+    active_provider, active_model = get_active()
+    result = []
+    for provider in ("anthropic", "google", "groq"):
+        if os.getenv(_KEY_ENV[provider], "").strip():
+            model = active_model if provider == active_provider else _DEFAULT_MODEL[provider]
+            result.append((provider, model))
+    return result
+
+
+def complete_for(provider: str, model: str, system: str, user: str, max_tokens: int = 2048) -> str:
+    """Stuurt een verzoek naar de opgegeven provider, ongeacht de actieve configuratie."""
+    if provider == "anthropic":
+        return _anthropic(system, user, model, max_tokens)
+    if provider == "google":
+        return _google(system, user, model, max_tokens)
+    if provider == "groq":
+        return _groq(system, user, model, max_tokens)
+    raise ValueError(f"Onbekende AI provider: {provider!r}")
 
 
 def complete(system: str, user: str, max_tokens: int = 2048) -> str:

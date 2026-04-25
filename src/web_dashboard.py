@@ -194,28 +194,58 @@ def api_markets_advise():
     try:
         from src.market_scanner import get_market_stats
         from src.ai_market_advisor import advise_markets
+        from src.ai_provider import get_configured_providers, get_active
         client = get_client()
         stats = get_market_stats(client)
         for m in stats:
             upsert_market_stats(m["market"], m["price"], m["change_24h"], m["volume_eur"])
 
-        advice = advise_markets(stats)
-        recommended = set(advice.get("recommended", []))
+        providers = get_configured_providers() or [get_active()]
+        all_markets_set = {m["market"] for m in stats}
 
-        for market, info in advice.get("markets", {}).items():
-            save_market_advice(
-                market=market,
-                recommended=info.get("include", False),
-                confidence=info.get("confidence"),
-                reasoning=info.get("reasoning", ""),
-            )
-        # Ensure all markets not in advice dict get ai_recommended=0
-        all_markets = {m["market"] for m in stats}
-        advised_markets = set(advice.get("markets", {}).keys())
-        for market in all_markets - advised_markets:
-            save_market_advice(market, False, None, "")
+        vote_yes: dict[str, int] = {}
+        vote_conf: dict[str, list] = {}
+        vote_reas: dict[str, dict] = {}
+        provider_results: dict = {}
 
-        return jsonify({"ok": True, "recommended": list(recommended), "summary": advice.get("summary", "")})
+        for prov, mdl in providers:
+            try:
+                advice = advise_markets(stats, provider=prov, model=mdl)
+                provider_results[prov] = {
+                    "summary": advice.get("summary", ""),
+                    "recommended": advice.get("recommended", []),
+                }
+                for market, info in advice.get("markets", {}).items():
+                    if info.get("include", False):
+                        vote_yes[market] = vote_yes.get(market, 0) + 1
+                        vote_conf.setdefault(market, []).append(info.get("confidence") or 0)
+                    vote_reas.setdefault(market, {})[prov] = info.get("reasoning", "")
+            except Exception as exc:
+                provider_results[prov] = {"error": str(exc)}
+
+        n = len(providers)
+        recommended: set[str] = set()
+        for market in all_markets_set:
+            yes = vote_yes.get(market, 0)
+            reas_parts = vote_reas.get(market, {})
+            reasoning = "  |  ".join(f"{p}: {r}" for p, r in reas_parts.items())
+            if yes > n / 2:
+                confs = vote_conf.get(market, [0])
+                avg_conf = sum(confs) / len(confs)
+                recommended.add(market)
+                save_market_advice(market, True, avg_conf, reasoning)
+            elif reas_parts:
+                save_market_advice(market, False, None, reasoning)
+            else:
+                save_market_advice(market, False, None, "")
+
+        summaries = [f"{p}: {d['summary']}" for p, d in provider_results.items() if "summary" in d]
+        return jsonify({
+            "ok": True,
+            "recommended": list(recommended),
+            "summary": "  |  ".join(summaries),
+            "providers": provider_results,
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -245,7 +275,7 @@ def api_trading_toggle():
 
 @app.route("/api/test_connection")
 def api_test_connection():
-    result: dict = {"bitvavo": False, "ai": False, "ai_provider": "", "ai_model": "", "errors": {}}
+    result: dict = {"bitvavo": False, "providers": {}, "errors": {}}
 
     try:
         client = get_client()
@@ -258,12 +288,17 @@ def api_test_connection():
         result["errors"]["bitvavo"] = str(e)
 
     try:
-        from src.ai_provider import complete, get_active
-        provider, model = get_active()
-        result["ai_provider"] = provider
-        result["ai_model"] = model
-        text = complete("Reply with the word OK and nothing else.", "ping", max_tokens=16)
-        result["ai"] = bool(text.strip())
+        from src.ai_provider import get_configured_providers, complete_for
+        providers = get_configured_providers()
+        if not providers:
+            from src.ai_provider import get_active
+            providers = [get_active()]
+        for prov, mdl in providers:
+            try:
+                text = complete_for(prov, mdl, "Reply with the word OK and nothing else.", "ping", max_tokens=16)
+                result["providers"][prov] = {"ok": bool(text.strip()), "model": mdl}
+            except Exception as e:
+                result["providers"][prov] = {"ok": False, "model": mdl, "error": str(e)}
     except Exception as e:
         result["errors"]["ai"] = str(e)
 

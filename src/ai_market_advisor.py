@@ -70,9 +70,9 @@ def _parse_advice(text: str) -> dict | None:
         return None
 
 
-def advise_markets(market_stats: list[dict]) -> dict:
+def advise_markets(market_stats: list[dict], *, provider: str | None = None, model: str | None = None) -> dict:
     """
-    Vraagt de geconfigureerde AI welke markten het meest geschikt zijn voor automatisch traden.
+    Vraagt de opgegeven (of actieve) AI welke markten het meest geschikt zijn voor automatisch traden.
 
     Returns dict with:
       recommended: list[str]       — aanbevolen marktparen
@@ -82,12 +82,14 @@ def advise_markets(market_stats: list[dict]) -> dict:
     if not market_stats:
         return {"recommended": [], "summary": "Geen marktdata beschikbaar.", "markets": {}}
 
-    from src.ai_provider import complete, get_active
-    provider, model = get_active()
+    from src.ai_provider import complete_for, get_active
+    if provider is None:
+        provider, model = get_active()
     logger.info("AI marktadvies via provider=%s model=%s", provider, model)
 
     table = _build_market_table(market_stats)
-    text = complete(
+    text = complete_for(
+        provider, model,
         _SYSTEM_PROMPT,
         "Analyze these markets and recommend which ones to include "
         "in an automated EUR trading portfolio:\n\n" + table,

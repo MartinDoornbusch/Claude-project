@@ -193,7 +193,7 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
 
     # Orders vandaag vs maximum
     orders_today = _orders_executed_today(market)
-    lines.append(f"AI orders today: {orders_today}/{MAX_ORDERS_PER_DAY}")
+    lines.append(f"AI orders today: {orders_today}/{int(os.getenv('AI_MAX_ORDERS_PER_DAY', '3'))}")
 
     if recent_signals:
         lines += ["", "=== Recent Signal History (newest first) ==="]

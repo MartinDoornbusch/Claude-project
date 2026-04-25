@@ -54,14 +54,13 @@
 
 <div class="container-fluid px-3 pb-5" style="max-width:1100px;">
 
-  {% if ai_summary %}
-  <div class="card mb-4 summary-card">
+  <div class="card mb-4 summary-card" id="ai-summary-card"{% if not ai_summary %} style="display:none"{% endif %}>
     <div class="card-body">
       <div class="d-flex align-items-start gap-2">
         <span style="font-size:1.2rem;">🤖</span>
-        <div>
-          <div class="fw-semibold mb-1" style="color:#2563eb;">AI Advies — claude-opus-4-7</div>
-          <div class="reasoning-tip">{{ ai_summary }}</div>
+        <div id="ai-summary-body" style="width:100%;">
+          <div class="fw-semibold mb-1" style="color:#2563eb;">AI Advies</div>
+          <div class="reasoning-tip">{{ ai_summary or '' }}</div>
           {% if ai_advised_at %}
           <div class="mt-1" style="font-size:.72rem; color:#94a3b8;">{{ ai_advised_at[:16] }} UTC</div>
           {% endif %}
@@ -69,7 +68,6 @@
       </div>
     </div>
   </div>
-  {% endif %}
 
   <!-- Stats + knoppen -->
   <div class="row g-3 mb-4">
@@ -234,12 +232,32 @@
 
   // ── AI Advies aanvragen ──
   async function getAiAdvice() {
-    showSpinner('Claude analyseert markten... (kan 30-60 seconden duren)');
+    showSpinner('Alle AI providers raadplegen... (kan 60+ seconden duren)');
     try {
       const r = await fetch(BASE_URL + '/api/markets/advise', {method: 'POST'});
       const data = await r.json();
       if (data.error) throw new Error(data.error);
-      location.reload();
+
+      // Toon per-provider resultaten in de kaart vóór de reload
+      const provs = data.providers || {};
+      const card  = document.getElementById('ai-summary-card');
+      const body  = document.getElementById('ai-summary-body');
+      if (card && body && Object.keys(provs).length > 0) {
+        card.style.display = '';
+        let html = '<div class="fw-semibold mb-2" style="color:#2563eb;">AI Advies — zojuist bijgewerkt</div>';
+        for (const [prov, info] of Object.entries(provs)) {
+          if (info.error) {
+            html += `<div class="reasoning-tip" style="color:#dc2626;">✗ ${prov}: ${info.error}</div>`;
+          } else {
+            const n = (info.recommended || []).length;
+            html += `<div class="reasoning-tip"><strong>${prov}</strong> → ${n} markt${n !== 1 ? 'en' : ''} aanbevolen: ${info.summary || ''}</div>`;
+          }
+        }
+        html += '<div class="mt-1" style="font-size:.72rem;color:#94a3b8;">Pagina herladen om tabel bij te werken...</div>';
+        body.innerHTML = html;
+      }
+
+      setTimeout(() => location.reload(), 3000);
     } catch(e) {
       alert('AI advies mislukt: ' + e.message);
       hideSpinner();
