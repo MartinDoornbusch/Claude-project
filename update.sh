@@ -7,8 +7,8 @@ ADDON_DIR="/addons/bitvavo-bot"
 
 echo "[update] Code ophalen van GitHub..."
 cd "$REPO_DIR"
-git fetch origin claude/bitvavo-ai-trading-bot-VI0ln
-git reset --hard origin/claude/bitvavo-ai-trading-bot-VI0ln
+git fetch origin main
+git reset --hard origin/main
 
 echo "[update] Add-on bestanden kopiëren naar $ADDON_DIR..."
 cp "$REPO_DIR/ha-addon/config.yaml"  "$ADDON_DIR/config.yaml"
