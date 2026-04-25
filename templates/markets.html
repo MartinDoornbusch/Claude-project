@@ -20,6 +20,10 @@
     .trend-flat   { background:#f1f5f9; color:#475569; border-radius:4px; padding:1px 6px; white-space:nowrap; }
     .trend-down   { background:#fee2e2; color:#991b1b; border-radius:4px; padding:1px 6px; white-space:nowrap; }
     .trend-crash  { background:#fca5a5; color:#7f1d1d; font-weight:600; border-radius:4px; padding:1px 6px; white-space:nowrap; }
+    .badge-stable { background:#e2e8f0; color:#475569; font-size:.7rem; border-radius:4px; padding:1px 5px; margin-left:4px; }
+    .badge-meme   { background:#fef3c7; color:#92400e; font-size:.7rem; border-radius:4px; padding:1px 5px; margin-left:4px; }
+    tr.is-stable td { opacity: .6; }
+    tr.is-stable { background: #f8fafc !important; }
     tbody tr:hover td { background: #f8fafc; }
     .change-pos { color: #16a34a; }
     .change-neg { color: #dc2626; }
@@ -114,6 +118,7 @@
     <button class="btn btn-sm" id="filter-hot"    onclick="setFilter('hot')"   style="background:#fef9c3;color:#854d0e;border-color:#fde047;">🔥 Stijgers</button>
     <button class="btn btn-sm" id="filter-flat"   onclick="setFilter('flat')"  style="background:#f1f5f9;color:#475569;border-color:#cbd5e1;">➡ Stabiel</button>
     <button class="btn btn-sm" id="filter-down"   onclick="setFilter('down')"  style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;">📉 Dalers</button>
+    <button class="btn btn-sm" id="filter-crypto" onclick="setFilter('crypto')" style="border-color:#a78bfa;color:#6d28d9;">Alleen crypto</button>
     <div class="ms-auto">
       <input type="text" class="form-control form-control-sm" id="search-input"
              placeholder="Zoeken..." oninput="filterTable()"
@@ -138,7 +143,12 @@
             </tr>
           </thead>
           <tbody id="markets-tbody">
+            {% set _stables = ['USDT','USDC','BUSD','DAI','TUSD','USDP','GUSD','FRAX','USDD','USTC','EURC','EURT','EURS','AGEUR','XAUT','PAXG'] %}
+            {% set _memes   = ['DOGE','SHIB','PEPE','FLOKI','BONK','WIF','MEME','BABYDOGE','ELON','SAFEMOON','CUM'] %}
             {% for m in watchlist %}
+            {% set base = m.market.split('-')[0] %}
+            {% set is_stable = base in _stables %}
+            {% set is_meme   = base in _memes %}
             {% set ch = m.change_24h %}
             {% if ch is not none %}
               {% if ch >= 5 %}{% set tcat = 'hot' %}{% set thtml = '<span class="trend-hot">🔥 +' + "%.1f"|format(ch) + '%</span>' %}
@@ -150,12 +160,17 @@
             {% else %}
               {% set tcat = '' %}{% set thtml = '<span class="text-muted">—</span>' %}
             {% endif %}
-            <tr class="market-row"
+            <tr class="market-row{% if is_stable %} is-stable{% endif %}"
                 data-market="{{ m.market }}"
                 data-enabled="{{ '1' if m.enabled else '0' }}"
                 data-ai="{{ '1' if m.ai_recommended else '0' }}"
-                data-trend="{{ tcat }}">
-              <td class="fw-semibold">{{ m.market }}</td>
+                data-trend="{{ tcat }}"
+                data-type="{{ 'stable' if is_stable else ('meme' if is_meme else 'crypto') }}">
+              <td class="fw-semibold">
+                {{ m.market }}
+                {% if is_stable %}<span class="badge-stable" title="Stablecoin — volgt een valuta, nauwelijks koersbeweging">🔒 Stable</span>{% endif %}
+                {% if is_meme %}<span class="badge-meme" title="Meme/speculatief coin — hoog risico, geen onderliggend nut">🎭 Meme</span>{% endif %}
+              </td>
               <td class="text-end font-monospace">
                 {% if m.last_price %}€{{ "%.4f"|format(m.last_price) }}{% else %}<span class="text-muted">—</span>{% endif %}
               </td>
@@ -287,6 +302,22 @@
     }
   }
 
+  // ── Stablecoin / meme detectie ──
+  const _STABLES = new Set(['USDT','USDC','BUSD','DAI','TUSD','USDP','GUSD','FRAX','USDD','USTC','EURC','EURT','EURS','AGEUR','XAUT','PAXG']);
+  const _MEMES   = new Set(['DOGE','SHIB','PEPE','FLOKI','BONK','WIF','MEME','BABYDOGE','ELON','SAFEMOON']);
+  function coinType(market) {
+    const base = market.split('-')[0].toUpperCase();
+    if (_STABLES.has(base)) return 'stable';
+    if (_MEMES.has(base))   return 'meme';
+    return 'crypto';
+  }
+  function coinBadge(market) {
+    const t = coinType(market);
+    if (t === 'stable') return '<span class="badge-stable" title="Stablecoin — volgt een valuta, nauwelijks koersbeweging">🔒 Stable</span>';
+    if (t === 'meme')   return '<span class="badge-meme" title="Meme/speculatief — hoog risico, geen onderliggend nut">🎭 Meme</span>';
+    return '';
+  }
+
   // ── Trendklasse bepalen op basis van 24u % ──
   function trendInfo(change) {
     if (change === null || change === undefined) return {cat: '', html: '<span class="text-muted">—</span>'};
@@ -313,8 +344,9 @@
         ? `<span class="${change >= 0 ? 'change-pos' : 'change-neg'}">${change >= 0 ? '+' : ''}${change.toFixed(2)}%</span>`
         : '<span class="text-muted">—</span>';
 
-      return `<tr class="market-row" data-market="${m.market}" data-enabled="${enabled}" data-ai="${ai}" data-trend="${trend.cat}">
-        <td class="fw-semibold">${m.market}</td>
+      const ctype = coinType(m.market);
+      return `<tr class="market-row${ctype === 'stable' ? ' is-stable' : ''}" data-market="${m.market}" data-enabled="${enabled}" data-ai="${ai}" data-trend="${trend.cat}" data-type="${ctype}">
+        <td class="fw-semibold">${m.market}${coinBadge(m.market)}</td>
         <td class="text-end font-monospace">${m.price ? '€' + m.price.toFixed(4) : '<span class="text-muted">—</span>'}</td>
         <td class="text-center">${trend.html}</td>
         <td class="text-end hide-sm">${changeHtml}</td>
@@ -337,7 +369,7 @@
   // ── Filter ──
   function setFilter(f) {
     currentFilter = f;
-    ['all','enabled','ai','hot','flat','down'].forEach(id => {
+    ['all','enabled','ai','hot','flat','down','crypto'].forEach(id => {
       const el = document.getElementById('filter-' + id);
       if (el) el.classList.toggle('active', id === f);
     });
@@ -351,13 +383,15 @@
       const enabled = row.dataset.enabled === '1';
       const ai      = row.dataset.ai === '1';
       const trend   = row.dataset.trend || '';
+      const type    = row.dataset.type  || 'crypto';
       const matchSearch = !q || market.includes(q);
       const matchFilter = currentFilter === 'all'
         || (currentFilter === 'enabled' && enabled)
         || (currentFilter === 'ai'      && ai)
         || (currentFilter === 'hot'     && trend === 'hot')
         || (currentFilter === 'flat'    && trend === 'flat')
-        || (currentFilter === 'down'    && trend === 'down');
+        || (currentFilter === 'down'    && trend === 'down')
+        || (currentFilter === 'crypto'  && type === 'crypto');
       row.style.display = matchSearch && matchFilter ? '' : 'none';
     });
   }
