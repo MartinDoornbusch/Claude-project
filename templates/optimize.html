@@ -26,7 +26,7 @@
     option { background: #ffffff; }
     @media (max-width:576px) { .hide-sm { display:none; } }
   </style>
-<script>const BASE_URL = '{{ url_for("index") }}'.replace(//$/, '');</script>
+<script>const BASE_URL = '{{ url_for("index") }}'.replace(/\/$/, '');</script>
 </head>
 <body>
 
