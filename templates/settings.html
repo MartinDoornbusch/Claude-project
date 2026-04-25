@@ -124,7 +124,7 @@
           <div class="card-header">Bitvavo API</div>
           <div class="card-body">
             <div class="mb-3">
-              <label class="form-label">API Key</label>
+              <label class="form-label">API Key {% if config.BITVAVO_API_KEY %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
               <div class="input-group">
                 <input type="password" class="form-control font-monospace" name="BITVAVO_API_KEY"
                        placeholder="{{ '●●●●●●●● (ingesteld)' if config.BITVAVO_API_KEY else 'Voer API key in' }}">
@@ -133,7 +133,7 @@
               <div class="form-text">Laat leeg om de huidige waarde te bewaren</div>
             </div>
             <div>
-              <label class="form-label">API Secret</label>
+              <label class="form-label">API Secret {% if config.BITVAVO_API_SECRET %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
               <div class="input-group">
                 <input type="password" class="form-control font-monospace" name="BITVAVO_API_SECRET"
                        placeholder="{{ '●●●●●●●● (ingesteld)' if config.BITVAVO_API_SECRET else 'Voer API secret in' }}">
@@ -273,7 +273,7 @@
           <div class="card-header" style="color:#2563eb;">Claude AI Strategie</div>
           <div class="card-body">
             <div class="mb-3">
-              <label class="form-label">Anthropic API Key</label>
+              <label class="form-label">Anthropic API Key {% if config.ANTHROPIC_API_KEY %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
               <div class="input-group">
                 <input type="password" class="form-control font-monospace" name="ANTHROPIC_API_KEY"
                        placeholder="{{ '●●●●●●●● (ingesteld)' if config.ANTHROPIC_API_KEY else 'sk-ant-...' }}">
@@ -368,7 +368,7 @@
                      value="{{ config.MQTT_USER }}" autocomplete="off">
             </div>
             <div>
-              <label class="form-label">Wachtwoord</label>
+              <label class="form-label">Wachtwoord {% if config.MQTT_PASS %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
               <div class="input-group">
                 <input type="password" class="form-control" name="MQTT_PASS"
                        placeholder="{{ '●●●●●●●● (ingesteld)' if config.MQTT_PASS else 'Laat leeg om ongewijzigd te laten' }}">
@@ -389,7 +389,7 @@
               <div class="form-text">URL van je Home Assistant instantie</div>
             </div>
             <div class="mb-3">
-              <label class="form-label">Long-lived Access Token</label>
+              <label class="form-label">Long-lived Access Token {% if config.HA_TOKEN %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
               <div class="input-group">
                 <input type="password" class="form-control font-monospace" name="HA_TOKEN"
                        placeholder="{{ '●●●●●●●● (ingesteld)' if config.HA_TOKEN else 'Profiel → Beveiliging → Token aanmaken' }}">
