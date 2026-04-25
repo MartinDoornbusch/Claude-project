@@ -15,12 +15,7 @@ from src.database import (
 
 logger = logging.getLogger(__name__)
 
-# ── Veiligheidslimieten (instelbaar via .env) ────────────────────────────────
-LIVE_ENABLED       = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
-MAX_TRADE_EUR      = float(os.getenv("MAX_TRADE_EUR", "25"))       # max per order
-MAX_EXPOSURE_EUR   = float(os.getenv("MAX_EXPOSURE_EUR", "100"))   # max totaal open
-DAILY_LOSS_LIMIT   = float(os.getenv("DAILY_LOSS_LIMIT_EUR", "50")) # dagelijks verlies stop
-FEE_RATE           = 0.0025                                          # Bitvavo taker fee
+FEE_RATE = 0.0025  # Bitvavo taker fee
 
 
 def _guard_checks(client: Bitvavo, market: str, spend_eur: float) -> str | None:
@@ -28,15 +23,19 @@ def _guard_checks(client: Bitvavo, market: str, spend_eur: float) -> str | None:
     Controleer alle veiligheidslimieten vóór een order.
     Retourneert een foutmelding als een limiet overschreden wordt, anders None.
     """
-    if not LIVE_ENABLED:
+    if os.getenv("LIVE_TRADING_ENABLED", "false").lower() != "true":
         return "LIVE_TRADING_ENABLED is niet true in .env"
 
-    if spend_eur > MAX_TRADE_EUR:
-        return f"Order (€{spend_eur:.2f}) overschrijdt MAX_TRADE_EUR (€{MAX_TRADE_EUR})"
+    max_trade_eur    = float(os.getenv("MAX_TRADE_EUR", "25"))
+    max_exposure_eur = float(os.getenv("MAX_EXPOSURE_EUR", "100"))
+    daily_loss_limit = float(os.getenv("DAILY_LOSS_LIMIT_EUR", "50"))
+
+    if spend_eur > max_trade_eur:
+        return f"Order (€{spend_eur:.2f}) overschrijdt MAX_TRADE_EUR (€{max_trade_eur})"
 
     daily_loss = get_daily_loss(market)
-    if daily_loss <= -DAILY_LOSS_LIMIT:
-        return f"Daglimiet bereikt: verlies vandaag €{abs(daily_loss):.2f} >= €{DAILY_LOSS_LIMIT}"
+    if daily_loss <= -daily_loss_limit:
+        return f"Daglimiet bereikt: verlies vandaag €{abs(daily_loss):.2f} >= €{daily_loss_limit}"
 
     open_trades = get_live_trades(market, limit=100)
     open_exposure = sum(
@@ -48,9 +47,9 @@ def _guard_checks(client: Bitvavo, market: str, spend_eur: float) -> str | None:
         if t["side"] == "SELL" and t["status"] == "filled"
     )
     net_exposure = open_exposure - open_sell
-    if net_exposure + spend_eur > MAX_EXPOSURE_EUR:
+    if net_exposure + spend_eur > max_exposure_eur:
         return (f"Blootstelling (€{net_exposure:.2f} + €{spend_eur:.2f}) "
-                f"overschrijdt MAX_EXPOSURE_EUR (€{MAX_EXPOSURE_EUR})")
+                f"overschrijdt MAX_EXPOSURE_EUR (€{max_exposure_eur})")
 
     return None
 
@@ -73,7 +72,7 @@ def buy(client: Bitvavo, market: str, current_price: float, reason: str = "") ->
     Plaats een echte markt-koop order op Bitvavo.
     Gebruikt MAX_TRADE_EUR als orderbedrag.
     """
-    spend_eur = MAX_TRADE_EUR
+    spend_eur = float(os.getenv("MAX_TRADE_EUR", "25"))
 
     block = _guard_checks(client, market, spend_eur)
     if block:
@@ -121,7 +120,7 @@ def sell(client: Bitvavo, market: str, current_price: float, reason: str = "") -
         logger.warning("[%s] LIVE SELL geblokkeerd: %s", market, block)
         return None
 
-    if not LIVE_ENABLED:
+    if os.getenv("LIVE_TRADING_ENABLED", "false").lower() != "true":
         logger.warning("[%s] LIVE SELL geblokkeerd: LIVE_TRADING_ENABLED is niet true", market)
         return None
 

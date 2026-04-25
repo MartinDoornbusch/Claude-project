@@ -14,8 +14,6 @@ from src.database import (
 
 logger = logging.getLogger(__name__)
 
-# Percentage van beschikbaar cash dat per trade ingezet wordt
-TRADE_FRACTION = float(os.getenv("PAPER_TRADE_FRACTION", "0.95"))
 # Simuleer 0.25% transactiekosten (zelfde als Bitvavo taker fee)
 FEE_RATE = 0.0025
 
@@ -23,7 +21,7 @@ FEE_RATE = 0.0025
 def buy(market: str, price: float, reason: str = "", fraction: float | None = None) -> dict | None:
     """
     Simuleer een marktorder koop.
-    Gebruikt fraction (of TRADE_FRACTION als None) van beschikbaar cash.
+    Gebruikt fraction (of PAPER_TRADE_FRACTION als None) van beschikbaar cash.
     Retourneert trade-info of None als er niets te besteden is.
     """
     cash = get_cash()
@@ -36,7 +34,8 @@ def buy(market: str, price: float, reason: str = "", fraction: float | None = No
         logger.info("[%s] BUY overgeslagen — positie al open (%.6f)", market, position["amount"])
         return None
 
-    used_fraction = fraction if fraction is not None else TRADE_FRACTION
+    trade_fraction = float(os.getenv("PAPER_TRADE_FRACTION", "0.95"))
+    used_fraction = fraction if fraction is not None else trade_fraction
     spend_eur = cash * used_fraction
     fee = spend_eur * FEE_RATE
     net_eur = spend_eur - fee

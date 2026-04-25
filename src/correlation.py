@@ -9,20 +9,22 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-CORR_THRESHOLD = float(os.getenv("CORR_THRESHOLD", "0.8"))
-CORR_LOOKBACK  = 30  # dagelijkse candles
+CORR_LOOKBACK = 30  # dagelijkse candles
 
 
 def get_correlated_markets(
     client,
     market: str,
     all_markets: list[str],
-    threshold: float = CORR_THRESHOLD,
+    threshold: float | None = None,
 ) -> list[str]:
     """
     Retourneert markten die sterk gecorreleerd zijn met `market` (>= threshold).
     Gebruikt 30 dagelijkse sluitingskoersen voor berekening.
     """
+    if threshold is None:
+        threshold = float(os.getenv("CORR_THRESHOLD", "0.8"))
+
     if len(all_markets) < 2:
         return []
 
@@ -64,12 +66,15 @@ def has_correlated_position(
     client,
     market: str,
     all_markets: list[str],
-    threshold: float = CORR_THRESHOLD,
+    threshold: float | None = None,
 ) -> tuple[bool, str]:
     """
     Controleert of er al een open positie is in een gecorreleerde markt.
     Retourneert (True, markt_naam) als dat zo is, anders (False, "").
     """
+    if threshold is None:
+        threshold = float(os.getenv("CORR_THRESHOLD", "0.8"))
+
     from src.database import get_position
 
     correlated = get_correlated_markets(client, market, all_markets, threshold)

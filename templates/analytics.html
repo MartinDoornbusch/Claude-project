@@ -115,13 +115,19 @@
   <!-- Cumulatieve PnL curve -->
   <div class="card mb-4">
     <div class="card-header">Cumulatieve PnL (per afgesloten trade)</div>
-    <div class="card-body"><canvas id="equity-chart" height="100"></canvas></div>
+    <div class="card-body">
+      <div id="equity-empty" style="display:none; text-align:center; padding:24px 0; color:#94a3b8; font-size:.85rem;">Nog geen afgesloten trades — grafiek verschijnt na eerste BUY→SELL cyclus</div>
+      <canvas id="equity-chart" height="100"></canvas>
+    </div>
   </div>
 
   <!-- Dagelijkse PnL staafdiagram -->
   <div class="card mb-4">
     <div class="card-header">Dagelijkse PnL</div>
-    <div class="card-body"><canvas id="daily-chart" height="90"></canvas></div>
+    <div class="card-body">
+      <div id="daily-empty" style="display:none; text-align:center; padding:24px 0; color:#94a3b8; font-size:.85rem;">Nog geen dagelijkse PnL-data beschikbaar</div>
+      <canvas id="daily-chart" height="90"></canvas>
+    </div>
   </div>
 
   <!-- Trades tabel -->
@@ -270,7 +276,15 @@
 
   function renderEquityChart(equity) {
     if (equityChart) equityChart.destroy();
-    if (!equity.length) return;
+    const empty = document.getElementById('equity-empty');
+    const canvas = document.getElementById('equity-chart');
+    if (!equity.length) {
+      if (empty) empty.style.display = '';
+      if (canvas) canvas.style.display = 'none';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    if (canvas) canvas.style.display = '';
     const labels = equity.map(e => e.ts);
     const vals   = equity.map(e => e.cum_pnl);
     const final  = vals[vals.length - 1];
@@ -309,7 +323,15 @@
 
   function renderDailyChart(daily) {
     if (dailyChart) dailyChart.destroy();
-    if (!daily.length) return;
+    const empty = document.getElementById('daily-empty');
+    const canvas = document.getElementById('daily-chart');
+    if (!daily.length) {
+      if (empty) empty.style.display = '';
+      if (canvas) canvas.style.display = 'none';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    if (canvas) canvas.style.display = '';
     const labels = daily.map(d => d.date);
     const vals   = daily.map(d => d.pnl);
     const colors = vals.map(v => v >= 0 ? 'rgba(22,163,74,.7)' : 'rgba(220,38,38,.7)');
