@@ -6,54 +6,54 @@
   <title>Instellingen — Bitvavo Bot</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { background: #0d1117; color: #e6edf3; }
-    .card { background: #161b22; border: 1px solid #30363d; }
-    .card-header { background: #21262d; border-bottom: 1px solid #30363d; font-weight: 600; }
-    .navbar { background: #161b22 !important; border-bottom: 1px solid #30363d; }
+    body { background: #f1f5f9; color: #1e293b; }
+    .card { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .card-header { background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #1e293b; }
+    .navbar { background: #1e40af !important; border-bottom: none; }
     .form-control, .form-select {
-      background: #0d1117; border-color: #30363d; color: #e6edf3;
+      background: #ffffff; border-color: #cbd5e1; color: #1e293b;
     }
     .form-control:focus, .form-select:focus {
-      background: #0d1117; border-color: #58a6ff; color: #e6edf3;
-      box-shadow: 0 0 0 .2rem rgba(88,166,255,.2);
+      background: #ffffff; border-color: #3b82f6; color: #1e293b;
+      box-shadow: 0 0 0 .2rem rgba(59,130,246,.15);
     }
-    .form-control::placeholder { color: #484f58; }
+    .form-control::placeholder { color: #94a3b8; }
     .input-group-text {
-      background: #21262d; border-color: #30363d; color: #8b949e;
+      background: #f8fafc; border-color: #cbd5e1; color: #64748b;
       cursor: pointer; user-select: none;
     }
-    .input-group-text:hover { color: #e6edf3; }
-    .form-label { color: #8b949e; font-size: .8rem; margin-bottom: .3rem;
+    .input-group-text:hover { color: #1e293b; }
+    .form-label { color: #64748b; font-size: .8rem; margin-bottom: .3rem;
                   text-transform: uppercase; letter-spacing: .05em; }
-    .form-text  { color: #484f58 !important; font-size: .78rem; }
-    .card-live  { border-color: rgba(248,81,73,.5) !important; }
-    .card-ai    { border-color: rgba(88,166,255,.5) !important; }
-    .card-mode  { border-color: rgba(56,139,253,.6) !important; background: #161b22; }
+    .form-text  { color: #94a3b8 !important; font-size: .78rem; }
+    .card-live  { border-color: rgba(220,38,38,.4) !important; }
+    .card-ai    { border-color: rgba(59,130,246,.4) !important; }
+    .card-mode  { border-color: rgba(59,130,246,.4) !important; background: #ffffff; }
     .mode-col   { border-radius: .5rem; padding: 1.2rem 1rem; }
-    .mode-col-paper { background: rgba(63,185,80,.06); }
-    .mode-col-live  { background: rgba(248,81,73,.06); }
-    .mode-col-regel { background: rgba(139,148,158,.06); }
-    .mode-col-ai    { background: rgba(88,166,255,.06); }
+    .mode-col-paper { background: rgba(22,163,74,.06); }
+    .mode-col-live  { background: rgba(220,38,38,.06); }
+    .mode-col-regel { background: rgba(100,116,139,.06); }
+    .mode-col-ai    { background: rgba(59,130,246,.06); }
     .big-switch .form-check-input { width: 3.2em; height: 1.6em; cursor: pointer; }
     .mode-name { font-size: 1.05rem; font-weight: 700; letter-spacing: .02em; }
-    .mode-desc { font-size: .78rem; color: #8b949e; min-height: 1.2em; }
-    .restart-note { font-size: .75rem; color: #f0883e; }
-    option { background: #21262d; }
+    .mode-desc { font-size: .78rem; color: #64748b; min-height: 1.2em; }
+    .restart-note { font-size: .75rem; color: #f97316; }
+    option { background: #ffffff; }
   </style>
 </head>
 <body>
 
 <nav class="navbar navbar-dark px-3 mb-4">
   <a class="navbar-brand fw-bold text-decoration-none" href="{{ url_for('index') }}">← Dashboard</a>
-  <span style="font-size:.85rem; color:#8b949e;">Instellingen</span>
+  <span style="font-size:.85rem; color:#93c5fd;">Instellingen</span>
 </nav>
 
 <div class="container-fluid px-3 pb-5" style="max-width:960px;">
 
   {% if saved %}
-  <div class="alert alert-success alert-dismissible fade show mb-4" role="alert" style="background:#1a3a1a; border-color:#238636; color:#3fb950;">
+  <div class="alert alert-success alert-dismissible fade show mb-4" role="alert" style="background:#f0fdf4; border-color:#86efac; color:#166534;">
     ✓ Instellingen opgeslagen. <strong>Herstart de bot</strong> om strategie- en modus-wijzigingen te activeren.
-    <button type="button" class="btn-close" style="filter:invert(1);" data-bs-dismiss="alert"></button>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
   </div>
   {% endif %}
 
@@ -80,7 +80,7 @@
                 </div>
               </div>
               <div class="mode-name" id="trading-name"
-                   style="color: {{ '#f85149' if config.LIVE_TRADING_ENABLED == 'true' else '#3fb950' }}">
+                   style="color: {{ '#dc2626' if config.LIVE_TRADING_ENABLED == 'true' else '#16a34a' }}">
                 {{ 'LIVE TRADING' if config.LIVE_TRADING_ENABLED == 'true' else 'PAPER TRADING' }}
               </div>
               <div class="mode-desc" id="trading-desc">
@@ -101,7 +101,7 @@
                 </div>
               </div>
               <div class="mode-name" id="strategy-name"
-                   style="color: {{ '#58a6ff' if config.AI_STRATEGY_ENABLED == 'true' else '#8b949e' }}">
+                   style="color: {{ '#3b82f6' if config.AI_STRATEGY_ENABLED == 'true' else '#64748b' }}">
                 {{ 'CLAUDE AI' if config.AI_STRATEGY_ENABLED == 'true' else 'REGEL-GEBASEERD' }}
               </div>
               <div class="mode-desc" id="strategy-desc">
@@ -270,7 +270,7 @@
 
         <!-- Claude AI -->
         <div class="card mb-4 card-ai">
-          <div class="card-header" style="color:#58a6ff;">Claude AI Strategie</div>
+          <div class="card-header" style="color:#2563eb;">Claude AI Strategie</div>
           <div class="card-body">
             <div class="mb-3">
               <label class="form-label">Anthropic API Key</label>
@@ -281,7 +281,7 @@
               </div>
               <div class="form-text">
                 Aanmaken via
-                <a href="https://console.anthropic.com" target="_blank" style="color:#58a6ff;">console.anthropic.com</a>
+                <a href="https://console.anthropic.com" target="_blank" style="color:#2563eb;">console.anthropic.com</a>
               </div>
             </div>
             <div class="mb-3">
@@ -306,9 +306,9 @@
 
         <!-- Live Trading -->
         <div class="card mb-4 card-live">
-          <div class="card-header" style="color:#f85149;">Live Trading</div>
+          <div class="card-header" style="color:#dc2626;">Live Trading</div>
           <div class="card-body">
-            <div class="alert mb-3 p-2" style="background:rgba(248,81,73,.08); border:1px solid rgba(248,81,73,.3); font-size:.82rem; color:#e6edf3;">
+            <div class="alert mb-3 p-2" style="background:rgba(220,38,38,.06); border:1px solid rgba(220,38,38,.25); font-size:.82rem; color:#7f1d1d;">
               ⚠️ Echte orders met echt geld. Controleer of je Bitvavo API-sleutel
               <strong>Handelen</strong> rechten heeft (maar <strong>geen</strong> Opnemen).
             </div>
@@ -379,8 +379,8 @@
         </div>
 
         <!-- Home Assistant Notificaties -->
-        <div class="card mb-4" style="border-color: rgba(63,185,80,.4);">
-          <div class="card-header" style="color:#3fb950;">Home Assistant Notificaties</div>
+        <div class="card mb-4" style="border-color: rgba(22,163,74,.4);">
+          <div class="card-header" style="color:#16a34a;">Home Assistant Notificaties</div>
           <div class="card-body">
             <div class="mb-3">
               <label class="form-label">HA URL</label>
@@ -437,7 +437,7 @@
     const live = liveToggle.checked;
     colTrading.className = 'mode-col ' + (live ? 'mode-col-live' : 'mode-col-paper');
     tradingName.textContent = live ? 'LIVE TRADING'  : 'PAPER TRADING';
-    tradingName.style.color = live ? '#f85149'       : '#3fb950';
+    tradingName.style.color = live ? '#dc2626'       : '#16a34a';
     tradingDesc.textContent = live ? 'Echte orders op Bitvavo' : 'Virtueel geld, geen risico';
   }
   liveToggle.addEventListener('change', updateTrading);
@@ -452,7 +452,7 @@
     const ai = aiToggle.checked;
     colStrategy.className = 'mode-col ' + (ai ? 'mode-col-ai' : 'mode-col-regel');
     strategyName.textContent = ai ? 'CLAUDE AI'                     : 'REGEL-GEBASEERD';
-    strategyName.style.color = ai ? '#58a6ff'                       : '#8b949e';
+    strategyName.style.color = ai ? '#3b82f6'                       : '#64748b';
     strategyDesc.textContent = ai ? 'claude-opus-4-7 analyseert markt' : 'MA crossover + RSI regels';
   }
   aiToggle.addEventListener('change', updateStrategy);
