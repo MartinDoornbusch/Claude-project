@@ -349,33 +349,67 @@ def analytics_page():
 def api_analytics():
     """Berekent PnL-pairs uit paper trades voor de analytics pagina."""
     try:
+        from collections import defaultdict
+
         market = request.args.get("market")
-        trades = get_all_paper_trades_asc(market.upper() if market else None)
         daily  = get_daily_pnl_series()
 
-        # Match BUY→SELL pairs per market (FIFO)
-        open_buys: dict[str, list] = {}
-        pairs = []
-        for t in trades:
-            m = t["market"]
-            if t["side"] == "BUY":
-                open_buys.setdefault(m, []).append(t)
-            elif t["side"] == "SELL" and open_buys.get(m):
-                buy = open_buys[m].pop(0)
-                pnl_eur = t["eur_total"] - buy["eur_total"]
-                pnl_pct = (t["price"] - buy["price"]) / buy["price"] * 100
-                pairs.append({
-                    "market":      m,
-                    "buy_ts":      buy["ts"],
-                    "sell_ts":     t["ts"],
-                    "buy_price":   buy["price"],
-                    "sell_price":  t["price"],
-                    "amount":      buy["amount"],
-                    "pnl_eur":     round(pnl_eur, 4),
-                    "pnl_pct":     round(pnl_pct, 3),
-                })
+        def _build_pairs(trades: list) -> list:
+            open_buys: dict[str, list] = {}
+            result = []
+            for t in trades:
+                m = t["market"]
+                if t["side"] == "BUY":
+                    open_buys.setdefault(m, []).append(t)
+                elif t["side"] == "SELL" and open_buys.get(m):
+                    buy = open_buys[m].pop(0)
+                    pnl_eur = t["eur_total"] - buy["eur_total"]
+                    pnl_pct = (t["price"] - buy["price"]) / buy["price"] * 100
+                    result.append({
+                        "market":     m,
+                        "buy_ts":     buy["ts"],
+                        "sell_ts":    t["ts"],
+                        "buy_price":  buy["price"],
+                        "sell_price": t["price"],
+                        "amount":     buy["amount"],
+                        "pnl_eur":    round(pnl_eur, 4),
+                        "pnl_pct":    round(pnl_pct, 3),
+                    })
+            return result
 
-        # Build cumulative equity from pairs (sorted by sell_ts)
+        # Alle pairs voor per-coin vergelijking (altijd ongefilterd)
+        all_pairs = _build_pairs(get_all_paper_trades_asc(None))
+
+        # Gefilterde pairs voor KPIs / grafiek
+        pairs = _build_pairs(
+            get_all_paper_trades_asc(market.upper() if market else None)
+        ) if market else all_pairs
+
+        # ── Per-coin breakdown ──────────────────────────────────────────────
+        mkt_bucket: dict[str, list] = defaultdict(list)
+        for p in all_pairs:
+            mkt_bucket[p["market"]].append(p)
+
+        per_market = []
+        for mkt, mps in mkt_bucket.items():
+            wins_m   = [p for p in mps if p["pnl_eur"] > 0]
+            losses_m = [p for p in mps if p["pnl_eur"] <= 0]
+            total    = sum(p["pnl_eur"] for p in mps)
+            per_market.append({
+                "market":      mkt,
+                "num_trades":  len(mps),
+                "total_pnl":   round(total, 2),
+                "win_rate":    round(len(wins_m) / len(mps) * 100, 1) if mps else 0.0,
+                "num_wins":    len(wins_m),
+                "num_losses":  len(losses_m),
+                "avg_pnl_eur": round(total / len(mps), 2) if mps else 0.0,
+                "avg_pnl_pct": round(sum(p["pnl_pct"] for p in mps) / len(mps), 2) if mps else 0.0,
+                "best_trade":  round(max((p["pnl_eur"] for p in mps), default=0), 2),
+                "worst_trade": round(min((p["pnl_eur"] for p in mps), default=0), 2),
+            })
+        per_market.sort(key=lambda x: x["total_pnl"], reverse=True)
+
+        # ── Cumulatieve equity curve ────────────────────────────────────────
         pairs_sorted = sorted(pairs, key=lambda x: x["sell_ts"])
         cum = 0.0
         equity = []
@@ -383,25 +417,22 @@ def api_analytics():
             cum += p["pnl_eur"]
             equity.append({"ts": p["sell_ts"][:10], "cum_pnl": round(cum, 4)})
 
-        # Summary stats
-        total_pnl  = sum(p["pnl_eur"] for p in pairs)
-        wins       = [p for p in pairs if p["pnl_eur"] > 0]
-        losses     = [p for p in pairs if p["pnl_eur"] <= 0]
-        win_rate   = round(len(wins) / len(pairs) * 100, 1) if pairs else 0.0
-        avg_win    = round(sum(p["pnl_eur"] for p in wins) / len(wins), 2) if wins else 0.0
-        avg_loss   = round(sum(p["pnl_eur"] for p in losses) / len(losses), 2) if losses else 0.0
+        # ── Totaal-samenvatting ─────────────────────────────────────────────
+        wins   = [p for p in pairs if p["pnl_eur"] > 0]
+        losses = [p for p in pairs if p["pnl_eur"] <= 0]
 
         return jsonify({
             "pairs":        pairs_sorted,
             "equity":       equity,
             "daily":        daily,
-            "total_pnl":    round(total_pnl, 4),
+            "per_market":   per_market,
+            "total_pnl":    round(sum(p["pnl_eur"] for p in pairs), 4),
             "num_trades":   len(pairs),
             "num_wins":     len(wins),
             "num_losses":   len(losses),
-            "win_rate_pct": win_rate,
-            "avg_win_eur":  avg_win,
-            "avg_loss_eur": avg_loss,
+            "win_rate_pct": round(len(wins) / len(pairs) * 100, 1) if pairs else 0.0,
+            "avg_win_eur":  round(sum(p["pnl_eur"] for p in wins)   / len(wins),   2) if wins   else 0.0,
+            "avg_loss_eur": round(sum(p["pnl_eur"] for p in losses) / len(losses), 2) if losses else 0.0,
             "best_trade":   round(max((p["pnl_eur"] for p in pairs), default=0), 2),
             "worst_trade":  round(min((p["pnl_eur"] for p in pairs), default=0), 2),
         })

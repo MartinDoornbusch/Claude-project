@@ -47,6 +47,35 @@
     <button class="btn btn-sm btn-outline-secondary" onclick="loadAnalytics()">⟳ Verversen</button>
   </div>
 
+  <!-- Per-coin vergelijking -->
+  <div class="card mb-4" id="per-coin-card" style="display:none;">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>Rendement per coin</span>
+      <span style="font-size:.75rem; color:#64748b;" id="per-coin-subtitle"></span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0" id="per-coin-table" style="font-size:.85rem;">
+          <thead>
+            <tr>
+              <th style="cursor:pointer;" onclick="sortCoins('rank')">#</th>
+              <th style="cursor:pointer;" onclick="sortCoins('market')">Coin</th>
+              <th class="text-center" style="cursor:pointer;" onclick="sortCoins('num_trades')">Trades</th>
+              <th class="text-end" style="cursor:pointer;" onclick="sortCoins('total_pnl')">PnL EUR ↕</th>
+              <th class="text-end hide-sm" style="cursor:pointer;" onclick="sortCoins('win_rate')">Win %</th>
+              <th class="text-end hide-sm" style="cursor:pointer;" onclick="sortCoins('avg_pnl_eur')">Gem./trade</th>
+              <th class="text-end hide-sm" style="cursor:pointer;" onclick="sortCoins('avg_pnl_pct')">Gem. %</th>
+              <th class="text-end hide-sm" style="cursor:pointer;" onclick="sortCoins('best_trade')">Beste</th>
+              <th class="text-end hide-sm" style="cursor:pointer;" onclick="sortCoins('worst_trade')">Slechtste</th>
+              <th class="text-center">Score</th>
+            </tr>
+          </thead>
+          <tbody id="per-coin-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- KPI kaartjes -->
   <div class="row g-3 mb-4" id="kpi-row">
     <div class="col-6 col-md-3"><div class="card p-3 text-center">
@@ -122,8 +151,11 @@
 </div>
 
 <script>
-  let equityChart = null;
-  let dailyChart  = null;
+  let equityChart  = null;
+  let dailyChart   = null;
+  let _perMarket   = [];
+  let _sortKey     = 'total_pnl';
+  let _sortAsc     = false;
 
   async function loadAnalytics() {
     const mkt = document.getElementById('mkt-select').value;
@@ -136,9 +168,81 @@
       renderEquityChart(d.equity);
       renderDailyChart(d.daily);
       renderPairs(d.pairs);
+      if (d.per_market && d.per_market.length > 0) {
+        _perMarket = d.per_market;
+        renderPerCoin(_perMarket);
+      }
     } catch(e) {
       alert('Fout bij laden analytics: ' + e.message);
     }
+  }
+
+  function sortCoins(key) {
+    if (_sortKey === key) _sortAsc = !_sortAsc;
+    else { _sortKey = key; _sortAsc = key === 'market'; }
+    const sorted = [..._perMarket].sort((a, b) => {
+      const va = a[key], vb = b[key];
+      const cmp = typeof va === 'string' ? va.localeCompare(vb) : va - vb;
+      return _sortAsc ? cmp : -cmp;
+    });
+    renderPerCoin(sorted);
+  }
+
+  function renderPerCoin(data) {
+    if (!data || data.length === 0) return;
+    document.getElementById('per-coin-card').style.display = '';
+    document.getElementById('per-coin-subtitle').textContent =
+      data.length + ' coins • gesorteerd op PnL';
+
+    // Max absoluut PnL voor balk-schaling
+    const maxAbs = Math.max(...data.map(r => Math.abs(r.total_pnl)), 0.01);
+
+    document.getElementById('per-coin-tbody').innerHTML = data.map((r, i) => {
+      const pos      = r.total_pnl >= 0;
+      const pnlCls   = pos ? 'pos' : 'neg';
+      const barColor = pos ? '#16a34a' : '#dc2626';
+      const barW     = Math.round(Math.abs(r.total_pnl) / maxAbs * 100);
+
+      // Score: ✓ groen / ~ geel / ✗ rood
+      const good = r.total_pnl > 0 && r.win_rate >= 50 && r.num_trades >= 3;
+      const ok   = r.total_pnl > 0 || r.win_rate >= 50;
+      const scoreBg  = good ? '#dcfce7' : ok ? '#fef9c3' : '#fee2e2';
+      const scoreClr = good ? '#166534' : ok ? '#854d0e' : '#991b1b';
+      const scoreTxt = good ? '✓ Goed'  : ok ? '~ Neutraal' : '✗ Slecht';
+
+      return `<tr>
+        <td class="text-muted" style="width:32px;">${i + 1}</td>
+        <td class="fw-semibold">${r.market.replace('-EUR', '')}
+          <span class="text-muted" style="font-size:.7rem;">-EUR</span></td>
+        <td class="text-center text-muted">${r.num_trades}
+          <span style="font-size:.7rem;">(${r.num_wins}W/${r.num_losses}L)</span></td>
+        <td class="text-end" style="min-width:130px;">
+          <div class="d-flex align-items-center justify-content-end gap-2">
+            <div style="width:50px;height:6px;border-radius:3px;background:#e2e8f0;overflow:hidden;">
+              <div style="width:${barW}%;height:100%;background:${barColor};border-radius:3px;"></div>
+            </div>
+            <span class="fw-semibold ${pnlCls}">${pos?'+':''}€${r.total_pnl.toFixed(2)}</span>
+          </div>
+        </td>
+        <td class="text-end hide-sm">
+          <span class="${r.win_rate >= 50 ? 'pos' : 'neg'}">${r.win_rate.toFixed(1)}%</span>
+        </td>
+        <td class="text-end hide-sm ${r.avg_pnl_eur >= 0 ? 'pos' : 'neg'}">
+          ${r.avg_pnl_eur >= 0 ? '+' : ''}€${r.avg_pnl_eur.toFixed(2)}
+        </td>
+        <td class="text-end hide-sm ${r.avg_pnl_pct >= 0 ? 'pos' : 'neg'}">
+          ${r.avg_pnl_pct >= 0 ? '+' : ''}${r.avg_pnl_pct.toFixed(2)}%
+        </td>
+        <td class="text-end hide-sm pos">+€${r.best_trade.toFixed(2)}</td>
+        <td class="text-end hide-sm neg">€${r.worst_trade.toFixed(2)}</td>
+        <td class="text-center">
+          <span style="font-size:.72rem;padding:2px 8px;border-radius:10px;
+                       background:${scoreBg};color:${scoreClr};font-weight:600;">
+            ${scoreTxt}
+          </span>
+        </td>
+      </tr>`;
+    }).join('');
   }
 
   function renderKpis(d) {
