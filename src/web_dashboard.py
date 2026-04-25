@@ -102,6 +102,9 @@ def index():
     except Exception:
         ai_decisions = []
 
+    from src.ai_provider import get_configured_providers
+    active_providers = [p for p, _ in get_configured_providers()]
+
     return render_template(
         "index.html",
         portfolio=pf,
@@ -110,6 +113,7 @@ def index():
         markets=_dashboard_markets(),
         ai_enabled=ai_enabled(),
         ai_decisions=ai_decisions,
+        active_providers=active_providers,
     )
 
 

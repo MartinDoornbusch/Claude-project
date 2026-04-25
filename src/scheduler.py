@@ -12,7 +12,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from src.bitvavo_client import get_client
 from src.candles import get_candles, latest_signals, add_indicators, get_atr_fraction
-from src.database import init_db, save_ai_decision, get_enabled_markets, save_portfolio_snapshot, get_trading_paused
+from src.database import init_db, save_ai_decision, save_signal, get_enabled_markets, save_portfolio_snapshot, get_trading_paused
 from src.paper_trader import portfolio_value, TRADE_FRACTION
 from src.strategy import evaluate
 from src.ai_strategy import ai_enabled, ai_evaluate
@@ -94,6 +94,9 @@ def run_cycle() -> None:
                 signal = evaluate(market, interval, df, client=client)
                 reason = "MA crossover / RSI"
 
+            # Sla indicatoren altijd op — ook bij AI-strategie (nodig voor grafieken)
+            save_signal(market, interval, sig, signal)
+
             market_signals[market] = {**sig, "signal": signal}
             market_prices[market] = current_price
 
@@ -156,8 +159,10 @@ def start() -> None:
     )
 
     logger.info(
-        "Bot gestart | modus: %s | markten: %s | interval: %s | check: elke %d min",
-        mode(), ", ".join(_active_markets()), INTERVAL, CHECK_MINUTES,
+        "Bot gestart | modus: %s | markten: %s | interval: %s | check: elke %s min",
+        mode(), ", ".join(_active_markets()),
+        os.getenv("CANDLE_INTERVAL", "1h"),
+        os.getenv("CHECK_INTERVAL_MINUTES", "60"),
     )
 
     if mode() == "LIVE":
