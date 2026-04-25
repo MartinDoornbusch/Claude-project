@@ -34,8 +34,12 @@ DEFAULTS: dict[str, str] = {
     "HA_URL":                   "",
     "HA_TOKEN":                 "",
     "HA_NOTIFY_SERVICE":        "notify",
-    # Claude AI
+    # Claude AI / AI provider
+    "AI_PROVIDER":              "anthropic",
+    "AI_MODEL":                 "",
     "ANTHROPIC_API_KEY":        "",
+    "GOOGLE_API_KEY":           "",
+    "GROQ_API_KEY":             "",
     "AI_STRATEGY_ENABLED":      "false",
     "AI_MIN_CONFIDENCE":        "0.7",
     "AI_MAX_ORDERS_PER_DAY":    "3",
@@ -49,7 +53,7 @@ DEFAULTS: dict[str, str] = {
 }
 
 # Keys whose values should never be overwritten with an empty string via the UI
-SENSITIVE_KEYS = {"BITVAVO_API_KEY", "BITVAVO_API_SECRET", "ANTHROPIC_API_KEY", "MQTT_PASS", "HA_TOKEN"}
+SENSITIVE_KEYS = {"BITVAVO_API_KEY", "BITVAVO_API_SECRET", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "GROQ_API_KEY", "MQTT_PASS", "HA_TOKEN"}
 
 # Keys that map to HTML checkboxes (absent in POST = false)
 BOOL_KEYS = {"LIVE_TRADING_ENABLED", "AI_STRATEGY_ENABLED", "MTF_ENABLED", "VOL_SIZING_ENABLED", "CORR_CHECK_ENABLED"}

@@ -220,7 +220,8 @@ def api_markets_advise():
 
 @app.route("/api/test_connection")
 def api_test_connection():
-    result: dict = {"bitvavo": False, "anthropic": False, "errors": {}}
+    result: dict = {"bitvavo": False, "ai": False, "ai_provider": "", "ai_model": "", "errors": {}}
+
     try:
         client = get_client()
         t = client.time()
@@ -231,17 +232,15 @@ def api_test_connection():
     except Exception as e:
         result["errors"]["bitvavo"] = str(e)
 
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
-    if anthropic_key:
-        try:
-            import anthropic as _anthropic
-            ac = _anthropic.Anthropic(api_key=anthropic_key)
-            ac.models.list()
-            result["anthropic"] = True
-        except Exception as e:
-            result["errors"]["anthropic"] = str(e)
-    else:
-        result["errors"]["anthropic"] = "API key niet ingesteld"
+    try:
+        from src.ai_provider import complete, get_active
+        provider, model = get_active()
+        result["ai_provider"] = provider
+        result["ai_model"] = model
+        text = complete("Reply with the word OK and nothing else.", "ping", max_tokens=16)
+        result["ai"] = bool(text.strip())
+    except Exception as e:
+        result["errors"]["ai"] = str(e)
 
     return jsonify(result)
 

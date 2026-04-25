@@ -285,39 +285,81 @@
           </div>
         </div>
 
-        <!-- Claude AI -->
+        <!-- AI Strategie -->
         <div class="card mb-4 card-ai">
-          <div class="card-header" style="color:#2563eb;">Claude AI Strategie</div>
+          <div class="card-header" style="color:#2563eb;">AI Strategie</div>
           <div class="card-body">
+
+            <!-- Provider keuze -->
             <div class="mb-3">
+              <label class="form-label">AI Provider</label>
+              <select class="form-select" name="AI_PROVIDER" id="ai_provider_sel" onchange="updateAiProviderUI()">
+                <option value="anthropic" {{ 'selected' if config.AI_PROVIDER == 'anthropic' or not config.AI_PROVIDER }}>Anthropic (Claude) — betaald</option>
+                <option value="google"    {{ 'selected' if config.AI_PROVIDER == 'google' }}>Google (Gemini) — gratis tier</option>
+                <option value="groq"      {{ 'selected' if config.AI_PROVIDER == 'groq' }}>Groq (Llama / Mixtral) — gratis</option>
+              </select>
+            </div>
+
+            <!-- Model keuze -->
+            <div class="mb-3">
+              <label class="form-label">Model</label>
+              <select class="form-select" name="AI_MODEL" id="ai_model_sel"></select>
+              <div class="form-text" id="ai_model_hint"></div>
+            </div>
+
+            <!-- Anthropic API Key -->
+            <div class="mb-3 ai-key-row" id="key-row-anthropic">
               <label class="form-label">Anthropic API Key {% if config.ANTHROPIC_API_KEY %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
               <div class="input-group">
                 <input type="password" class="form-control font-monospace" name="ANTHROPIC_API_KEY"
                        placeholder="{{ '●●●●●●●● (ingesteld)' if config.ANTHROPIC_API_KEY else 'sk-ant-...' }}">
                 <span class="input-group-text toggle-pw">Toon</span>
               </div>
-              <div class="form-text">
-                Aanmaken via
-                <a href="https://console.anthropic.com" target="_blank" style="color:#2563eb;">console.anthropic.com</a>
+              <div class="form-text">Aanmaken via <a href="https://console.anthropic.com" target="_blank" style="color:#2563eb;">console.anthropic.com</a></div>
+            </div>
+
+            <!-- Google API Key -->
+            <div class="mb-3 ai-key-row" id="key-row-google">
+              <label class="form-label">Google API Key {% if config.GOOGLE_API_KEY %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
+              <div class="input-group">
+                <input type="password" class="form-control font-monospace" name="GOOGLE_API_KEY"
+                       placeholder="{{ '●●●●●●●● (ingesteld)' if config.GOOGLE_API_KEY else 'AIza...' }}">
+                <span class="input-group-text toggle-pw">Toon</span>
+              </div>
+              <div class="form-text">Gratis aanmaken via <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#2563eb;">aistudio.google.com/apikey</a> — tot 1500 verzoeken/dag gratis</div>
+            </div>
+
+            <!-- Groq API Key -->
+            <div class="mb-3 ai-key-row" id="key-row-groq">
+              <label class="form-label">Groq API Key {% if config.GROQ_API_KEY %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
+              <div class="input-group">
+                <input type="password" class="form-control font-monospace" name="GROQ_API_KEY"
+                       placeholder="{{ '●●●●●●●● (ingesteld)' if config.GROQ_API_KEY else 'gsk_...' }}">
+                <span class="input-group-text toggle-pw">Toon</span>
+              </div>
+              <div class="form-text">Gratis aanmaken via <a href="https://console.groq.com/keys" target="_blank" style="color:#2563eb;">console.groq.com</a> — volledig gratis</div>
+            </div>
+
+            <div class="border-top pt-3 mt-1">
+              <div class="mb-3">
+                <label class="form-label">Minimum confidence (0.5–1.0)</label>
+                <input type="number" class="form-control" name="AI_MIN_CONFIDENCE"
+                       value="{{ config.AI_MIN_CONFIDENCE }}" step="0.05" min="0.5" max="1.0">
+                <div class="form-text">Besluit onder deze waarde → automatisch HOLD</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Max orders per dag (per markt)</label>
+                <input type="number" class="form-control" name="AI_MAX_ORDERS_PER_DAY"
+                       value="{{ config.AI_MAX_ORDERS_PER_DAY }}" min="1" max="20">
+              </div>
+              <div>
+                <label class="form-label">Cooldown tussen trades (minuten)</label>
+                <input type="number" class="form-control" name="AI_COOLDOWN_MINUTES"
+                       value="{{ config.AI_COOLDOWN_MINUTES }}" min="5" max="1440">
+                <div class="form-text">Minimale rust na een uitgevoerde AI-trade</div>
               </div>
             </div>
-            <div class="mb-3">
-              <label class="form-label">Minimum confidence (0.5–1.0)</label>
-              <input type="number" class="form-control" name="AI_MIN_CONFIDENCE"
-                     value="{{ config.AI_MIN_CONFIDENCE }}" step="0.05" min="0.5" max="1.0">
-              <div class="form-text">Besluit onder deze waarde → automatisch HOLD</div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label">Max orders per dag (per markt)</label>
-              <input type="number" class="form-control" name="AI_MAX_ORDERS_PER_DAY"
-                     value="{{ config.AI_MAX_ORDERS_PER_DAY }}" min="1" max="20">
-            </div>
-            <div>
-              <label class="form-label">Cooldown tussen trades (minuten)</label>
-              <input type="number" class="form-control" name="AI_COOLDOWN_MINUTES"
-                     value="{{ config.AI_COOLDOWN_MINUTES }}" min="5" max="1440">
-              <div class="form-text">Minimale rust na een uitgevoerde AI-trade</div>
-            </div>
+
           </div>
         </div>
 
@@ -490,11 +532,11 @@
         const msg = (d.errors && d.errors.bitvavo) ? d.errors.bitvavo : 'Onbekende fout';
         html += `<span style="color:#dc2626;">✗ Bitvavo: ${msg}</span><br>`;
       }
-      if (d.anthropic) {
-        html += '<span style="color:#16a34a;">✓ Anthropic API OK</span>';
+      if (d.ai) {
+        html += `<span style="color:#16a34a;">✓ AI OK (${d.ai_provider} / ${d.ai_model})</span>`;
       } else {
-        const msg = (d.errors && d.errors.anthropic) ? d.errors.anthropic : 'Niet getest';
-        html += `<span style="color:#94a3b8;">— Anthropic: ${msg}</span>`;
+        const msg = (d.errors && d.errors.ai) ? d.errors.ai : 'Niet getest';
+        html += `<span style="color:#dc2626;">✗ AI (${d.ai_provider || '?'}): ${msg}</span>`;
       }
       res.innerHTML = html;
     } catch(e) {
@@ -502,6 +544,45 @@
     }
     btn.disabled = false;
   }
+
+  // ── AI Provider / Model UI ──
+  const _AI_MODELS = {
+    anthropic: [
+      {v:'claude-opus-4-7',          l:'Claude Opus 4.7 — beste kwaliteit (betaald)'},
+      {v:'claude-sonnet-4-6',        l:'Claude Sonnet 4.6 — goede balans (betaald)'},
+      {v:'claude-haiku-4-5',         l:'Claude Haiku 4.5 — snel & goedkoop (betaald)'},
+    ],
+    google: [
+      {v:'gemini-2.0-flash',         l:'Gemini 2.0 Flash — aanbevolen (gratis tier)'},
+      {v:'gemini-2.0-flash-lite',    l:'Gemini 2.0 Flash Lite — snelst (gratis tier)'},
+      {v:'gemini-1.5-flash',         l:'Gemini 1.5 Flash (gratis tier)'},
+    ],
+    groq: [
+      {v:'llama-3.3-70b-versatile',  l:'Llama 3.3 70B — beste kwaliteit (gratis)'},
+      {v:'llama-3.1-8b-instant',     l:'Llama 3.1 8B — snelst (gratis)'},
+      {v:'mixtral-8x7b-32768',       l:'Mixtral 8x7B (gratis)'},
+    ],
+  };
+  const _AI_HINTS = {
+    anthropic: 'Betaald per token. Haiku ≈ €0,01–0,05 per analyse.',
+    google:    'Gratis tot ±1500 verzoeken/dag. Geen creditcard nodig.',
+    groq:      'Volledig gratis, open-source Llama modellen.',
+  };
+  const _currentModel = '{{ config.AI_MODEL }}';
+
+  function updateAiProviderUI() {
+    const provider = document.getElementById('ai_provider_sel').value;
+    const sel = document.getElementById('ai_model_sel');
+    sel.innerHTML = (_AI_MODELS[provider] || []).map(m =>
+      `<option value="${m.v}"${_currentModel === m.v ? ' selected' : ''}>${m.l}</option>`
+    ).join('');
+    document.getElementById('ai_model_hint').textContent = _AI_HINTS[provider] || '';
+    ['anthropic', 'google', 'groq'].forEach(p => {
+      const row = document.getElementById('key-row-' + p);
+      if (row) row.style.display = p === provider ? '' : 'none';
+    });
+  }
+  updateAiProviderUI();
 
   // ── Beschikbare markten laden ──
   let _allMarkets = [];
