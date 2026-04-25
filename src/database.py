@@ -113,6 +113,11 @@ def init_db() -> None:
                 total_eur REAL NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS bot_settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS backtest_runs (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 ts          TEXT NOT NULL,
@@ -477,6 +482,23 @@ def save_backtest_run(
             market, interval, sma_short, sma_long, rsi_buy, rsi_sell,
             capital, return_pct, sharpe, max_dd, win_rate, num_trades,
         ))
+
+
+def get_trading_paused() -> bool:
+    """Geeft True terug als trading handmatig gepauzeerd is."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT value FROM bot_settings WHERE key='trading_paused'"
+        ).fetchone()
+    return row["value"] == "1" if row else False
+
+
+def set_trading_paused(paused: bool) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO bot_settings (key, value) VALUES ('trading_paused', ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value
+        """, ("1" if paused else "0",))
 
 
 def save_market_advice(market: str, recommended: bool, confidence: float | None, reasoning: str) -> None:

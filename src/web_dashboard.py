@@ -10,7 +10,7 @@ from flask import Flask, render_template, jsonify, request, redirect, url_for
 from src.database import (
     get_latest_signals, get_paper_trades, get_cash, get_position, get_ai_decisions,
     get_watchlist, get_enabled_markets, set_market_enabled, upsert_market_stats, save_market_advice,
-    get_all_paper_trades_asc, get_daily_pnl_series,
+    get_all_paper_trades_asc, get_daily_pnl_series, get_trading_paused, set_trading_paused,
 )
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
@@ -216,6 +216,18 @@ def api_markets_advise():
         return jsonify({"ok": True, "recommended": list(recommended), "summary": advice.get("summary", "")})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/trading/status")
+def api_trading_status():
+    return jsonify({"paused": get_trading_paused()})
+
+
+@app.route("/api/trading/toggle", methods=["POST"])
+def api_trading_toggle():
+    paused = not get_trading_paused()
+    set_trading_paused(paused)
+    return jsonify({"paused": paused})
 
 
 @app.route("/api/test_connection")

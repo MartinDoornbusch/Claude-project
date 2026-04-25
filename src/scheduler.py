@@ -12,7 +12,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from src.bitvavo_client import get_client
 from src.candles import get_candles, latest_signals, add_indicators, get_atr_fraction
-from src.database import init_db, save_ai_decision, get_enabled_markets, save_portfolio_snapshot
+from src.database import init_db, save_ai_decision, get_enabled_markets, save_portfolio_snapshot, get_trading_paused
 from src.paper_trader import portfolio_value, TRADE_FRACTION
 from src.strategy import evaluate
 from src.ai_strategy import AI_ENABLED, ai_evaluate
@@ -38,8 +38,12 @@ def _active_markets() -> list[str]:
 
 
 def run_cycle() -> None:
+    paused  = get_trading_paused()
     markets = _active_markets()
-    logger.info("=== Cyclus gestart [%s] (%s) ===", mode(), ", ".join(markets))
+    logger.info(
+        "=== Cyclus gestart [%s] (%s)%s ===",
+        mode(), ", ".join(markets), " — TRADING GEPAUZEERD" if paused else "",
+    )
     client = get_client()
     market_signals: dict[str, dict] = {}
     market_prices: dict[str, float] = {}
@@ -51,12 +55,12 @@ def run_cycle() -> None:
             sig = latest_signals(df)
             current_price = sig["close"]
 
-            # Stop-loss / take-profit check vóór strategie-evaluatie
-            sl_tp_triggered = check_sl_tp(client, market, current_price)
+            # Stop-loss / take-profit check — ook bij pauze (veiligheidsnet)
+            sl_tp_triggered = check_sl_tp(client, market, current_price) if not paused else False
 
             if AI_ENABLED:
                 decision, confidence, reasoning = ai_evaluate(market, sig)
-                executed = decision in ("BUY", "SELL")
+                executed = (not paused) and decision in ("BUY", "SELL")
                 save_ai_decision(market, decision, confidence, reasoning, executed=executed)
                 signal = decision
                 reason = f"AI ({confidence:.0%}): {reasoning}"
@@ -66,6 +70,10 @@ def run_cycle() -> None:
 
             market_signals[market] = {**sig, "signal": signal}
             market_prices[market] = current_price
+
+            if paused:
+                logger.info("[%s] Signaal %s niet uitgevoerd — trading gepauzeerd", market, signal)
+                continue
 
             # Sla strategie-signal over als SL/TP al heeft verkocht
             if not sl_tp_triggered:

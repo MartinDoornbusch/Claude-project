@@ -52,6 +52,22 @@
 
 <div class="container-fluid px-3">
 
+  <!-- Trading Guardrail -->
+  <div class="d-flex align-items-center justify-content-between rounded px-4 py-3 mb-4"
+       id="guardrail-bar" style="border: 2px solid #86efac; background:#f0fdf4; transition: all .3s;">
+    <div class="d-flex align-items-center gap-3">
+      <span id="guardrail-dot" style="font-size:1.4rem; line-height:1;">●</span>
+      <div>
+        <div class="fw-bold" id="guardrail-label" style="font-size:1rem;">Laden...</div>
+        <div style="font-size:.78rem; color:#64748b;" id="guardrail-desc"></div>
+      </div>
+    </div>
+    <button class="btn btn-sm fw-semibold px-3" id="guardrail-btn"
+            style="min-width:120px;" onclick="toggleTrading()" disabled>
+      ...
+    </button>
+  </div>
+
   <!-- Portfolio samenvatting -->
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
@@ -209,6 +225,63 @@
 </div>
 
 <script>
+  // ── Trading Guardrail ──
+  function applyGuardrailState(paused) {
+    const bar   = document.getElementById('guardrail-bar');
+    const dot   = document.getElementById('guardrail-dot');
+    const label = document.getElementById('guardrail-label');
+    const desc  = document.getElementById('guardrail-desc');
+    const btn   = document.getElementById('guardrail-btn');
+
+    if (paused) {
+      bar.style.borderColor   = '#fca5a5';
+      bar.style.background    = '#fff1f2';
+      dot.style.color         = '#dc2626';
+      label.textContent       = 'Trading Gepauzeerd';
+      label.style.color       = '#dc2626';
+      desc.textContent        = 'Signalen worden berekend maar geen orders uitgevoerd';
+      btn.textContent         = 'Herstart Trading';
+      btn.style.background    = '#16a34a';
+      btn.style.borderColor   = '#16a34a';
+      btn.style.color         = '#fff';
+    } else {
+      bar.style.borderColor   = '#86efac';
+      bar.style.background    = '#f0fdf4';
+      dot.style.color         = '#16a34a';
+      label.textContent       = 'Trading Actief';
+      label.style.color       = '#16a34a';
+      desc.textContent        = 'Bot voert BUY/SELL orders uit bij signalen';
+      btn.textContent         = 'Stop Trading';
+      btn.style.background    = '#dc2626';
+      btn.style.borderColor   = '#dc2626';
+      btn.style.color         = '#fff';
+    }
+    btn.disabled = false;
+  }
+
+  async function toggleTrading() {
+    const btn = document.getElementById('guardrail-btn');
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+      const r = await fetch(BASE_URL + '/api/trading/toggle', {method: 'POST'});
+      const d = await r.json();
+      applyGuardrailState(d.paused);
+    } catch(e) {
+      btn.disabled = false;
+      alert('Fout: ' + e.message);
+    }
+  }
+
+  // Laad initiële status
+  fetch(BASE_URL + '/api/trading/status')
+    .then(r => r.json())
+    .then(d => applyGuardrailState(d.paused))
+    .catch(() => {
+      document.getElementById('guardrail-label').textContent = 'Status onbekend';
+      document.getElementById('guardrail-btn').disabled = false;
+    });
+
   // Klok
   function updateClock() {
     document.getElementById('clock').textContent = new Date().toLocaleTimeString('nl-NL');
