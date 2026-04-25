@@ -3,6 +3,10 @@ set -e
 
 cd /config/bitvavo-bot
 
+echo "[addon] Code bijwerken van GitHub (main)..."
+git fetch origin main 2>/dev/null || echo "[addon] Waarschuwing: git fetch mislukt, ga door met bestaande code."
+git reset --hard origin/main 2>/dev/null || echo "[addon] Waarschuwing: git reset mislukt, ga door met bestaande code."
+
 echo "[addon] Trading bot starten..."
 python3 main.py run &
 
