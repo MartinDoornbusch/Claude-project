@@ -218,6 +218,17 @@ def api_markets_advise():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/real_portfolio")
+def api_real_portfolio():
+    try:
+        from src.portfolio import get_portfolio_value_eur
+        client = get_client()
+        balances, total_eur = get_portfolio_value_eur(client)
+        return jsonify({"balances": balances, "total_eur": round(total_eur, 2)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/trading/status")
 def api_trading_status():
     return jsonify({"paused": get_trading_paused()})
