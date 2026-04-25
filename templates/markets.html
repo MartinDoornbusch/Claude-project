@@ -35,6 +35,7 @@
     option { background: #21262d; }
     @media (max-width: 576px) { .hide-sm { display: none; } }
   </style>
+<script>const BASE_URL = '{{ url_for("index") }}'.replace(//$/, '');</script>
 </head>
 <body>
 
@@ -200,7 +201,7 @@
   // ── Toggle markt aan/uit ──
   async function toggleMarket(market, enabled) {
     try {
-      const r = await fetch('/api/markets/toggle', {
+      const r = await fetch(BASE_URL + '/api/markets/toggle', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({market, enabled})
@@ -218,7 +219,7 @@
   async function scanMarkets() {
     showSpinner('Marktdata ophalen van Bitvavo...');
     try {
-      const r = await fetch('/api/markets/scan');
+      const r = await fetch(BASE_URL + '/api/markets/scan');
       const data = await r.json();
       if (data.error) throw new Error(data.error);
       rebuildTable(data.markets);
@@ -234,7 +235,7 @@
   async function getAiAdvice() {
     showSpinner('Claude analyseert markten... (kan 30-60 seconden duren)');
     try {
-      const r = await fetch('/api/markets/advise', {method: 'POST'});
+      const r = await fetch(BASE_URL + '/api/markets/advise', {method: 'POST'});
       const data = await r.json();
       if (data.error) throw new Error(data.error);
       location.reload();

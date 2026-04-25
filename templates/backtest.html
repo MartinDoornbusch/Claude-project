@@ -28,6 +28,7 @@
     .kpi-card.neg-border { border-color: rgba(248,81,73,.4) !important; }
     @media (max-width:576px) { .hide-sm { display:none; } }
   </style>
+<script>const BASE_URL = '{{ url_for("index") }}'.replace(//$/, '');</script>
 </head>
 <body>
 
@@ -187,7 +188,7 @@
     document.getElementById('error-box').style.display = 'none';
 
     try {
-      const r = await fetch('/api/backtest', {
+      const r = await fetch(BASE_URL + '/api/backtest', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({market, interval, limit, capital, stop_loss_pct: sl, take_profit_pct: tp})

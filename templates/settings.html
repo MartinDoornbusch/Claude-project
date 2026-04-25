@@ -57,7 +57,7 @@
   </div>
   {% endif %}
 
-  <form method="POST" action="/settings">
+  <form method="POST" action="{{ url_for('settings_save') }}">
 
     <!-- ── Strategie Schakelaar ── -->
     <div class="card mb-4 card-mode">

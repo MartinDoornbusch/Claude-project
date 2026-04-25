@@ -23,6 +23,7 @@
     .empty-state { color: #8b949e; font-size: .9rem; }
     @media (max-width:576px) { .hide-sm { display:none; } }
   </style>
+<script>const BASE_URL = '{{ url_for("index") }}'.replace(//$/, '');</script>
 </head>
 <body>
 
@@ -125,7 +126,7 @@
 
   async function loadAnalytics() {
     const mkt = document.getElementById('mkt-select').value;
-    const url = '/api/analytics' + (mkt ? '?market=' + mkt : '');
+    const url = BASE_URL + '/api/analytics' + (mkt ? '?market=' + mkt : '');
     try {
       const r = await fetch(url);
       const d = await r.json();

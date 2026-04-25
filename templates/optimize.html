@@ -25,6 +25,7 @@
     option { background: #21262d; }
     @media (max-width:576px) { .hide-sm { display:none; } }
   </style>
+<script>const BASE_URL = '{{ url_for("index") }}'.replace(//$/, '');</script>
 </head>
 <body>
 
@@ -144,7 +145,7 @@
     document.getElementById('error-box').style.display = 'none';
 
     try {
-      const r = await fetch('/api/optimize', {
+      const r = await fetch(BASE_URL + '/api/optimize', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({market, interval, limit, capital})

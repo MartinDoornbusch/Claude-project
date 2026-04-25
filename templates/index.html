@@ -32,6 +32,7 @@
     .ai-badge-HOLD { background: rgba(139,148,158,.1); color: #8b949e; border: 1px solid #8b949e; }
     .reasoning-text { font-size: 0.82rem; color: #c9d1d9; font-style: italic; }
   </style>
+<script>const BASE_URL = '{{ url_for("index") }}'.replace(//$/, '');</script>
 </head>
 <body>
 
@@ -221,7 +222,7 @@
   markets.forEach((market, i) => {
     const canvas = document.getElementById('chart-' + (i + 1));
     if (!canvas) return;
-    fetch('/api/signals/' + market)
+    fetch(BASE_URL + '/api/signals/' + market)
       .then(r => r.json())
       .then(data => {
         const reversed = data.slice().reverse();
