@@ -15,10 +15,11 @@ from src.database import (
 
 logger = logging.getLogger(__name__)
 
-AI_ENABLED         = os.getenv("AI_STRATEGY_ENABLED", "false").lower() == "true"
-MIN_CONFIDENCE     = float(os.getenv("AI_MIN_CONFIDENCE", "0.7"))
-MAX_ORDERS_PER_DAY = int(os.getenv("AI_MAX_ORDERS_PER_DAY", "3"))
-COOLDOWN_MINUTES   = int(os.getenv("AI_COOLDOWN_MINUTES", "60"))
+def ai_enabled() -> bool:
+    return os.getenv("AI_STRATEGY_ENABLED", "false").lower() == "true"
+
+# Backwards-compat alias — gebruik ai_enabled() voor live-waarden
+AI_ENABLED = ai_enabled()
 
 _SYSTEM_PROMPT = """\
 You are an expert crypto trading analyst for the Bitvavo exchange.
@@ -229,23 +230,28 @@ def _parse_decision(text: str) -> dict | None:
 
 def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
     """
-    Vraagt Claude om een trading beslissing voor de opgegeven markt.
+    Vraagt de geconfigureerde AI om een trading beslissing voor de opgegeven markt.
 
     Retourneert: (decision, confidence, reasoning)
     - decision:   "BUY" | "SELL" | "HOLD"
     - confidence: 0.0–1.0
     - reasoning:  uitleg van de beslissing
     """
-    if not AI_ENABLED:
+    # Lees config dynamisch zodat wijzigingen zonder herstart actief zijn
+    min_confidence     = float(os.getenv("AI_MIN_CONFIDENCE", "0.7"))
+    max_orders_per_day = int(os.getenv("AI_MAX_ORDERS_PER_DAY", "3"))
+    cooldown_minutes   = int(os.getenv("AI_COOLDOWN_MINUTES", "60"))
+
+    if not ai_enabled():
         return "HOLD", 0.0, "AI strategie uitgeschakeld"
 
-    if _orders_executed_today(market) >= MAX_ORDERS_PER_DAY:
-        logger.info("[%s] AI: dagelijks maximum van %d orders bereikt", market, MAX_ORDERS_PER_DAY)
-        return "HOLD", 0.0, f"Max {MAX_ORDERS_PER_DAY} orders per dag bereikt"
+    if _orders_executed_today(market) >= max_orders_per_day:
+        logger.info("[%s] AI: dagelijks maximum van %d orders bereikt", market, max_orders_per_day)
+        return "HOLD", 0.0, f"Max {max_orders_per_day} orders per dag bereikt"
 
     minutes_ago = _last_trade_minutes_ago(market)
-    if minutes_ago is not None and minutes_ago < COOLDOWN_MINUTES:
-        remaining = int(COOLDOWN_MINUTES - minutes_ago)
+    if minutes_ago is not None and minutes_ago < cooldown_minutes:
+        remaining = int(cooldown_minutes - minutes_ago)
         logger.info("[%s] AI: cooldown actief, nog %d minuten", market, remaining)
         return "HOLD", 0.0, f"Cooldown: wacht nog {remaining} minuten"
 
@@ -277,14 +283,14 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         confidence = parsed["confidence"]
         reasoning  = parsed["reasoning"]
 
-        if confidence < MIN_CONFIDENCE:
+        if confidence < min_confidence:
             logger.info(
                 "[%s] AI advies %s afgewezen: confidence %.0f%% < minimum %.0f%%",
-                market, decision, confidence * 100, MIN_CONFIDENCE * 100,
+                market, decision, confidence * 100, min_confidence * 100,
             )
             return (
                 "HOLD", confidence,
-                f"Confidence {confidence:.0%} onder minimum {MIN_CONFIDENCE:.0%}: {reasoning}",
+                f"Confidence {confidence:.0%} onder minimum {min_confidence:.0%}: {reasoning}",
             )
 
         logger.info(

@@ -15,29 +15,55 @@ from src.candles import get_candles, latest_signals, add_indicators, get_atr_fra
 from src.database import init_db, save_ai_decision, get_enabled_markets, save_portfolio_snapshot, get_trading_paused
 from src.paper_trader import portfolio_value, TRADE_FRACTION
 from src.strategy import evaluate
-from src.ai_strategy import AI_ENABLED, ai_evaluate
+from src.ai_strategy import ai_enabled, ai_evaluate
 from src.mqtt_publisher import publish_all
 from src.trade_manager import execute_buy, execute_sell, check_sl_tp, mode
 
 logger = logging.getLogger(__name__)
 
-INTERVAL       = os.getenv("CANDLE_INTERVAL", "1h")
-CHECK_MINUTES  = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
-VOL_SIZING     = os.getenv("VOL_SIZING_ENABLED", "false").lower() == "true"
-CORR_CHECK     = os.getenv("CORR_CHECK_ENABLED", "false").lower() == "true"
 _ENV_MARKETS   = [m.strip() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",")]
+_scheduler     = None   # globale referentie voor herplanning
+
+
+def _env_markets() -> list[str]:
+    return [m.strip() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",")]
 
 
 def _active_markets() -> list[str]:
     """Geeft ingeschakelde markten uit de DB terug; valt terug op TRADING_MARKETS env-var."""
     try:
         markets = get_enabled_markets()
-        return markets if markets else _ENV_MARKETS
+        return markets if markets else _env_markets()
     except Exception:
-        return _ENV_MARKETS
+        return _env_markets()
 
 
 def run_cycle() -> None:
+    global _scheduler
+
+    # Herlaad .env zodat live-wijzigingen via het dashboard meteen actief zijn
+    from dotenv import load_dotenv
+    from pathlib import Path
+    load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
+
+    # Lees alle config dynamisch
+    interval      = os.getenv("CANDLE_INTERVAL", "1h")
+    check_minutes = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
+    vol_sizing    = os.getenv("VOL_SIZING_ENABLED", "false").lower() == "true"
+    corr_check    = os.getenv("CORR_CHECK_ENABLED", "false").lower() == "true"
+
+    # Herplan scheduler als interval gewijzigd is
+    if _scheduler is not None:
+        job = _scheduler.get_job("trading_cycle")
+        if job:
+            current_seconds = job.trigger.interval.total_seconds()
+            if abs(current_seconds - check_minutes * 60) > 5:
+                _scheduler.reschedule_job(
+                    "trading_cycle",
+                    trigger=IntervalTrigger(minutes=check_minutes),
+                )
+                logger.info("Scheduler herplanned: elke %d minuten", check_minutes)
+
     paused  = get_trading_paused()
     markets = _active_markets()
     logger.info(
@@ -50,7 +76,7 @@ def run_cycle() -> None:
 
     for market in markets:
         try:
-            df = get_candles(client, market, INTERVAL, limit=200)
+            df = get_candles(client, market, interval, limit=200)
             df = add_indicators(df)
             sig = latest_signals(df)
             current_price = sig["close"]
@@ -58,14 +84,14 @@ def run_cycle() -> None:
             # Stop-loss / take-profit check — ook bij pauze (veiligheidsnet)
             sl_tp_triggered = check_sl_tp(client, market, current_price) if not paused else False
 
-            if AI_ENABLED:
+            if ai_enabled():
                 decision, confidence, reasoning = ai_evaluate(market, sig)
                 executed = (not paused) and decision in ("BUY", "SELL")
                 save_ai_decision(market, decision, confidence, reasoning, executed=executed)
                 signal = decision
                 reason = f"AI ({confidence:.0%}): {reasoning}"
             else:
-                signal = evaluate(market, INTERVAL, df, client=client)
+                signal = evaluate(market, interval, df, client=client)
                 reason = "MA crossover / RSI"
 
             market_signals[market] = {**sig, "signal": signal}
@@ -79,7 +105,7 @@ def run_cycle() -> None:
             if not sl_tp_triggered:
                 if signal == "BUY":
                     # Correlatie-check: voorkom dubbele blootstelling
-                    if CORR_CHECK:
+                    if corr_check:
                         from src.correlation import has_correlated_position
                         blocked, corr_market = has_correlated_position(client, market, markets)
                         if blocked:
@@ -91,7 +117,7 @@ def run_cycle() -> None:
 
                     if signal == "BUY":
                         # Volatiliteits-gebaseerde positiegroottes
-                        fraction = get_atr_fraction(df, TRADE_FRACTION) if VOL_SIZING else None
+                        fraction = get_atr_fraction(df, TRADE_FRACTION) if vol_sizing else None
                         execute_buy(client, market, current_price, reason=reason, fraction=fraction)
                 elif signal == "SELL":
                     execute_sell(client, market, current_price, reason=reason)
@@ -145,10 +171,12 @@ def start() -> None:
     init_db()
     run_cycle()
 
-    scheduler = BlockingScheduler(timezone="Europe/Amsterdam")
-    scheduler.add_job(
+    global _scheduler
+    check_minutes = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
+    _scheduler = BlockingScheduler(timezone="Europe/Amsterdam")
+    _scheduler.add_job(
         run_cycle,
-        trigger=IntervalTrigger(minutes=CHECK_MINUTES),
+        trigger=IntervalTrigger(minutes=check_minutes),
         id="trading_cycle",
         max_instances=1,
         coalesce=True,
@@ -156,10 +184,10 @@ def start() -> None:
 
     def _shutdown(signum, frame):
         logger.info("Afsluiten...")
-        scheduler.shutdown(wait=False)
+        _scheduler.shutdown(wait=False)
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, _shutdown)
     signal.signal(signal.SIGINT, _shutdown)
 
-    scheduler.start()
+    _scheduler.start()

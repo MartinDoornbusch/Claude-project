@@ -15,7 +15,7 @@ from src.database import (
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
 from src.portfolio import get_ticker_price
-from src.ai_strategy import AI_ENABLED
+from src.ai_strategy import ai_enabled
 from src.config_manager import read_config, write_config, config_from_form
 
 app = Flask(__name__, template_folder="../templates")
@@ -42,15 +42,13 @@ def allow_iframe(response):
     response.headers["Content-Security-Policy"] = "frame-ancestors *"
     return response
 
-_ENV_MARKETS = [m.strip() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",")]
-
-
 def _dashboard_markets() -> list[str]:
+    env_markets = [m.strip() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",")]
     try:
         m = get_enabled_markets()
-        return m if m else _ENV_MARKETS
+        return m if m else env_markets
     except Exception:
-        return _ENV_MARKETS
+        return env_markets
 
 
 def _build_portfolio() -> dict:
@@ -100,7 +98,7 @@ def index():
         trades = []
 
     try:
-        ai_decisions = get_ai_decisions(limit=10) if AI_ENABLED else []
+        ai_decisions = get_ai_decisions(limit=10) if ai_enabled() else []
     except Exception:
         ai_decisions = []
 
@@ -110,7 +108,7 @@ def index():
         market_data=market_data,
         trades=trades,
         markets=_dashboard_markets(),
-        ai_enabled=AI_ENABLED,
+        ai_enabled=ai_enabled(),
         ai_decisions=ai_decisions,
     )
 
@@ -148,6 +146,10 @@ def settings_page():
 def settings_save():
     updates = config_from_form(request.form)
     write_config(updates)
+    # Herlaad .env direct in dit proces zodat API-aanroepen meteen de nieuwe waarden gebruiken
+    from dotenv import load_dotenv
+    from src.config_manager import ENV_PATH
+    load_dotenv(dotenv_path=str(ENV_PATH), override=True)
     return redirect(url_for("settings_page", saved=1))
 
 
