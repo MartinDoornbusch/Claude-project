@@ -40,6 +40,12 @@ DEFAULTS: dict[str, str] = {
     "ANTHROPIC_API_KEY":        "",
     "GOOGLE_API_KEY":           "",
     "GROQ_API_KEY":             "",
+    "AI_ANTHROPIC_ENABLED":     "true",
+    "AI_GOOGLE_ENABLED":        "true",
+    "AI_GROQ_ENABLED":          "true",
+    "AI_MODEL_ANTHROPIC":       "",
+    "AI_MODEL_GOOGLE":          "",
+    "AI_MODEL_GROQ":            "",
     "AI_STRATEGY_ENABLED":      "false",
     "AI_MIN_CONFIDENCE":        "0.7",
     "AI_MAX_ORDERS_PER_DAY":    "3",
@@ -56,7 +62,8 @@ DEFAULTS: dict[str, str] = {
 SENSITIVE_KEYS = {"BITVAVO_API_KEY", "BITVAVO_API_SECRET", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "GROQ_API_KEY", "MQTT_PASS", "HA_TOKEN"}
 
 # Keys that map to HTML checkboxes (absent in POST = false)
-BOOL_KEYS = {"LIVE_TRADING_ENABLED", "AI_STRATEGY_ENABLED", "MTF_ENABLED", "VOL_SIZING_ENABLED", "CORR_CHECK_ENABLED"}
+BOOL_KEYS = {"LIVE_TRADING_ENABLED", "AI_STRATEGY_ENABLED", "MTF_ENABLED", "VOL_SIZING_ENABLED", "CORR_CHECK_ENABLED",
+             "AI_ANTHROPIC_ENABLED", "AI_GOOGLE_ENABLED", "AI_GROQ_ENABLED"}
 
 
 def read_config() -> dict[str, str]:

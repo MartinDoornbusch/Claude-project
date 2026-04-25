@@ -15,9 +15,9 @@ PROVIDER_MODELS: dict[str, list[dict]] = {
         {"value": "claude-haiku-4-5",  "label": "Claude Haiku 4.5 — snel & goedkoop (betaald)"},
     ],
     "google": [
-        {"value": "gemini-2.0-flash",      "label": "Gemini 2.0 Flash — aanbevolen (gratis tier)"},
-        {"value": "gemini-2.0-flash-lite", "label": "Gemini 2.0 Flash Lite — snelst (gratis tier)"},
-        {"value": "gemini-1.5-flash",      "label": "Gemini 1.5 Flash (gratis tier)"},
+        {"value": "gemini-2.5-flash-preview-05-20", "label": "Gemini 2.5 Flash — nieuwste (gratis preview)"},
+        {"value": "gemini-1.5-flash",               "label": "Gemini 1.5 Flash — stabiel (gratis tier)"},
+        {"value": "gemini-1.5-pro",                 "label": "Gemini 1.5 Pro — meest capabel (beperkt gratis)"},
     ],
     "groq": [
         {"value": "llama-3.3-70b-versatile", "label": "Llama 3.3 70B — beste kwaliteit (gratis)"},
@@ -28,8 +28,14 @@ PROVIDER_MODELS: dict[str, list[dict]] = {
 
 _DEFAULT_MODEL: dict[str, str] = {
     "anthropic": "claude-opus-4-7",
-    "google":    "gemini-2.0-flash",
+    "google":    "gemini-1.5-flash",
     "groq":      "llama-3.3-70b-versatile",
+}
+
+_KEY_ENV: dict[str, str] = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "google":    "GOOGLE_API_KEY",
+    "groq":      "GROQ_API_KEY",
 }
 
 
@@ -38,6 +44,32 @@ def get_active() -> tuple[str, str]:
     provider = os.getenv("AI_PROVIDER", "anthropic").lower()
     model    = os.getenv("AI_MODEL", "").strip() or _DEFAULT_MODEL.get(provider, "")
     return provider, model
+
+
+def get_configured_providers() -> list[tuple[str, str]]:
+    """Geeft [(provider, model)] voor alle providers met API key EN ingeschakeld via AI_<PROVIDER>_ENABLED."""
+    result = []
+    for provider in ("anthropic", "google", "groq"):
+        if not os.getenv(_KEY_ENV[provider], "").strip():
+            continue
+        enabled = os.getenv(f"AI_{provider.upper()}_ENABLED", "true").lower()
+        if enabled == "false":
+            continue
+        model = (os.getenv(f"AI_MODEL_{provider.upper()}", "").strip()
+                 or _DEFAULT_MODEL[provider])
+        result.append((provider, model))
+    return result
+
+
+def complete_for(provider: str, model: str, system: str, user: str, max_tokens: int = 2048) -> str:
+    """Stuurt een verzoek naar de opgegeven provider, ongeacht de actieve configuratie."""
+    if provider == "anthropic":
+        return _anthropic(system, user, model, max_tokens)
+    if provider == "google":
+        return _google(system, user, model, max_tokens)
+    if provider == "groq":
+        return _groq(system, user, model, max_tokens)
+    raise ValueError(f"Onbekende AI provider: {provider!r}")
 
 
 def complete(system: str, user: str, max_tokens: int = 2048) -> str:
