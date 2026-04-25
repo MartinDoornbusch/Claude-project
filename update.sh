@@ -17,7 +17,5 @@ cp "$REPO_DIR/ha-addon/run.sh"       "$ADDON_DIR/run.sh"
 echo "[update] Add-on herladen..."
 ha addons reload
 
-echo ""
-echo "✓ Klaar! Ga naar HA → Add-ons → Bitvavo Trading Bot"
-echo "  Als er een nieuwe versie staat → klik Bijwerken (herbouwt de image)"
-echo "  Anders → klik Herstarten om de nieuwe code te activeren"
+echo "[update] Supervisor herstarten zodat nieuwe versie zichtbaar wordt..."
+ha supervisor restart

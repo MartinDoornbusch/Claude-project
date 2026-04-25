@@ -231,6 +231,18 @@ def api_real_portfolio():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/update", methods=["POST"])
+def api_update():
+    import subprocess
+    import threading
+
+    def _run():
+        subprocess.run(["sh", "/config/bitvavo-bot/update.sh"], check=False)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"ok": True})
+
+
 @app.route("/api/trading/status")
 def api_trading_status():
     return jsonify({"paused": get_trading_paused()})
