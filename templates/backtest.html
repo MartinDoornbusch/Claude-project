@@ -29,7 +29,7 @@
     .kpi-card.neg-border { border-color: rgba(220,38,38,.4) !important; }
     @media (max-width:576px) { .hide-sm { display:none; } }
   </style>
-<script>const BASE_URL = '{{ url_for("index") }}'.replace(//$/, '');</script>
+<script>const BASE_URL = '{{ url_for("index") }}'.replace(/\/$/, '');</script>
 </head>
 <body>
 

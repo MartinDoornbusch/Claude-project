@@ -218,6 +218,45 @@ def api_markets_advise():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/test_connection")
+def api_test_connection():
+    result: dict = {"bitvavo": False, "anthropic": False, "errors": {}}
+    try:
+        client = get_client()
+        t = client.time()
+        if isinstance(t, dict) and "time" in t:
+            result["bitvavo"] = True
+        else:
+            result["errors"]["bitvavo"] = str(t)
+    except Exception as e:
+        result["errors"]["bitvavo"] = str(e)
+
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if anthropic_key:
+        try:
+            import anthropic as _anthropic
+            ac = _anthropic.Anthropic(api_key=anthropic_key)
+            ac.models.list()
+            result["anthropic"] = True
+        except Exception as e:
+            result["errors"]["anthropic"] = str(e)
+    else:
+        result["errors"]["anthropic"] = "API key niet ingesteld"
+
+    return jsonify(result)
+
+
+@app.route("/api/markets/available")
+def api_markets_available():
+    try:
+        from src.market_scanner import get_all_eur_markets
+        client = get_client()
+        markets = get_all_eur_markets(client)
+        return jsonify({"markets": markets})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/markets/toggle", methods=["POST"])
 def api_markets_toggle():
     try:
