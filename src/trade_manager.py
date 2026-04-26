@@ -10,6 +10,7 @@ from python_bitvavo_api.bitvavo import Bitvavo
 import src.paper_trader as paper
 import src.live_trader as live
 from src.database import get_position, set_house_money_activated
+from src.env_utils import env_float, env_float_opt
 
 logger = logging.getLogger(__name__)
 
@@ -24,15 +25,11 @@ def check_sl_tp(client: Bitvavo, market: str, current_price: float) -> bool:
     """
     from src.database import get_position_meta, update_position_peak, set_breakeven_activated, clear_position_meta
 
-    _sl_raw  = os.getenv("STOP_LOSS_PCT",        "").strip()
-    _tp_raw  = os.getenv("TAKE_PROFIT_PCT",      "").strip()
-    _be_raw  = os.getenv("BREAKEVEN_TRIGGER_PCT","").strip()
-    trailing_enabled = os.getenv("TRAILING_STOP_ENABLED", "false").lower() == "true"
-    trailing_pct     = float(os.getenv("TRAILING_STOP_PCT", "2.0"))
-
-    stop_loss_pct:    float | None = float(_sl_raw)  if _sl_raw  else None
-    take_profit_pct:  float | None = float(_tp_raw)  if _tp_raw  else None
-    breakeven_trigger: float | None = float(_be_raw) if _be_raw  else None
+    trailing_enabled  = os.getenv("TRAILING_STOP_ENABLED", "false").lower() == "true"
+    trailing_pct      = env_float("TRAILING_STOP_PCT", 2.0)
+    stop_loss_pct     = env_float_opt("STOP_LOSS_PCT")
+    take_profit_pct   = env_float_opt("TAKE_PROFIT_PCT")
+    breakeven_trigger = env_float_opt("BREAKEVEN_TRIGGER_PCT")
 
     nothing_to_check = (
         stop_loss_pct is None and take_profit_pct is None
@@ -117,7 +114,7 @@ def check_house_money(client: Bitvavo, market: str, current_price: float) -> boo
     if meta.get("house_money_activated"):
         return False
 
-    trigger_pct = float(os.getenv("HOUSE_MONEY_TRIGGER_PCT", "10"))
+    trigger_pct = env_float("HOUSE_MONEY_TRIGGER_PCT", 10)
     chg_pct     = (current_price - pos["avg_price"]) / pos["avg_price"] * 100
     if chg_pct < trigger_pct:
         return False

@@ -9,6 +9,8 @@ import socket
 
 import paho.mqtt.client as mqtt
 
+from src.env_utils import env_int
+
 logger = logging.getLogger(__name__)
 
 HA_DISCOVERY_PREFIX = "homeassistant"
@@ -75,11 +77,11 @@ def publish_all(portfolio: dict, market_signals: dict[str, dict]) -> None:
         return
 
     host    = os.getenv("MQTT_HOST", "").strip()
-    port    = int(os.getenv("MQTT_PORT", "1883"))
+    port    = env_int("MQTT_PORT", 1883)
     user    = os.getenv("MQTT_USER", "")
     passwd  = os.getenv("MQTT_PASS", "")
     prefix  = os.getenv("MQTT_PREFIX", "bitvavo")
-    timeout = int(os.getenv("MQTT_CONNECT_TIMEOUT", "3"))  # seconden
+    timeout = env_int("MQTT_CONNECT_TIMEOUT", 3)
 
     if not host:
         return

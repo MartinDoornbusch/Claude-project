@@ -7,6 +7,8 @@ import os
 
 import pandas as pd
 
+from src.env_utils import env_float
+
 logger = logging.getLogger(__name__)
 
 CORR_LOOKBACK = 30  # dagelijkse candles
@@ -23,7 +25,7 @@ def get_correlated_markets(
     Gebruikt 30 dagelijkse sluitingskoersen voor berekening.
     """
     if threshold is None:
-        threshold = float(os.getenv("CORR_THRESHOLD", "0.8"))
+        threshold = env_float("CORR_THRESHOLD", 0.8)
 
     if len(all_markets) < 2:
         return []
@@ -73,7 +75,7 @@ def has_correlated_position(
     Retourneert (True, markt_naam) als dat zo is, anders (False, "").
     """
     if threshold is None:
-        threshold = float(os.getenv("CORR_THRESHOLD", "0.8"))
+        threshold = env_float("CORR_THRESHOLD", 0.8)
 
     from src.database import get_position
 

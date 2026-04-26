@@ -22,6 +22,7 @@ from src.database import (
     get_latest_signals, get_cash, get_position, get_paper_trades,
     get_last_buy_ts, get_recent_trade_pairs, get_market_change_24h,
 )
+from src.env_utils import env_float, env_int
 
 logger = logging.getLogger(__name__)
 
@@ -241,7 +242,7 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
 
     from src.database import get_daily_loss
     daily_loss  = get_daily_loss(market)
-    daily_limit = float(os.getenv("DAILY_LOSS_LIMIT_EUR", "50"))
+    daily_limit = env_float("DAILY_LOSS_LIMIT_EUR", 50)
     if daily_loss < 0:
         lines.append(
             f"Daily realized loss: €{daily_loss:.2f} / €{daily_limit:.0f} limit "
@@ -259,7 +260,7 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
             lines.append(f"⚠️ LOSS STREAK: {loss_streak} consecutive losses — consider HOLD")
 
     orders_today = _orders_executed_today(market)
-    lines.append(f"AI orders today: {orders_today}/{int(os.getenv('AI_MAX_ORDERS_PER_DAY', '3'))}")
+    lines.append(f"AI orders today: {orders_today}/{env_int('AI_MAX_ORDERS_PER_DAY', 3)}")
 
     if recent_signals:
         lines += ["", "=== Recent Signal History (newest first) ==="]
@@ -369,10 +370,10 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
 
     Retourneert: (decision, confidence, reasoning)
     """
-    min_confidence     = float(os.getenv("AI_MIN_CONFIDENCE", "0.7"))
-    max_orders_per_day = int(os.getenv("AI_MAX_ORDERS_PER_DAY", "3"))
-    cooldown_minutes   = int(os.getenv("AI_COOLDOWN_MINUTES", "60"))
-    score_threshold    = float(os.getenv("AI_SCORE_THRESHOLD", "0.5"))
+    min_confidence     = env_float("AI_MIN_CONFIDENCE", 0.7)
+    max_orders_per_day = env_int("AI_MAX_ORDERS_PER_DAY", 3)
+    cooldown_minutes   = env_int("AI_COOLDOWN_MINUTES", 60)
+    score_threshold    = env_float("AI_SCORE_THRESHOLD", 0.5)
 
     if not ai_enabled():
         return "HOLD", 0.0, "AI strategie uitgeschakeld"

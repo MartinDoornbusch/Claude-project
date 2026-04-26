@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
+from src.env_utils import env_float
 from src.database import (
     get_cash, set_cash,
     get_position, set_position,
@@ -20,11 +21,11 @@ FEE_RATE = 0.0025
 
 def _check_daily_loss(market: str) -> bool:
     """Returns True als dagelijkse verliesgrens bereikt is."""
-    daily_loss_pct = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "2.0"))
+    daily_loss_pct = env_float("DAILY_LOSS_LIMIT_PCT", 2.0)
     if daily_loss_pct <= 0:
         return False
     from src.database import get_total_daily_loss
-    portfolio_basis  = float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
+    portfolio_basis  = env_float("PAPER_STARTING_CAPITAL", 1000)
     daily_loss_limit = portfolio_basis * daily_loss_pct / 100
     today_loss       = get_total_daily_loss()
     if today_loss < 0 and abs(today_loss) >= daily_loss_limit:
@@ -106,7 +107,7 @@ def buy(market: str, price: float, reason: str = "", fraction: float | None = No
         logger.info("[%s] BUY overgeslagen — positie al open (%.6f)", market, position["amount"])
         return None
 
-    trade_fraction = float(os.getenv("PAPER_TRADE_FRACTION", "0.15"))
+    trade_fraction = env_float("PAPER_TRADE_FRACTION", 0.15)
     used_fraction  = fraction if fraction is not None else trade_fraction
 
     if iceberg_chunks > 1:

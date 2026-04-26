@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 
 import pandas as pd
+
+from src.env_utils import env_float, env_float_opt
 import ta.trend as ta_trend
 import ta.momentum as ta_momentum
 import ta.volatility as ta_volatility
@@ -100,13 +102,12 @@ def get_risk_fraction(
     De fractie wordt teruggerekend naar het deel van beschikbaar cash.
     """
     if risk_pct is None:
-        risk_pct = float(os.getenv("RISK_PER_TRADE_PCT", "1.0"))
+        risk_pct = env_float("RISK_PER_TRADE_PCT", 1.0)
     if sl_pct is None:
-        sl_raw = os.getenv("STOP_LOSS_PCT", "").strip()
-        sl_pct = abs(float(sl_raw)) if sl_raw else 5.0
+        sl_pct = abs(env_float_opt("STOP_LOSS_PCT") or 5.0)
 
     if sl_pct <= 0 or portfolio_total <= 0 or available_cash <= 0:
-        return float(os.getenv("PAPER_TRADE_FRACTION", "0.15"))
+        return env_float("PAPER_TRADE_FRACTION", 0.15)
 
     position_eur = portfolio_total * (risk_pct / 100) / (sl_pct / 100)
     fraction = position_eur / available_cash

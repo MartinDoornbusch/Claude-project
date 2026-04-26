@@ -19,6 +19,7 @@ from src.bitvavo_client import get_client
 from src.portfolio import get_ticker_price
 from src.ai_strategy import ai_enabled
 from src.config_manager import read_config, write_config, config_from_form
+from src.env_utils import env_float
 
 app = Flask(__name__, template_folder="../templates")
 
@@ -143,8 +144,8 @@ def index():
     daily_loss_data: dict = {"loss_eur": 0.0, "limit_eur": 0.0, "limit_pct": 2.0, "pct_used": 0.0}
     try:
         loss_eur  = get_total_daily_loss()  # negative = loss
-        limit_pct = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "2.0"))
-        ptotal    = get_latest_portfolio_total() or float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
+        limit_pct = env_float("DAILY_LOSS_LIMIT_PCT", 2.0)
+        ptotal    = get_latest_portfolio_total() or env_float("PAPER_STARTING_CAPITAL", 1000)
         limit_eur = ptotal * limit_pct / 100
         pct_used  = min(100.0, abs(loss_eur) / limit_eur * 100) if limit_eur > 0 and loss_eur < 0 else 0.0
         daily_loss_data = {
@@ -176,10 +177,10 @@ def index():
     # ── Open Positions SL/TP per market ───────────────────────────────────────
     positions_data: dict = {}
     try:
-        sl_pct           = float(os.getenv("STOP_LOSS_PCT") or "0")
-        tp_pct           = float(os.getenv("TAKE_PROFIT_PCT") or "0")
+        sl_pct           = env_float("STOP_LOSS_PCT", 0.0)
+        tp_pct           = env_float("TAKE_PROFIT_PCT", 0.0)
         trailing_enabled = os.getenv("TRAILING_STOP_ENABLED", "false").lower() == "true"
-        trailing_pct     = float(os.getenv("TRAILING_STOP_PCT", "2.0"))
+        trailing_pct     = env_float("TRAILING_STOP_PCT", 2.0)
         for market in _dashboard_markets():
             pos = get_position(market)
             if pos["amount"] > 0 and pos["avg_price"] > 0:
@@ -290,7 +291,7 @@ def api_portfolio_cleanup():
 
 @app.route("/api/paper/reset", methods=["POST"])
 def api_paper_reset():
-    capital = float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
+    capital = env_float("PAPER_STARTING_CAPITAL", 1000)
     reset_paper_trading(capital)
     return jsonify({"ok": True, "capital": capital})
 

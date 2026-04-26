@@ -114,6 +114,17 @@ def write_config(updates: dict[str, str]) -> None:
         set_key(str(ENV_PATH), key, value)
 
 
+_NUMERIC_KEYS = {
+    "CHECK_INTERVAL_MINUTES", "PAPER_STARTING_CAPITAL", "PAPER_TRADE_FRACTION",
+    "RISK_PER_TRADE_PCT", "MAX_TRADE_EUR", "MAX_EXPOSURE_EUR",
+    "DAILY_LOSS_LIMIT_PCT", "STOP_LOSS_PCT", "TAKE_PROFIT_PCT",
+    "TRAILING_STOP_PCT", "BREAKEVEN_TRIGGER_PCT",
+    "HOUSE_MONEY_TRIGGER_PCT", "CLEANUP_PCT", "ICEBERG_CHUNKS", "ICEBERG_INTERVAL_SECONDS",
+    "AI_MIN_CONFIDENCE", "AI_MAX_ORDERS_PER_DAY", "AI_COOLDOWN_MINUTES", "AI_SCORE_THRESHOLD",
+    "CORR_THRESHOLD", "MQTT_PORT", "MQTT_CONNECT_TIMEOUT",
+}
+
+
 def config_from_form(form) -> dict[str, str]:
     """Build a validated updates dict from a Flask request.form."""
     updates: dict[str, str] = {}
@@ -124,5 +135,8 @@ def config_from_form(form) -> dict[str, str]:
             value = form.get(key, "").strip()
             if value == "" and key in SENSITIVE_KEYS:
                 continue  # leave existing secret untouched
+            # Normalise comma decimal separator to dot before persisting
+            if key in _NUMERIC_KEYS and value:
+                value = value.replace(",", ".")
             updates[key] = value
     return updates

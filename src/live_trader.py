@@ -6,6 +6,8 @@ import logging
 import os
 import time
 
+from src.env_utils import env_float
+
 from python_bitvavo_api.bitvavo import Bitvavo
 
 from src.database import (
@@ -26,10 +28,10 @@ def _guard_checks(client: Bitvavo, market: str, spend_eur: float) -> str | None:
     if os.getenv("LIVE_TRADING_ENABLED", "false").lower() != "true":
         return "LIVE_TRADING_ENABLED is niet true in .env"
 
-    max_trade_eur      = float(os.getenv("MAX_TRADE_EUR", "25"))
-    max_exposure_eur   = float(os.getenv("MAX_EXPOSURE_EUR", "100"))
-    daily_loss_pct     = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "2.0"))
-    portfolio_basis    = float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
+    max_trade_eur      = env_float("MAX_TRADE_EUR", 25)
+    max_exposure_eur   = env_float("MAX_EXPOSURE_EUR", 100)
+    daily_loss_pct     = env_float("DAILY_LOSS_LIMIT_PCT", 2.0)
+    portfolio_basis    = env_float("PAPER_STARTING_CAPITAL", 1000)
     daily_loss_limit   = portfolio_basis * daily_loss_pct / 100
 
     if spend_eur > max_trade_eur:
@@ -74,7 +76,7 @@ def _poll_order(client: Bitvavo, market: str, order_id: str, timeout: int = 30) 
 def _buy_iceberg(client: Bitvavo, market: str, current_price: float,
                  reason: str, n_chunks: int) -> dict | None:
     """Splits een LIVE koop op in n_chunks gelijke deelorders (iceberg)."""
-    max_trade_eur = float(os.getenv("MAX_TRADE_EUR", "25"))
+    max_trade_eur = env_float("MAX_TRADE_EUR", 25)
     chunk_eur     = max_trade_eur / n_chunks
     min_chunk     = 5.0
 
@@ -125,7 +127,7 @@ def _buy_iceberg(client: Bitvavo, market: str, current_price: float,
             break
 
         if i < n_chunks - 1:
-            _interval = float(os.getenv("ICEBERG_INTERVAL_SECONDS", "2"))
+            _interval = env_float("ICEBERG_INTERVAL_SECONDS", 2)
             if _interval > 0:
                 time.sleep(_interval)
 
@@ -146,7 +148,7 @@ def buy(client: Bitvavo, market: str, current_price: float, reason: str = "",
     Plaats een echte markt-koop order op Bitvavo.
     Gebruikt MAX_TRADE_EUR als orderbedrag.
     """
-    spend_eur = float(os.getenv("MAX_TRADE_EUR", "25"))
+    spend_eur = env_float("MAX_TRADE_EUR", 25)
 
     block = _guard_checks(client, market, spend_eur)
     if block:
