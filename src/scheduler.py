@@ -11,8 +11,12 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from src.bitvavo_client import get_client
-from src.candles import get_candles, latest_signals, add_indicators, get_atr_fraction
-from src.database import init_db, save_ai_decision, save_signal, get_enabled_markets, save_portfolio_snapshot, get_trading_paused
+from src.candles import get_candles, latest_signals, add_indicators, get_atr_fraction, get_risk_fraction
+from src.database import (
+    init_db, save_ai_decision, save_signal, get_enabled_markets,
+    save_portfolio_snapshot, get_trading_paused,
+    get_latest_portfolio_total, get_cash,
+)
 from src.paper_trader import portfolio_value
 from src.strategy import evaluate
 from src.ai_strategy import ai_enabled, ai_evaluate
@@ -46,10 +50,14 @@ def run_cycle() -> None:
     load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
 
     # Lees alle config dynamisch
-    interval      = os.getenv("CANDLE_INTERVAL", "1h")
-    check_minutes = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
-    vol_sizing    = os.getenv("VOL_SIZING_ENABLED", "false").lower() == "true"
-    corr_check    = os.getenv("CORR_CHECK_ENABLED", "false").lower() == "true"
+    interval       = os.getenv("CANDLE_INTERVAL", "1h")
+    check_minutes  = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
+    vol_sizing     = os.getenv("VOL_SIZING_ENABLED", "false").lower() == "true"
+    corr_check     = os.getenv("CORR_CHECK_ENABLED", "false").lower() == "true"
+    sizing_mode    = os.getenv("POSITION_SIZING_MODE", "fraction")
+
+    # Portfolio totaal voor positiegroottes (gebruik laatste snapshot als startpunt)
+    portfolio_total = get_latest_portfolio_total() or float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
 
     # Herplan scheduler als interval gewijzigd is
     if _scheduler is not None:
@@ -118,8 +126,14 @@ def run_cycle() -> None:
                             signal = "HOLD"
 
                     if signal == "BUY":
-                        # Volatiliteits-gebaseerde positiegroottes
-                        fraction = get_atr_fraction(df, float(os.getenv("PAPER_TRADE_FRACTION", "0.95"))) if vol_sizing else None
+                        # Positiegroottes op basis van gekozen methode
+                        base_frac = float(os.getenv("PAPER_TRADE_FRACTION", "0.15"))
+                        if sizing_mode == "risk_pct":
+                            fraction = get_risk_fraction(df, portfolio_total, get_cash())
+                        elif vol_sizing:
+                            fraction = get_atr_fraction(df, base_frac)
+                        else:
+                            fraction = None
                         execute_buy(client, market, current_price, reason=reason, fraction=fraction)
                 elif signal == "SELL":
                     execute_sell(client, market, current_price, reason=reason)

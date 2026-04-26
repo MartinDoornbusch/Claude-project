@@ -10,7 +10,7 @@ from python_bitvavo_api.bitvavo import Bitvavo
 
 from src.database import (
     save_live_trade, update_live_trade,
-    get_live_trades, get_daily_loss, add_daily_pnl,
+    get_live_trades, add_daily_pnl,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,16 +26,20 @@ def _guard_checks(client: Bitvavo, market: str, spend_eur: float) -> str | None:
     if os.getenv("LIVE_TRADING_ENABLED", "false").lower() != "true":
         return "LIVE_TRADING_ENABLED is niet true in .env"
 
-    max_trade_eur    = float(os.getenv("MAX_TRADE_EUR", "25"))
-    max_exposure_eur = float(os.getenv("MAX_EXPOSURE_EUR", "100"))
-    daily_loss_limit = float(os.getenv("DAILY_LOSS_LIMIT_EUR", "50"))
+    max_trade_eur      = float(os.getenv("MAX_TRADE_EUR", "25"))
+    max_exposure_eur   = float(os.getenv("MAX_EXPOSURE_EUR", "100"))
+    daily_loss_pct     = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "2.0"))
+    portfolio_basis    = float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
+    daily_loss_limit   = portfolio_basis * daily_loss_pct / 100
 
     if spend_eur > max_trade_eur:
         return f"Order (€{spend_eur:.2f}) overschrijdt MAX_TRADE_EUR (€{max_trade_eur})"
 
-    daily_loss = get_daily_loss(market)
-    if daily_loss <= -daily_loss_limit:
-        return f"Daglimiet bereikt: verlies vandaag €{abs(daily_loss):.2f} >= €{daily_loss_limit}"
+    from src.database import get_total_daily_loss
+    daily_loss = get_total_daily_loss()
+    if daily_loss < 0 and abs(daily_loss) >= daily_loss_limit:
+        return (f"Daglimiet bereikt: verlies vandaag €{abs(daily_loss):.2f} "
+                f">= {daily_loss_pct}% van €{portfolio_basis:.0f} (€{daily_loss_limit:.2f})")
 
     open_trades = get_live_trades(market, limit=100)
     open_exposure = sum(

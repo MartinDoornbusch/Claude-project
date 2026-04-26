@@ -17,15 +17,19 @@ DEFAULTS: dict[str, str] = {
     "CHECK_INTERVAL_MINUTES":   "60",
     # Paper trading
     "PAPER_STARTING_CAPITAL":   "1000.0",
-    "PAPER_TRADE_FRACTION":     "0.95",
+    "PAPER_TRADE_FRACTION":     "0.15",
+    # Position sizing
+    "POSITION_SIZING_MODE":     "fraction",   # "fraction" | "risk_pct"
+    "RISK_PER_TRADE_PCT":       "1.0",
     # Live trading
     "LIVE_TRADING_ENABLED":     "false",
     "MAX_TRADE_EUR":            "25",
     "MAX_EXPOSURE_EUR":         "100",
-    "DAILY_LOSS_LIMIT_EUR":     "50",
     # Risk management
+    "DAILY_LOSS_LIMIT_PCT":     "2.0",
     "STOP_LOSS_PCT":            "",
     "TAKE_PROFIT_PCT":          "",
+    "OCO_ENABLED":              "false",
     "MTF_ENABLED":              "true",
     "VOL_SIZING_ENABLED":       "false",
     "CORR_CHECK_ENABLED":       "false",
@@ -65,7 +69,8 @@ DEFAULTS: dict[str, str] = {
 SENSITIVE_KEYS = {"BITVAVO_API_KEY", "BITVAVO_API_SECRET", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "GROQ_API_KEY", "MQTT_PASS", "HA_TOKEN"}
 
 # Keys that map to HTML checkboxes (absent in POST = false)
-BOOL_KEYS = {"LIVE_TRADING_ENABLED", "AI_STRATEGY_ENABLED", "MTF_ENABLED", "VOL_SIZING_ENABLED", "CORR_CHECK_ENABLED",
+BOOL_KEYS = {"LIVE_TRADING_ENABLED", "AI_STRATEGY_ENABLED", "MTF_ENABLED", "VOL_SIZING_ENABLED",
+             "CORR_CHECK_ENABLED", "OCO_ENABLED",
              "AI_ANTHROPIC_ENABLED", "AI_GOOGLE_ENABLED", "AI_GROQ_ENABLED", "MQTT_ENABLED"}
 
 
