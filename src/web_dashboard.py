@@ -11,7 +11,7 @@ from src.database import (
     get_latest_signals, get_paper_trades, get_cash, get_position, get_ai_decisions,
     get_watchlist, get_enabled_markets, set_market_enabled, upsert_market_stats, save_market_advice,
     get_all_paper_trades_asc, get_daily_pnl_series, get_trading_paused, set_trading_paused,
-    get_live_trades,
+    get_live_trades, reset_paper_trading,
 )
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
@@ -162,11 +162,20 @@ def api_portfolio():
     return jsonify(pf)
 
 
+@app.route("/api/paper/reset", methods=["POST"])
+def api_paper_reset():
+    capital = float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
+    reset_paper_trading(capital)
+    return jsonify({"ok": True, "capital": capital})
+
+
 @app.route("/settings", methods=["GET"])
 def settings_page():
     config = read_config()
     saved = request.args.get("saved") == "1"
-    return render_template("settings.html", config=config, saved=saved)
+    from src.ai_provider import get_configured_providers
+    active_providers = [p for p, _ in get_configured_providers()]
+    return render_template("settings.html", config=config, saved=saved, active_providers=active_providers)
 
 
 @app.route("/settings", methods=["POST"])

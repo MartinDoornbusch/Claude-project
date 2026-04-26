@@ -38,7 +38,7 @@
     .big-switch .form-check-input { width: 3.2em; height: 1.6em; cursor: pointer; }
     .mode-name { font-size: 1.05rem; font-weight: 700; letter-spacing: .02em; }
     .mode-desc { font-size: .78rem; color: #64748b; min-height: 1.2em; }
-    .restart-note { font-size: .75rem; color: #f97316; }
+    .live-note { font-size: .75rem; color: #94a3b8; }
     option { background: #ffffff; }
   </style>
 </head>
@@ -64,7 +64,7 @@
     <div class="card mb-4 card-mode">
       <div class="card-header d-flex justify-content-between align-items-center">
         <span>Actieve Modus</span>
-        <span class="restart-note">⚡ Herstart de bot na opslaan</span>
+        <span class="live-note">Wijzigingen zijn direct actief na opslaan</span>
       </div>
       <div class="card-body">
         <div class="row g-3">
@@ -91,6 +91,12 @@
           </div>
 
           <!-- Regel ↔ AI -->
+          {% set _prov_map = {"anthropic": "Claude", "google": "Gemini", "groq": "Groq"} %}
+          {% set _prov_labels = active_providers | map('lower') | map('replace', 'anthropic', 'Claude') | list %}
+          {% set _ai_names = [] %}
+          {% for p in active_providers %}{% if _prov_map[p] is defined %}{% set _ = _ai_names.append(_prov_map[p]) %}{% endif %}{% endfor %}
+          {% set _ai_label = (_ai_names | join(' + ') | upper) if _ai_names else 'AI' %}
+          {% set _ai_desc  = (_ai_names | join(', ') + ' analyseren markt') if _ai_names else 'Geen providers geconfigureerd' %}
           <div class="col-12 col-sm-6">
             <div class="mode-col {{ 'mode-col-ai' if config.AI_STRATEGY_ENABLED == 'true' else 'mode-col-regel' }}" id="col-strategy">
               <div class="d-flex align-items-center justify-content-between mb-2">
@@ -103,10 +109,10 @@
               </div>
               <div class="mode-name" id="strategy-name"
                    style="color: {{ '#3b82f6' if config.AI_STRATEGY_ENABLED == 'true' else '#64748b' }}">
-                {{ 'CLAUDE AI' if config.AI_STRATEGY_ENABLED == 'true' else 'REGEL-GEBASEERD' }}
+                {{ _ai_label if config.AI_STRATEGY_ENABLED == 'true' else 'REGEL-GEBASEERD' }}
               </div>
               <div class="mode-desc" id="strategy-desc">
-                {{ 'claude-opus-4-7 analyseert markt' if config.AI_STRATEGY_ENABLED == 'true' else 'MA crossover + RSI regels' }}
+                {{ _ai_desc if config.AI_STRATEGY_ENABLED == 'true' else 'MA crossover + RSI regels' }}
               </div>
             </div>
           </div>
@@ -251,6 +257,15 @@
                 </div>
               </div>
             </div>
+
+            {% if config.LIVE_TRADING_ENABLED != 'true' %}
+            <div class="mt-3 pt-3 border-top">
+              <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmPaperReset(this)">
+                Paper portfolio resetten
+              </button>
+              <div class="form-text mt-1">Wist alle trades, posities en dagelijks PnL — stelt cash terug op €{{ config.PAPER_STARTING_CAPITAL|float|int }}</div>
+            </div>
+            {% endif %}
           </div>
         </div>
 
@@ -671,6 +686,9 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+  const AI_STRATEGY_NAME = {{ (_ai_label)      | tojson }};
+  const AI_STRATEGY_DESC = {{ (_ai_desc)        | tojson }};
+
   // ── Positiegrootte methode ──
   function toggleSizingMode(mode) {
     document.getElementById('sizing-fraction-fields').style.display = mode === 'fraction' ? '' : 'none';
@@ -710,9 +728,9 @@
   function updateStrategy() {
     const ai = aiToggle.checked;
     colStrategy.className = 'mode-col ' + (ai ? 'mode-col-ai' : 'mode-col-regel');
-    strategyName.textContent = ai ? 'CLAUDE AI'                     : 'REGEL-GEBASEERD';
-    strategyName.style.color = ai ? '#3b82f6'                       : '#64748b';
-    strategyDesc.textContent = ai ? 'claude-opus-4-7 analyseert markt' : 'MA crossover + RSI regels';
+    strategyName.textContent = ai ? AI_STRATEGY_NAME : 'REGEL-GEBASEERD';
+    strategyName.style.color = ai ? '#3b82f6'        : '#64748b';
+    strategyDesc.textContent = ai ? AI_STRATEGY_DESC : 'MA crossover + RSI regels';
   }
   aiToggle.addEventListener('change', updateStrategy);
 
@@ -748,6 +766,24 @@
       res.innerHTML = html || '<span style="color:#64748b;">Geen providers geconfigureerd</span>';
     } catch(e) {
       res.innerHTML = `<span style="color:#dc2626;">Fout: ${e.message}</span>`;
+    }
+    btn.disabled = false;
+  }
+
+  // ── Paper portfolio reset ──
+  async function confirmPaperReset(btn) {
+    if (!confirm('Paper portfolio resetten?\n\nAlle trades, posities en dagelijks PnL worden gewist. Cash wordt teruggezet op het startkapitaal.')) return;
+    btn.disabled = true;
+    try {
+      const r = await fetch(BASE_URL + '/api/paper/reset', {method: 'POST'});
+      const d = await r.json();
+      if (d.ok) {
+        alert(`Portfolio gereset ✓\nStartkapitaal: €${d.capital.toFixed(2)}`);
+      } else {
+        alert('Reset mislukt: ' + (d.error || 'onbekende fout'));
+      }
+    } catch(e) {
+      alert('Fout: ' + e.message);
     }
     btn.disabled = false;
   }

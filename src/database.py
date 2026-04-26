@@ -469,6 +469,16 @@ def get_daily_pnl_series() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def reset_paper_trading(starting_capital: float = 1000.0) -> None:
+    """Wist alle paper trades, posities en snapshots — reset cash naar startkapitaal."""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM paper_trades")
+        conn.execute("DELETE FROM paper_portfolio")
+        conn.execute("INSERT OR REPLACE INTO paper_cash (id, eur) VALUES (1, ?)", (starting_capital,))
+        conn.execute("DELETE FROM portfolio_snapshots")
+        conn.execute("DELETE FROM daily_pnl")
+
+
 def save_portfolio_snapshot(cash_eur: float, pos_eur: float, total_eur: float) -> None:
     with get_conn() as conn:
         conn.execute(
