@@ -257,3 +257,37 @@ def sell(client: Bitvavo, market: str, current_price: float, reason: str = "") -
         update_live_trade(trade_id, current_price, available, gross_eur, "timeout")
         logger.warning("[%s] LIVE SELL order niet gevuld binnen timeout", market)
         return None
+
+
+def partial_sell(client: Bitvavo, market: str, amount: float, current_price: float,
+                 reason: str = "") -> dict | None:
+    """Verkoop een specifieke hoeveelheid van de open positie (voor huisgeld-modus)."""
+    if os.getenv("LIVE_TRADING_ENABLED", "false").lower() != "true":
+        logger.warning("[%s] LIVE PARTIAL SELL geblokkeerd: LIVE_TRADING_ENABLED niet true", market)
+        return None
+
+    gross_eur = amount * current_price
+    logger.info("[%s] LIVE PARTIAL SELL — %.6f @ €%.4f | reden: %s", market, amount, current_price, reason)
+    trade_id = save_live_trade(market, "SELL", None, current_price, amount, gross_eur, "pending", reason)
+
+    result = client.placeOrder(market, "sell", "market", {"amount": str(amount)})
+    if isinstance(result, dict) and "error" in result:
+        update_live_trade(trade_id, current_price, amount, gross_eur, "error")
+        logger.error("[%s] LIVE PARTIAL SELL mislukt: %s", market, result["error"])
+        return None
+
+    order_id = result.get("orderId", "")
+    filled   = _poll_order(client, market, order_id)
+
+    if filled and filled.get("status") == "filled":
+        f_price  = float(filled.get("price") or current_price)
+        f_amount = float(filled.get("filledAmount", amount))
+        f_eur    = float(filled.get("filledAmountQuote", gross_eur))
+        update_live_trade(trade_id, f_price, f_amount, f_eur, "filled")
+        logger.info("[%s] LIVE PARTIAL SELL gevuld — %.6f @ €%.4f", market, f_amount, f_price)
+        return {"side": "SELL", "order_id": order_id, "price": f_price,
+                "amount": f_amount, "eur": f_eur, "partial": True}
+    else:
+        update_live_trade(trade_id, current_price, amount, gross_eur, "timeout")
+        logger.warning("[%s] LIVE PARTIAL SELL niet gevuld binnen timeout", market)
+        return None

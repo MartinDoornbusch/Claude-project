@@ -21,7 +21,7 @@ from src.paper_trader import portfolio_value
 from src.strategy import evaluate
 from src.ai_strategy import ai_enabled, ai_evaluate
 from src.mqtt_publisher import publish_all
-from src.trade_manager import execute_buy, execute_sell, check_sl_tp, mode
+from src.trade_manager import execute_buy, execute_sell, check_sl_tp, check_house_money, mode
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +33,14 @@ def _env_markets() -> list[str]:
 
 
 def _active_markets() -> list[str]:
-    """Geeft ingeschakelde markten uit de DB terug; valt terug op TRADING_MARKETS env-var."""
+    """Geeft ingeschakelde markten terug, gefilterd op blacklist."""
+    blacklist: set[str] = {m.strip().upper() for m in os.getenv("TRADING_BLACKLIST", "").split(",") if m.strip()}
     try:
         markets = get_enabled_markets()
-        return markets if markets else _env_markets()
+        active  = markets if markets else _env_markets()
     except Exception:
-        return _env_markets()
+        active = _env_markets()
+    return [m for m in active if m.upper() not in blacklist]
 
 
 def run_cycle() -> None:
@@ -92,6 +94,10 @@ def run_cycle() -> None:
 
             # Stop-loss / take-profit check — ook bij pauze (veiligheidsnet)
             sl_tp_triggered = check_sl_tp(client, market, current_price) if not paused else False
+
+            # Huisgeld-check: verkoopt inleg terug als positie X% in de winst staat
+            if not sl_tp_triggered and not paused:
+                check_house_money(client, market, current_price)
 
             if ai_enabled():
                 decision, confidence, reasoning = ai_evaluate(market, sig)

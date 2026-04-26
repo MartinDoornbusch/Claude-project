@@ -9,7 +9,7 @@ from python_bitvavo_api.bitvavo import Bitvavo
 
 import src.paper_trader as paper
 import src.live_trader as live
-from src.database import get_position
+from src.database import get_position, set_house_money_activated
 
 logger = logging.getLogger(__name__)
 
@@ -103,11 +103,69 @@ def check_sl_tp(client: Bitvavo, market: str, current_price: float) -> bool:
     return False
 
 
+def check_house_money(client: Bitvavo, market: str, current_price: float) -> bool:
+    """Verkoopt bij X% winst precies genoeg om de initiële inleg terug te halen."""
+    if os.getenv("HOUSE_MONEY_ENABLED", "false").lower() != "true":
+        return False
+
+    pos = get_position(market)
+    if pos["amount"] <= 0 or pos["avg_price"] <= 0:
+        return False
+
+    from src.database import get_position_meta, set_house_money_activated
+    meta = get_position_meta(market)
+    if meta.get("house_money_activated"):
+        return False
+
+    trigger_pct = float(os.getenv("HOUSE_MONEY_TRIGGER_PCT", "10"))
+    chg_pct     = (current_price - pos["avg_price"]) / pos["avg_price"] * 100
+    if chg_pct < trigger_pct:
+        return False
+
+    initial_eur = pos["amount"] * pos["avg_price"]
+    qty_to_sell = min(initial_eur / current_price, pos["amount"] * 0.9999)
+
+    reason = f"Huisgeld: inleg veiliggesteld bij {chg_pct:.1f}%"
+    logger.info(
+        "[%s] HUISGELD: verkoop %.6f om inleg €%.2f terug te halen bij %.1f%% winst",
+        market, qty_to_sell, initial_eur, chg_pct,
+    )
+
+    from src.notifier import notify_trade
+    if os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true":
+        result = live.partial_sell(client, market, qty_to_sell, current_price, reason)
+    else:
+        result = paper.partial_sell(market, qty_to_sell, current_price, reason)
+
+    if result:
+        set_house_money_activated(market)
+        notify_trade(market, "SELL", current_price, reason)
+        return True
+    return False
+
+
 def execute_buy(
     client: Bitvavo, market: str, price: float, reason: str = "",
     fraction: float | None = None, iceberg_chunks: int = 1,
 ) -> dict | None:
     from src.notifier import notify_trade
+
+    # Blacklist check
+    blacklist = {m.strip().upper() for m in os.getenv("TRADING_BLACKLIST", "").split(",") if m.strip()}
+    if market.upper() in blacklist:
+        logger.info("[%s] BUY overgeslagen — markt staat op blacklist", market)
+        return None
+
+    # Huisgeld: alleen kopen als vorige trade winstgevend was
+    if os.getenv("HOUSE_MONEY_ONLY_PROFIT", "false").lower() == "true":
+        from src.database import get_last_trade_pnl
+        last_pnl = get_last_trade_pnl(market)
+        if last_pnl is not None and last_pnl <= 0:
+            logger.info(
+                "[%s] BUY overgeslagen — huisgeld: vorige trade verliesgevend (€%.2f)", market, last_pnl
+            )
+            return None
+
     if os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true":
         logger.info("[%s] Mode: LIVE — BUY uitvoeren", market)
         result = live.buy(client, market, price, reason, iceberg_chunks=iceberg_chunks)
