@@ -71,7 +71,75 @@ def _poll_order(client: Bitvavo, market: str, order_id: str, timeout: int = 30) 
     return None
 
 
-def buy(client: Bitvavo, market: str, current_price: float, reason: str = "") -> dict | None:
+def _buy_iceberg(client: Bitvavo, market: str, current_price: float,
+                 reason: str, n_chunks: int) -> dict | None:
+    """Splits een LIVE koop op in n_chunks gelijke deelorders (iceberg)."""
+    max_trade_eur = float(os.getenv("MAX_TRADE_EUR", "25"))
+    chunk_eur     = max_trade_eur / n_chunks
+    min_chunk     = 5.0
+
+    if chunk_eur < min_chunk:
+        logger.warning(
+            "[%s] Iceberg chunk €%.2f < minimum €%.2f — verhoog MAX_TRADE_EUR of verlaag ICEBERG_CHUNKS",
+            market, chunk_eur, min_chunk,
+        )
+        chunk_eur = min_chunk
+
+    total_amount = 0.0
+    total_cost   = 0.0
+
+    for i in range(n_chunks):
+        block = _guard_checks(client, market, chunk_eur)
+        if block:
+            logger.warning("[%s] Iceberg chunk %d/%d geblokkeerd: %s", market, i + 1, n_chunks, block)
+            break
+
+        logger.info("[%s] Iceberg chunk %d/%d — €%.2f", market, i + 1, n_chunks, chunk_eur)
+        trade_id = save_live_trade(market, "BUY", None, current_price, None, chunk_eur,
+                                   "pending", f"[Iceberg {i+1}/{n_chunks}] {reason}")
+
+        result = client.placeOrder(market, "buy", "market", {"amountQuote": str(chunk_eur)})
+
+        if isinstance(result, dict) and "error" in result:
+            update_live_trade(trade_id, current_price, 0, chunk_eur, "error")
+            logger.error("[%s] Iceberg chunk %d mislukt: %s", market, i + 1, result["error"])
+            break
+
+        order_id = result.get("orderId", "")
+        filled   = _poll_order(client, market, order_id)
+
+        if filled and filled.get("status") == "filled":
+            f_price  = float(filled.get("price") or current_price)
+            f_amount = float(filled.get("filledAmount", 0))
+            f_eur    = float(filled.get("filledAmountQuote", chunk_eur))
+            update_live_trade(trade_id, f_price, f_amount, f_eur, "filled")
+            total_amount += f_amount
+            total_cost   += f_eur
+            logger.info(
+                "[%s] Iceberg chunk %d/%d gevuld — €%.2f | %.6f @ €%.4f",
+                market, i + 1, n_chunks, f_eur, f_amount, f_price,
+            )
+        else:
+            update_live_trade(trade_id, current_price, 0, chunk_eur, "timeout")
+            logger.warning("[%s] Iceberg chunk %d niet gevuld — stoppen", market, i + 1)
+            break
+
+        if i < n_chunks - 1:
+            time.sleep(2)
+
+    if total_amount <= 0:
+        return None
+
+    avg_price = total_cost / total_amount if total_amount > 0 else current_price
+    logger.info(
+        "[%s] LIVE ICEBERG BUY klaar — %d chunks | totaal: %.6f | gem. prijs: €%.4f | kosten: €%.2f",
+        market, n_chunks, total_amount, avg_price, total_cost,
+    )
+    return {"side": "BUY", "price": avg_price, "amount": total_amount, "eur": total_cost}
+
+
+def buy(client: Bitvavo, market: str, current_price: float, reason: str = "",
+        iceberg_chunks: int = 1) -> dict | None:
     """
     Plaats een echte markt-koop order op Bitvavo.
     Gebruikt MAX_TRADE_EUR als orderbedrag.
@@ -82,6 +150,9 @@ def buy(client: Bitvavo, market: str, current_price: float, reason: str = "") ->
     if block:
         logger.warning("[%s] LIVE BUY geblokkeerd: %s", market, block)
         return None
+
+    if iceberg_chunks > 1:
+        return _buy_iceberg(client, market, current_price, reason, iceberg_chunks)
 
     logger.info("[%s] LIVE BUY plaatsen — €%.2f | reden: %s", market, spend_eur, reason)
 
