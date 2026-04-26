@@ -57,15 +57,16 @@ def check_sl_tp(client: Bitvavo, market: str, current_price: float) -> bool:
 
 
 def execute_buy(
-    client: Bitvavo, market: str, price: float, reason: str = "", fraction: float | None = None
+    client: Bitvavo, market: str, price: float, reason: str = "",
+    fraction: float | None = None, iceberg_chunks: int = 1,
 ) -> dict | None:
     from src.notifier import notify_trade
     if os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true":
         logger.info("[%s] Mode: LIVE — BUY uitvoeren", market)
-        result = live.buy(client, market, price, reason)
+        result = live.buy(client, market, price, reason, iceberg_chunks=iceberg_chunks)
     else:
         logger.info("[%s] Mode: PAPER — BUY simuleren", market)
-        result = paper.buy(market, price, reason, fraction=fraction)
+        result = paper.buy(market, price, reason, fraction=fraction, iceberg_chunks=iceberg_chunks)
     if result:
         notify_trade(market, "BUY", price, reason)
     return result

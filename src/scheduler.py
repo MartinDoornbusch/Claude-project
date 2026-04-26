@@ -50,11 +50,13 @@ def run_cycle() -> None:
     load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
 
     # Lees alle config dynamisch
-    interval       = os.getenv("CANDLE_INTERVAL", "1h")
-    check_minutes  = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
-    vol_sizing     = os.getenv("VOL_SIZING_ENABLED", "false").lower() == "true"
-    corr_check     = os.getenv("CORR_CHECK_ENABLED", "false").lower() == "true"
-    sizing_mode    = os.getenv("POSITION_SIZING_MODE", "fraction")
+    interval        = os.getenv("CANDLE_INTERVAL", "1h")
+    check_minutes   = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
+    vol_sizing      = os.getenv("VOL_SIZING_ENABLED", "false").lower() == "true"
+    corr_check      = os.getenv("CORR_CHECK_ENABLED", "false").lower() == "true"
+    sizing_mode     = os.getenv("POSITION_SIZING_MODE", "fraction")
+    iceberg_enabled = os.getenv("ICEBERG_ENABLED", "false").lower() == "true"
+    iceberg_chunks  = int(os.getenv("ICEBERG_CHUNKS", "5")) if iceberg_enabled else 1
 
     # Portfolio totaal voor positiegroottes (gebruik laatste snapshot als startpunt)
     portfolio_total = get_latest_portfolio_total() or float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
@@ -134,7 +136,8 @@ def run_cycle() -> None:
                             fraction = get_atr_fraction(df, base_frac)
                         else:
                             fraction = None
-                        execute_buy(client, market, current_price, reason=reason, fraction=fraction)
+                        execute_buy(client, market, current_price, reason=reason,
+                                    fraction=fraction, iceberg_chunks=iceberg_chunks)
                 elif signal == "SELL":
                     execute_sell(client, market, current_price, reason=reason)
 

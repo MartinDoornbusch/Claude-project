@@ -354,6 +354,35 @@
                      value="{{ config.CORR_THRESHOLD }}" step="0.05" min="0.5" max="1.0">
               <div class="form-text">Markten boven deze correlatie gelden als één risico</div>
             </div>
+
+            <!-- Iceberg orders -->
+            <div class="mt-3 pt-3 border-top">
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="icebergEnabled"
+                       name="ICEBERG_ENABLED"
+                       {{ 'checked' if config.ICEBERG_ENABLED == 'true' }}
+                       onchange="toggleIceberg(this.checked)">
+                <label class="form-check-label" for="icebergEnabled">
+                  <strong>Iceberg orders</strong>
+                </label>
+              </div>
+              <div class="form-text mb-2">
+                Splits een grote koop op in meerdere kleinere deelorders om marktimpact te beperken op illiquide markten.
+              </div>
+              <div id="icebergChunksRow" style="display:{{ 'block' if config.ICEBERG_ENABLED == 'true' else 'none' }}">
+                <label class="form-label">Aantal chunks</label>
+                <input type="number" class="form-control" name="ICEBERG_CHUNKS"
+                       id="icebergChunks"
+                       value="{{ config.ICEBERG_CHUNKS }}" min="2" max="20" step="1"
+                       style="max-width:120px;">
+                <div class="form-text">
+                  Elke chunk = MAX_TRADE_EUR / chunks
+                  {% if config.MAX_TRADE_EUR and config.ICEBERG_CHUNKS %}
+                    (≈ €{{ "%.2f"|format(config.MAX_TRADE_EUR|float / config.ICEBERG_CHUNKS|int) }} per order)
+                  {% endif %}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -721,6 +750,11 @@
       res.innerHTML = `<span style="color:#dc2626;">Fout: ${e.message}</span>`;
     }
     btn.disabled = false;
+  }
+
+  // ── Iceberg toggle ──
+  function toggleIceberg(enabled) {
+    document.getElementById('icebergChunksRow').style.display = enabled ? 'block' : 'none';
   }
 
   // ── AI Provider toggles ──
