@@ -11,6 +11,7 @@ from src.database import (
     get_latest_signals, get_paper_trades, get_cash, get_position, get_ai_decisions,
     get_watchlist, get_enabled_markets, set_market_enabled, upsert_market_stats, save_market_advice,
     get_all_paper_trades_asc, get_daily_pnl_series, get_trading_paused, set_trading_paused,
+    get_live_trades,
 )
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
@@ -101,6 +102,8 @@ def _build_market_data() -> list[dict]:
 
 @app.route("/")
 def index():
+    live_mode = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
+
     try:
         pf = _build_portfolio()
     except Exception:
@@ -112,7 +115,7 @@ def index():
         market_data = []
 
     try:
-        trades = get_paper_trades(limit=20)
+        trades = get_live_trades(limit=20) if live_mode else get_paper_trades(limit=20)
     except Exception:
         trades = []
 
@@ -126,6 +129,7 @@ def index():
 
     return render_template(
         "index.html",
+        live_mode=live_mode,
         portfolio=pf,
         market_data=market_data,
         trades=trades,

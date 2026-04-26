@@ -189,8 +189,13 @@
         </div>
 
         <!-- Paper Trading -->
-        <div class="card mb-4">
-          <div class="card-header">Paper Trading</div>
+        <div class="card mb-4{% if config.LIVE_TRADING_ENABLED == 'true' %} opacity-50{% endif %}">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Paper Trading</span>
+            {% if config.LIVE_TRADING_ENABLED == 'true' %}
+            <span class="badge bg-secondary" style="font-size:.68rem;">Niet actief in LIVE modus</span>
+            {% endif %}
+          </div>
           <div class="card-body">
             <div class="mb-3">
               <label class="form-label">Startkapitaal (EUR)</label>
@@ -518,8 +523,15 @@
         </div>
 
         <!-- Live Trading -->
-        <div class="card mb-4 card-live">
-          <div class="card-header" style="color:#dc2626;">Live Trading</div>
+        <div class="card mb-4 card-live{% if config.LIVE_TRADING_ENABLED != 'true' %} opacity-50{% endif %}">
+          <div class="card-header d-flex justify-content-between align-items-center" style="color:#dc2626;">
+            <span>Live Trading</span>
+            {% if config.LIVE_TRADING_ENABLED == 'true' %}
+            <span class="badge bg-danger" style="font-size:.68rem;">⚡ ACTIEF</span>
+            {% else %}
+            <span class="badge bg-secondary" style="font-size:.68rem;">Uitgeschakeld</span>
+            {% endif %}
+          </div>
           <div class="card-body">
             <div class="alert mb-3 p-2" style="background:rgba(220,38,38,.06); border:1px solid rgba(220,38,38,.25); font-size:.82rem; color:#7f1d1d;">
               ⚠️ Echte orders met echt geld. Controleer of je Bitvavo API-sleutel

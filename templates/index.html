@@ -69,12 +69,28 @@
     </button>
   </div>
 
-  <!-- Portfolio samenvatting -->
+  {% if live_mode %}
+  <!-- ══ LIVE MODUS ══ Echt Bitvavo portfolio bovenaan, auto-geladen ══ -->
+  <div class="card mb-4" style="border-color:#fca5a5;">
+    <div class="card-header d-flex justify-content-between align-items-center" style="background:#fff1f2;">
+      <span style="color:#dc2626; font-weight:600;">Bitvavo Portfolio</span>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-danger" style="font-size:.72rem;">LIVE</span>
+        <span id="real-pf-total" class="fw-bold" style="color:#dc2626;"></span>
+        <button class="btn btn-sm btn-outline-danger" onclick="loadRealPortfolio()" id="real-pf-btn">⟳ Ververs</button>
+      </div>
+    </div>
+    <div class="card-body p-0" id="real-pf-body">
+      <div class="text-center text-muted py-3" style="font-size:.85rem;">Laden...</div>
+    </div>
+  </div>
+  {% else %}
+  <!-- ══ PAPER MODUS ══ Virtueel portfolio samenvatting ══ -->
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-      <div class="card p-3 text-center">
-        <div class="stat-label">Totaal</div>
-        <div class="stat-value">€{{ "%.2f"|format(portfolio.total_eur) }}</div>
+      <div class="card p-3 text-center" style="border-color:#86efac;">
+        <div class="stat-label">Paper Totaal</div>
+        <div class="stat-value" style="color:#16a34a;">€{{ "%.2f"|format(portfolio.total_eur) }}</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
@@ -86,25 +102,23 @@
     {% for market, pos in portfolio.positions.items() %}
     <div class="col-6 col-md-3">
       <div class="card p-3 text-center">
-        <div class="stat-label">{{ market }} positie</div>
+        <div class="stat-label">{{ market }}</div>
         <div class="stat-value">€{{ "%.2f"|format(pos.eur_value) }}</div>
         <div class="{% if pos.pnl >= 0 %}pnl-pos{% else %}pnl-neg{% endif %} small">
-          PnL: {{ "%+.2f"|format(pos.pnl) }} EUR
+          {{ "%+.2f"|format(pos.pnl) }} EUR
         </div>
       </div>
     </div>
     {% endfor %}
   </div>
 
-  <!-- Echt Bitvavo Portfolio -->
+  <!-- Echt Bitvavo Portfolio (secundair in paper modus) -->
   <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <span>Bitvavo Portfolio (live)</span>
+      <span>Bitvavo Portfolio (live saldo)</span>
       <div class="d-flex align-items-center gap-2">
         <span id="real-pf-total" class="fw-bold" style="color:#1e40af;"></span>
-        <button class="btn btn-sm btn-outline-secondary" onclick="loadRealPortfolio()" id="real-pf-btn">
-          ⟳ Ververs
-        </button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadRealPortfolio()" id="real-pf-btn">⟳ Ververs</button>
       </div>
     </div>
     <div class="card-body p-0" id="real-pf-body">
@@ -113,6 +127,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
 
   <!-- Markt indicatoren -->
   <div class="row g-3 mb-4">
@@ -217,7 +232,46 @@
   </div>
   {% endif %}
 
-  <!-- Trades tabel -->
+  {% if live_mode %}
+  <!-- LIVE: echte uitgevoerde orders -->
+  <div class="card mb-4" style="border-color:#fca5a5;">
+    <div class="card-header" style="background:#fff1f2; color:#dc2626;">Uitgevoerde Live Orders</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Tijd</th><th>Markt</th><th>Side</th>
+              <th class="text-end">Prijs</th><th class="text-end">EUR</th>
+              <th class="text-center">Status</th><th>Reden</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in trades %}
+            <tr>
+              <td class="text-nowrap">{{ t.ts[:16] }}</td>
+              <td>{{ t.market }}</td>
+              <td class="signal-{{ t.side }}">{{ t.side }}</td>
+              <td class="text-end">{{ t.price | fmt_price if t.price else '—' }}</td>
+              <td class="text-end">€{{ "%.2f"|format(t.eur_total) if t.eur_total else '—' }}</td>
+              <td class="text-center">
+                {% if t.status == 'filled' %}<span class="text-success">✓ Gevuld</span>
+                {% elif t.status == 'pending' %}<span class="text-warning">⏳ Wacht</span>
+                {% elif t.status == 'error' %}<span class="text-danger">✗ Fout</span>
+                {% else %}<span class="text-muted">{{ t.status }}</span>{% endif %}
+              </td>
+              <td class="reasoning-text">{{ t.reason or '—' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="text-center text-muted py-3">Nog geen live orders uitgevoerd</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <!-- PAPER: gesimuleerde trades -->
   <div class="card mb-4">
     <div class="card-header">Laatste paper trades</div>
     <div class="card-body p-0">
@@ -247,6 +301,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
 
 </div>
 
@@ -324,8 +379,9 @@
     btn.textContent = '⟳ Ververs';
   }
 
-  // Automatisch laden bij pagina-open
-  loadRealPortfolio();
+  // In live modus altijd auto-laden; in paper modus alleen na handmatige klik
+  const LIVE_MODE = {{ 'true' if live_mode else 'false' }};
+  if (LIVE_MODE) loadRealPortfolio();
 
   // ── Trading Guardrail ──
   function applyGuardrailState(paused) {
