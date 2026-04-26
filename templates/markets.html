@@ -135,7 +135,6 @@
             <tr>
               <th>Markt</th>
               <th class="text-end">Prijs</th>
-              <th class="text-center">Trend</th>
               <th class="text-end hide-sm">24u %</th>
               <th class="text-end hide-sm">Volume EUR</th>
               <th class="text-center">AI Advies</th>
@@ -174,7 +173,6 @@
               <td class="text-end font-monospace">
                 {% if m.last_price %}€{{ "%.4f"|format(m.last_price) }}{% else %}<span class="text-muted">—</span>{% endif %}
               </td>
-              <td class="text-center">{{ thtml }}</td>
               <td class="text-end hide-sm">
                 {% if m.change_24h is not none %}
                 <span class="{{ 'change-pos' if m.change_24h >= 0 else 'change-neg' }}">
@@ -275,27 +273,29 @@
       const r = await fetch(BASE_URL + '/api/markets/advise', {method: 'POST'});
       const data = await r.json();
       if (data.error) throw new Error(data.error);
+      hideSpinner();
 
-      // Toon per-provider resultaten in de kaart vóór de reload
       const provs = data.providers || {};
       const card  = document.getElementById('ai-summary-card');
       const body  = document.getElementById('ai-summary-body');
-      if (card && body && Object.keys(provs).length > 0) {
+      if (card && body) {
         card.style.display = '';
-        let html = '<div class="fw-semibold mb-2" style="color:#2563eb;">AI Advies — zojuist bijgewerkt</div>';
+        const rec = data.recommended || [];
+        let html = `<div class="fw-semibold mb-2" style="color:#2563eb;">✓ AI Advies bijgewerkt — ${rec.length} markt${rec.length !== 1 ? 'en' : ''} aanbevolen</div>`;
+        if (rec.length) {
+          html += `<div class="mb-2" style="font-size:.85rem;">${rec.map(m => `<span class="badge bg-success me-1">${m}</span>`).join('')}</div>`;
+        }
         for (const [prov, info] of Object.entries(provs)) {
           if (info.error) {
             html += `<div class="reasoning-tip" style="color:#dc2626;">✗ ${prov}: ${info.error}</div>`;
           } else {
             const n = (info.recommended || []).length;
-            html += `<div class="reasoning-tip"><strong>${prov}</strong> → ${n} markt${n !== 1 ? 'en' : ''} aanbevolen: ${info.summary || ''}</div>`;
+            html += `<div class="reasoning-tip"><strong>${prov}</strong> → ${n} aanbevolen · ${info.summary || ''}</div>`;
           }
         }
-        html += '<div class="mt-1" style="font-size:.72rem;color:#94a3b8;">Pagina herladen om tabel bij te werken...</div>';
+        html += `<div class="mt-2"><button class="btn btn-sm btn-outline-primary" onclick="location.reload()">↻ Tabel vernieuwen</button></div>`;
         body.innerHTML = html;
       }
-
-      setTimeout(() => location.reload(), 3000);
     } catch(e) {
       alert('AI advies mislukt: ' + e.message);
       hideSpinner();
@@ -348,7 +348,6 @@
       return `<tr class="market-row${ctype === 'stable' ? ' is-stable' : ''}" data-market="${m.market}" data-enabled="${enabled}" data-ai="${ai}" data-trend="${trend.cat}" data-type="${ctype}">
         <td class="fw-semibold">${m.market}${coinBadge(m.market)}</td>
         <td class="text-end font-monospace">${m.price ? '€' + m.price.toFixed(4) : '<span class="text-muted">—</span>'}</td>
-        <td class="text-center">${trend.html}</td>
         <td class="text-end hide-sm">${changeHtml}</td>
         <td class="text-end hide-sm">${m.volume_eur ? '€' + Math.round(m.volume_eur).toLocaleString('nl-NL') : '<span class="text-muted">—</span>'}</td>
         <td class="text-center" style="min-width:110px;">${aiBadge}</td>
