@@ -215,15 +215,18 @@ def api_markets_advise():
         for prov, mdl in providers:
             try:
                 advice = advise_markets(stats, provider=prov, model=mdl)
+                rec_list = advice.get("recommended", [])
                 provider_results[prov] = {
                     "summary": advice.get("summary", ""),
-                    "recommended": advice.get("recommended", []),
+                    "recommended": rec_list,
                 }
-                for market, info in advice.get("markets", {}).items():
-                    if info.get("include", False):
+                # Gebruik de "recommended" lijst (nieuw formaat) als primaire bron
+                for market in rec_list:
+                    if market in all_markets_set:
                         vote_yes[market] = vote_yes.get(market, 0) + 1
-                        vote_conf.setdefault(market, []).append(info.get("confidence") or 0)
-                    vote_reas.setdefault(market, {})[prov] = info.get("reasoning", "")
+                        minfo = advice.get("markets", {}).get(market, {})
+                        vote_conf.setdefault(market, []).append(minfo.get("confidence") or 0.8)
+                        vote_reas.setdefault(market, {})[prov] = minfo.get("reasoning", "")
             except Exception as exc:
                 provider_results[prov] = {"error": str(exc)}
 
@@ -234,7 +237,7 @@ def api_markets_advise():
             reas_parts = vote_reas.get(market, {})
             reasoning = "  |  ".join(f"{p}: {r}" for p, r in reas_parts.items())
             if yes > n / 2:
-                confs = vote_conf.get(market, [0])
+                confs = vote_conf.get(market, [0.8])
                 avg_conf = sum(confs) / len(confs)
                 recommended.add(market)
                 save_market_advice(market, True, avg_conf, reasoning)
