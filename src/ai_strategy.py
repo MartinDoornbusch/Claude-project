@@ -45,16 +45,21 @@ Evaluate the provided indicator data and return a fast, disciplined trading sign
 Rules:
 - BUY  → strong bullish confluence: golden cross + RSI not overbought, price near lower BB with rising MACD
 - SELL → strong bearish confluence: death cross, RSI > 70, or significant unrealized loss
-- HOLD → mixed/unclear signals or insufficient data; capital preservation takes priority
+- HOLD → mixed/unclear signals, insufficient data, or flat/sideways market; capital preservation takes priority
 - Do NOT buy if there is already an open position (unless signal is exceptionally strong)
 - Do NOT sell if there is no open position
+
+Volatility rule (IMPORTANT):
+- If ATR-14 is below 0.5% of the current price the market is flat/sideways.
+  In that case return HOLD with low confidence — do not act on RSI or MA signals alone.
+  A flat market produces false signals; wait for a real breakout.
 
 Respond with ONLY a JSON block — no other text:
 ```json
 {
   "decision": "BUY",
   "confidence": 0.82,
-  "reasoning": "Golden cross confirmed, RSI at 45, MACD histogram rising."
+  "reasoning": "Golden cross confirmed, RSI at 45, MACD histogram rising, ATR above 1.2%."
 }
 ```
 decision: BUY | SELL | HOLD  —  confidence: 0.0–1.0  —  reasoning: one concise English sentence\
@@ -64,9 +69,15 @@ _SENTIMENT_PROMPT = """\
 You are a crypto market sentiment analyst for the Bitvavo exchange.
 Assess the current market mood from the price action, volume, and macro context provided.
 
+The data you receive comes from the candle timeframe shown in the context header.
+Use that timeframe to calibrate your interpretation:
+- Short timeframes (1m–15m): react to recent momentum bursts and micro-sentiment
+- Medium timeframes (1h–4h): focus on intra-day trend and volume patterns
+- Daily/weekly: evaluate macro trend health and fear/greed context
+
 Guidelines:
-- POSITIVE → clear uptrend, healthy volume, fear/greed in neutral-to-greed zone, no reversal signs
-- NEGATIVE → downtrend, extreme greed (correction risk), panic-sell patterns, deteriorating momentum
+- POSITIVE → clear uptrend for this timeframe, healthy volume, fear/greed in neutral-to-greed zone
+- NEGATIVE → downtrend, extreme greed (correction risk), panic-sell patterns, or deteriorating momentum
 - NEUTRAL  → mixed or insufficient signals
 
 Respond with ONLY a JSON block — no other text:
@@ -74,7 +85,7 @@ Respond with ONLY a JSON block — no other text:
 {
   "sentiment": "POSITIVE",
   "confidence": 0.75,
-  "reasoning": "Uptrend intact with above-average volume; Fear & Greed at 48 — neutral territory."
+  "reasoning": "1h uptrend intact with above-average volume; Fear & Greed at 48 — neutral territory."
 }
 ```
 sentiment: POSITIVE | NEGATIVE | NEUTRAL  —  confidence: 0.0–1.0  —  reasoning: one concise English sentence\
@@ -123,12 +134,14 @@ def _last_trade_minutes_ago(market: str) -> float | None:
 
 
 def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_str: str = "") -> str:
-    pos   = get_position(market)
-    cash  = get_cash()
-    price = float(signals.get("close", 0))
+    pos      = get_position(market)
+    cash     = get_cash()
+    price    = float(signals.get("close", 0))
+    interval = os.getenv("CANDLE_INTERVAL", "1h")
 
     lines = [
         f"Market: {market}",
+        f"Candle timeframe: {interval}",
         f"Current price: €{price:.4f}",
     ]
 
@@ -418,7 +431,19 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         if tactical_result is None:
             return "HOLD", 0.0, "Geen tactisch analyse resultaat beschikbaar"
 
-        # Snelle HOLD: als de score te laag is en er is geen sentimentprovider, stop hier
+        # ATR-snelpadcheck — platte markt: Gemini en Claude niet nodig, direct HOLD
+        atr = signals.get("atr_14")
+        atr_flat = False
+        if atr is not None and price > 0:
+            atr_pct = atr / price * 100
+            atr_flat = atr_pct < 0.5
+            if atr_flat:
+                logger.info("[%s] Platte markt (ATR %.2f%% < 0.5%%) — HOLD zonder Gemini/Claude", market, atr_pct)
+                return "HOLD", abs(tactical_score), (
+                    f"Platte markt (ATR {atr_pct:.2f}% < 0.5%%) — {tactical_result['reasoning']}"
+                )
+
+        # Snelle HOLD: score te laag en geen sentimentprovider
         sentiment_prov = next((p for p, r in roles.items() if r == "sentiment"), None)
         if not sentiment_prov and abs(tactical_score) < score_threshold:
             return "HOLD", abs(tactical_score), (
