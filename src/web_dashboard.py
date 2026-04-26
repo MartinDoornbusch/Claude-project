@@ -166,12 +166,18 @@ def markets_page():
         if row.get("last_advised"):
             ai_advised_at = row["last_advised"]
             break
-    # Get last AI summary from most recent advised row
-    advised = [r for r in watchlist if r.get("last_advised") and r.get("ai_reasoning")]
-    # We store summary separately - use first recommended row's reasoning as proxy
-    recs = [r for r in watchlist if r.get("ai_recommended") and r.get("ai_reasoning")]
+    recs = [r for r in watchlist if r.get("ai_recommended")]
     if recs:
         ai_summary = f"{len(recs)} markten aanbevolen door AI."
+    for row in watchlist:
+        provider_votes: dict = {}
+        reasoning = row.get("ai_reasoning") or ""
+        if reasoning.startswith("{"):
+            try:
+                provider_votes = json.loads(reasoning)
+            except Exception:
+                pass
+        row["provider_votes"] = provider_votes
     return render_template(
         "markets.html",
         watchlist=watchlist,
@@ -209,24 +215,27 @@ def api_markets_advise():
 
         vote_yes: dict[str, int] = {}
         vote_conf: dict[str, list] = {}
-        vote_reas: dict[str, dict] = {}
+        per_prov_votes: dict[str, dict[str, dict]] = {}
         provider_results: dict = {}
 
         for prov, mdl in providers:
             try:
                 advice = advise_markets(stats, provider=prov, model=mdl)
-                rec_list = advice.get("recommended", [])
+                rec_set = set(advice.get("recommended", []))
                 provider_results[prov] = {
                     "summary": advice.get("summary", ""),
-                    "recommended": rec_list,
+                    "recommended": list(rec_set),
                 }
-                # Gebruik de "recommended" lijst (nieuw formaat) als primaire bron
-                for market in rec_list:
-                    if market in all_markets_set:
+                for market in all_markets_set:
+                    minfo = advice.get("markets", {}).get(market, {})
+                    is_rec = market in rec_set
+                    per_prov_votes.setdefault(market, {})[prov] = {
+                        "yes": is_rec,
+                        "reasoning": minfo.get("reasoning", "") if is_rec else "",
+                    }
+                    if is_rec:
                         vote_yes[market] = vote_yes.get(market, 0) + 1
-                        minfo = advice.get("markets", {}).get(market, {})
                         vote_conf.setdefault(market, []).append(minfo.get("confidence") or 0.8)
-                        vote_reas.setdefault(market, {})[prov] = minfo.get("reasoning", "")
             except Exception as exc:
                 provider_results[prov] = {"error": str(exc)}
 
@@ -234,15 +243,15 @@ def api_markets_advise():
         recommended: set[str] = set()
         for market in all_markets_set:
             yes = vote_yes.get(market, 0)
-            reas_parts = vote_reas.get(market, {})
-            reasoning = "  |  ".join(f"{p}: {r}" for p, r in reas_parts.items())
+            prov_votes = per_prov_votes.get(market, {})
+            reasoning_json = json.dumps(prov_votes) if prov_votes else ""
             if yes > n / 2:
                 confs = vote_conf.get(market, [0.8])
                 avg_conf = sum(confs) / len(confs)
                 recommended.add(market)
-                save_market_advice(market, True, avg_conf, reasoning)
-            elif reas_parts:
-                save_market_advice(market, False, None, reasoning)
+                save_market_advice(market, True, avg_conf, reasoning_json)
+            elif prov_votes:
+                save_market_advice(market, False, None, reasoning_json)
             else:
                 save_market_advice(market, False, None, "")
 
