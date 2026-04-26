@@ -12,6 +12,7 @@ from src.database import (
     get_watchlist, get_enabled_markets, set_market_enabled, upsert_market_stats, save_market_advice,
     get_all_paper_trades_asc, get_daily_pnl_series, get_trading_paused, set_trading_paused,
     get_live_trades, reset_paper_trading, get_portfolio_snapshots,
+    get_all_positions,
 )
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
@@ -160,6 +161,54 @@ def api_portfolio():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify(pf)
+
+
+@app.route("/api/portfolio/cleanup", methods=["POST"])
+def api_portfolio_cleanup():
+    try:
+        data           = request.get_json(force=True, silent=True) or {}
+        cleanup_pct    = float(data.get("pct", os.getenv("CLEANUP_PCT", "50"))) / 100
+        blacklist      = {m.strip().upper() for m in os.getenv("TRADING_BLACKLIST", "").split(",") if m.strip()}
+        active_markets = {m.strip().upper() for m in os.getenv("TRADING_MARKETS", "BTC-EUR").split(",") if m.strip()}
+        client         = get_client()
+        results        = []
+
+        if os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true":
+            balances = client.balance({})
+            if not isinstance(balances, list):
+                return jsonify({"error": "Kon balances niet ophalen"}), 500
+            for b in balances:
+                symbol = b.get("symbol", "")
+                if not symbol or symbol == "EUR":
+                    continue
+                market      = f"{symbol}-EUR"
+                if market in active_markets or market in blacklist:
+                    continue
+                available = float(b.get("available", 0))
+                if available < 1e-8:
+                    continue
+                sell_amount = available * cleanup_pct
+                price_data  = client.tickerPrice({"market": market})
+                price       = float(price_data.get("price", 0)) if isinstance(price_data, dict) else 0
+                r = client.placeOrder(market, "sell", "market", {"amount": str(sell_amount)})
+                results.append({"market": market, "amount": round(sell_amount, 6), "price": price,
+                                 "ok": isinstance(r, dict) and "error" not in r})
+        else:
+            from src.paper_trader import partial_sell
+            for pos in get_all_positions():
+                market = pos["market"]
+                if market in active_markets or market in blacklist:
+                    continue
+                price = get_ticker_price(client, market)
+                if not price:
+                    continue
+                sell_amount = pos["amount"] * cleanup_pct
+                r = partial_sell(market, sell_amount, price, f"Portfolio opschoning {int(cleanup_pct*100)}%")
+                results.append({"market": market, "amount": round(sell_amount, 6), "price": price, "ok": bool(r)})
+
+        return jsonify({"ok": True, "results": results, "count": len(results)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/paper/reset", methods=["POST"])

@@ -13,6 +13,7 @@ DEFAULTS: dict[str, str] = {
     "BITVAVO_API_SECRET":       "",
     # Trading
     "TRADING_MARKETS":          "BTC-EUR,ETH-EUR",
+    "TRADING_BLACKLIST":        "",
     "CANDLE_INTERVAL":          "1h",
     "CHECK_INTERVAL_MINUTES":   "60",
     # Paper trading
@@ -33,6 +34,11 @@ DEFAULTS: dict[str, str] = {
     "TRAILING_STOP_ENABLED":    "false",
     "TRAILING_STOP_PCT":        "2.0",
     "BREAKEVEN_TRIGGER_PCT":    "",
+    # House money / portfolio
+    "HOUSE_MONEY_ENABLED":      "false",
+    "HOUSE_MONEY_TRIGGER_PCT":  "10",
+    "HOUSE_MONEY_ONLY_PROFIT":  "false",
+    "CLEANUP_PCT":              "50",
     "ICEBERG_ENABLED":          "false",
     "ICEBERG_CHUNKS":           "5",
     "ICEBERG_INTERVAL_SECONDS": "2",
@@ -77,6 +83,7 @@ SENSITIVE_KEYS = {"BITVAVO_API_KEY", "BITVAVO_API_SECRET", "ANTHROPIC_API_KEY", 
 # Keys that map to HTML checkboxes (absent in POST = false)
 BOOL_KEYS = {"LIVE_TRADING_ENABLED", "AI_STRATEGY_ENABLED", "MTF_ENABLED", "VOL_SIZING_ENABLED",
              "CORR_CHECK_ENABLED", "OCO_ENABLED", "ICEBERG_ENABLED", "TRAILING_STOP_ENABLED",
+             "HOUSE_MONEY_ENABLED", "HOUSE_MONEY_ONLY_PROFIT",
              "AI_ANTHROPIC_ENABLED", "AI_GOOGLE_ENABLED", "AI_GROQ_ENABLED", "MQTT_ENABLED"}
 
 

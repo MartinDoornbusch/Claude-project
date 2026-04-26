@@ -160,6 +160,37 @@ def sell(market: str, price: float, reason: str = "") -> dict | None:
     return {"side": "SELL", "price": price, "amount": amount, "eur": net_eur, "pnl": pnl}
 
 
+def partial_sell(market: str, amount: float, price: float, reason: str = "") -> dict | None:
+    """Verkoop een deel van de open positie (voor huisgeld-modus en portfolio-opschoning)."""
+    position = get_position(market)
+    if position["amount"] <= 0:
+        return None
+
+    amount    = min(amount, position["amount"])
+    gross_eur = amount * price
+    fee       = gross_eur * FEE_RATE
+    net_eur   = gross_eur - fee
+    remaining = position["amount"] - amount
+    pnl       = net_eur - amount * position["avg_price"] / (1 - FEE_RATE)
+
+    cash = get_cash()
+    set_cash(cash + net_eur)
+
+    if remaining > 1e-8:
+        set_position(market, remaining, position["avg_price"])
+    else:
+        set_position(market, 0.0, 0.0)
+        add_daily_pnl(market, pnl)
+
+    save_paper_trade(market, "SELL", price, amount, reason)
+    logger.info(
+        "[%s] PAPER PARTIAL SELL — prijs: €%.4f | bedrag: %.6f | opbrengst: €%.2f | resterend: %.6f",
+        market, price, amount, net_eur, remaining,
+    )
+    return {"side": "SELL", "price": price, "amount": amount, "eur": net_eur,
+            "partial": True, "remaining": remaining}
+
+
 def portfolio_value(market_prices: dict[str, float]) -> dict:
     """
     Bereken de totale waarde van het paper portfolio.

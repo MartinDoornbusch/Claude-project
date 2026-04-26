@@ -178,6 +178,12 @@
               <div class="form-text">Typ handmatig of gebruik "Laad beschikbare markten" om te kiezen</div>
             </div>
             <div class="mb-3">
+              <label class="form-label">Blacklist / Uitsluitingslijst</label>
+              <input type="text" class="form-control" name="TRADING_BLACKLIST"
+                     value="{{ config.TRADING_BLACKLIST }}" placeholder="DOGE-EUR,SHIB-EUR,PEPE-EUR">
+              <div class="form-text">Komma-gescheiden markten — bot negeert deze volledig (geen koop, verkoop of risicoberekening). Handig voor meme-coins die je zelf al bezit.</div>
+            </div>
+            <div class="mb-3">
               <label class="form-label">Candle interval</label>
               <select class="form-select" name="CANDLE_INTERVAL">
                 {% for iv in ['1m','5m','15m','30m','1h','2h','4h','6h','8h','12h','1d'] %}
@@ -191,6 +197,29 @@
                      value="{{ config.CHECK_INTERVAL_MINUTES }}" min="1" max="1440">
               <div class="form-text">Hoe vaak de strategie draait</div>
             </div>
+          </div>
+        </div>
+
+        <!-- Portfolio Opschoning -->
+        <div class="card mb-4">
+          <div class="card-header">Portfolio Opschoning</div>
+          <div class="card-body">
+            <div class="form-text mb-3">
+              Eenmalige actie: verkoopt een deel van posities die <em>niet</em> in je handelsparen staan én niet op de blacklist staan. Handig om kapitaal vrij te maken voor de bot.
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Liquidatie-percentage</label>
+              <div class="input-group" style="max-width:200px;">
+                <input type="number" class="form-control" name="CLEANUP_PCT"
+                       value="{{ config.CLEANUP_PCT }}" min="1" max="100" step="5">
+                <span class="input-group-text">%</span>
+              </div>
+              <div class="form-text">50% = verkoop de helft van elke onbekende positie</div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-warning" onclick="runCleanup(this)">
+              Nu uitvoeren (eenmalig)
+            </button>
+            <div id="cleanup-result" class="mt-2" style="font-size:.82rem;"></div>
           </div>
         </div>
 
@@ -398,6 +427,37 @@
                   <span class="input-group-text">%</span>
                 </div>
                 <div class="form-text">Bot verplaatst stop automatisch naar instapprijs zodra positie dit % winst bereikt</div>
+              </div>
+            </div>
+
+            <!-- Huisgeld-modus -->
+            <div class="mt-3 pt-3 border-top">
+              <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox" id="houseMoneyEnabled"
+                       name="HOUSE_MONEY_ENABLED"
+                       {{ 'checked' if config.HOUSE_MONEY_ENABLED == 'true' }}
+                       onchange="toggleHouseMoney(this.checked)">
+                <label class="form-check-label" for="houseMoneyEnabled">
+                  <strong>Huisgeld-modus</strong>
+                </label>
+              </div>
+              <div class="form-text mb-2">
+                Bot verkoopt bij X% winst precies genoeg om de initiële inleg terug te halen — de rest is "gratis" kapitaal.
+              </div>
+              <div id="houseMoneyFields" style="display:{{ 'block' if config.HOUSE_MONEY_ENABLED == 'true' else 'none' }}">
+                <div class="input-group mb-2" style="max-width:230px;">
+                  <input type="number" class="form-control" name="HOUSE_MONEY_TRIGGER_PCT"
+                         value="{{ config.HOUSE_MONEY_TRIGGER_PCT }}" step="1" min="1" max="100">
+                  <span class="input-group-text">% winst trigger</span>
+                </div>
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="onlyProfitToggle"
+                         name="HOUSE_MONEY_ONLY_PROFIT"
+                         {{ 'checked' if config.HOUSE_MONEY_ONLY_PROFIT == 'true' }}>
+                  <label class="form-check-label" for="onlyProfitToggle" style="font-size:.85rem;">
+                    Alleen nieuwe kopen als vorige trade winstgevend was
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -835,6 +895,40 @@
 
   function toggleTrailing(enabled) {
     document.getElementById('trailingPctRow').style.display = enabled ? 'block' : 'none';
+  }
+
+  function toggleHouseMoney(enabled) {
+    document.getElementById('houseMoneyFields').style.display = enabled ? 'block' : 'none';
+  }
+
+  // ── Portfolio opschoning ──
+  async function runCleanup(btn) {
+    const pctInput = document.querySelector('input[name="CLEANUP_PCT"]');
+    const pct      = pctInput ? parseFloat(pctInput.value) : 50;
+    if (!confirm(`Portfolio opschoning uitvoeren?\n\n${pct}% van onbekende posities (niet op handelsparen of blacklist) wordt verkocht.`)) return;
+    btn.disabled = true;
+    const res = document.getElementById('cleanup-result');
+    res.innerHTML = '<span style="color:#64748b;">Bezig...</span>';
+    try {
+      const r = await fetch(BASE_URL + '/api/portfolio/cleanup', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({pct}),
+      });
+      const d = await r.json();
+      if (!d.ok) { res.innerHTML = `<span style="color:#dc2626;">Fout: ${d.error}</span>`; return; }
+      if (d.count === 0) {
+        res.innerHTML = '<span style="color:#64748b;">Geen onbekende posities gevonden.</span>';
+      } else {
+        const rows = d.results.map(x =>
+          `<span style="color:${x.ok ? '#16a34a' : '#dc2626'};">${x.ok ? '✓' : '✗'} ${x.market}: ${x.amount} @ €${parseFloat(x.price).toFixed(4)}</span>`
+        ).join('<br>');
+        res.innerHTML = `<strong>${d.count} positie(s) verwerkt:</strong><br>${rows}`;
+      }
+    } catch(e) {
+      res.innerHTML = `<span style="color:#dc2626;">Fout: ${e.message}</span>`;
+    }
+    btn.disabled = false;
   }
 
   // ── AI Provider toggles ──
