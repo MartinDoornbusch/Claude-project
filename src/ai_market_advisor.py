@@ -10,36 +10,36 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 You are an expert crypto portfolio analyst for the Bitvavo exchange (Netherlands, EUR pairs).
-Your task: evaluate ALL submitted EUR markets and mark each one as suitable (include: true) or unsuitable (include: false) for automated short-term trading.
+Your task: evaluate ALL submitted EUR markets and select those suitable for automated short-term trading.
 
-Inclusion criteria — include: true when ALL of these hold:
-1. EUR trading volume ≥ €50,000/day (liquidity, tight spreads)
+Inclusion criteria (include when ALL hold):
+1. EUR trading volume ≥ €50,000/day — tight spreads, good liquidity
 2. Real project utility — NOT a stablecoin (USDT, USDC, DAI, BUSD, TUSD, FRAX, USDD, EURC, etc.)
-3. Sufficient volatility for trading opportunities (typically > 1% daily movement)
-4. Not in extreme parabolic blow-off or total collapse
-5. Established market with reasonable track record
+3. Sufficient volatility for trading opportunities (> 1% daily movement typical)
+4. Not in extreme parabolic blow-off or total collapse (> 40% move in 24h = skip)
+5. Established project with reasonable track record
 
-Exclusion — include: false when ANY of these hold:
-- It is a stablecoin or fiat-pegged token → reasoning: "Stablecoin — no trading opportunity"
-- Volume < €20,000/day → reasoning: "Insufficient volume"
-- Pure meme / no utility / rug-pull risk → reasoning: "Speculative/meme — no utility"
-- Extreme movement (>40% in 24h) suggesting pump-dump → reasoning: "Extreme pump/dump risk"
+Exclusion (never include):
+- Stablecoins or fiat-pegged tokens → they don't move
+- Volume < €20,000/day → too illiquid for reliable execution
+- Pure meme / no utility / high rug-pull risk
+- Extreme pump-dump (> 40% in 24h)
 
-You MUST evaluate every market in the list. Aim to include all markets that genuinely meet the criteria — typically 15–35% of the submitted list.
+Target 15–35% of the submitted markets.
 
-Respond ONLY with a JSON block in this exact format (no extra text):
+Respond ONLY with this JSON — no other text. IMPORTANT: only list INCLUDED markets in "markets".
+Do NOT add excluded markets to "markets" (this keeps the response compact):
 ```json
 {
   "recommended": ["BTC-EUR", "ETH-EUR", "SOL-EUR"],
   "summary": "One sentence describing the overall selection rationale.",
   "markets": {
-    "BTC-EUR":  {"include": true,  "confidence": 0.95, "reasoning": "Highest liquidity, solid trend."},
-    "USDT-EUR": {"include": false, "reasoning": "Stablecoin — no trading opportunity."},
-    "DOGE-EUR": {"include": false, "reasoning": "Meme coin — high speculation risk."}
+    "BTC-EUR": {"confidence": 0.95, "reasoning": "Highest liquidity, solid trend."},
+    "ETH-EUR": {"confidence": 0.90, "reasoning": "Strong ecosystem, consistent volume."}
   }
 }
 ```
-Rules: include ALL analyzed markets in "markets". "confidence" (0.0–1.0) only for include=true entries.\
+Keep each "reasoning" under 10 words. List only recommended markets in "markets".\
 """
 
 
@@ -55,7 +55,6 @@ def _is_stablecoin(market: str) -> bool:
 
 
 def _build_market_table(market_stats: list[dict], limit: int = 80) -> str:
-    # Toon stablecoins wel in de tabel zodat de AI ze expliciet kan uitsluiten
     top = market_stats[:limit]
     lines = [
         f"Top {len(top)} EUR markets on Bitvavo by 24h volume:",
@@ -77,18 +76,39 @@ def _build_market_table(market_stats: list[dict], limit: int = 80) -> str:
 
 
 def _parse_advice(text: str) -> dict | None:
-    match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-    if match:
-        json_str = match.group(1)
-    else:
-        match = re.search(r'\{[^{}]*"recommended".*?\}', text, re.DOTALL)
-        if not match:
-            return None
-        json_str = match.group(0)
-    try:
-        return json.loads(json_str)
-    except (json.JSONDecodeError, ValueError):
-        return None
+    """
+    Parseer het AI-antwoord. Probeert eerst volledige JSON; valt terug op
+    gedeeltelijke extractie zodat een afgekapt antwoord toch bruikbaar is.
+    """
+    # Poging 1: volledige JSON-blok
+    m = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(1))
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Poging 2: JSON zonder code-fences
+    m = re.search(r'\{\s*"recommended"\s*:.*\}', text, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Poging 3: extraheer alleen "recommended" array uit afgekapt antwoord
+    rec_m = re.search(r'"recommended"\s*:\s*(\[.*?\])', text, re.DOTALL)
+    sum_m = re.search(r'"summary"\s*:\s*"([^"]*)"', text)
+    if rec_m:
+        try:
+            recommended = json.loads(rec_m.group(1))
+            summary = sum_m.group(1) if sum_m else "Advies gedeeltelijk ontvangen — response was afgekapt."
+            logger.warning("AI marktadvies afgekapt — alleen 'recommended' geëxtraheerd (%d markten)", len(recommended))
+            return {"recommended": recommended, "summary": summary, "markets": {}}
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    return None
 
 
 def advise_markets(market_stats: list[dict], *, provider: str | None = None, model: str | None = None) -> dict:
@@ -98,7 +118,7 @@ def advise_markets(market_stats: list[dict], *, provider: str | None = None, mod
     Returns dict with:
       recommended: list[str]       — aanbevolen marktparen
       summary:     str             — korte samenvatting
-      markets:     dict[str, dict] — per-markt advies {include, confidence, reasoning}
+      markets:     dict[str, dict] — per-markt advies voor aanbevolen markten {confidence, reasoning}
     """
     if not market_stats:
         return {"recommended": [], "summary": "Geen marktdata beschikbaar.", "markets": {}}
@@ -114,7 +134,7 @@ def advise_markets(market_stats: list[dict], *, provider: str | None = None, mod
         _SYSTEM_PROMPT,
         "Analyze these markets and recommend which ones to include "
         "in an automated EUR trading portfolio:\n\n" + table,
-        max_tokens=2048,
+        max_tokens=4096,
     )
     logger.debug("AI marktadvies raw: %.500s", text)
 

@@ -15,9 +15,9 @@ PROVIDER_MODELS: dict[str, list[dict]] = {
         {"value": "claude-haiku-4-5",  "label": "Claude Haiku 4.5 — snel & goedkoop (betaald)"},
     ],
     "google": [
-        {"value": "gemini-2.5-flash-preview-05-20", "label": "Gemini 2.5 Flash — nieuwste (gratis preview)"},
-        {"value": "gemini-1.5-flash",               "label": "Gemini 1.5 Flash — stabiel (gratis tier)"},
-        {"value": "gemini-1.5-pro",                 "label": "Gemini 1.5 Pro — meest capabel (beperkt gratis)"},
+        {"value": "gemini-2.0-flash",  "label": "Gemini 2.0 Flash — snel & actueel (aanbevolen)"},
+        {"value": "gemini-1.5-flash",  "label": "Gemini 1.5 Flash — stabiel (gratis tier)"},
+        {"value": "gemini-1.5-pro",    "label": "Gemini 1.5 Pro — meest capabel (beperkt gratis)"},
     ],
     "groq": [
         {"value": "llama-3.3-70b-versatile", "label": "Llama 3.3 70B — beste kwaliteit (gratis)"},
@@ -28,7 +28,7 @@ PROVIDER_MODELS: dict[str, list[dict]] = {
 
 _DEFAULT_MODEL: dict[str, str] = {
     "anthropic": "claude-opus-4-7",
-    "google":    "gemini-1.5-flash",
+    "google":    "gemini-2.0-flash",
     "groq":      "llama-3.3-70b-versatile",
 }
 

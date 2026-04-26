@@ -358,9 +358,9 @@
                     <div class="col-md-5">
                       {% set gm = config.AI_MODEL_GOOGLE %}
                       <select class="form-select form-select-sm" name="AI_MODEL_GOOGLE">
-                        <option value="gemini-2.5-flash-preview-05-20" {{ 'selected' if gm == 'gemini-2.5-flash-preview-05-20' }}>Gemini 2.5 Flash — nieuwste (preview)</option>
-                        <option value="gemini-1.5-flash"               {{ 'selected' if gm == 'gemini-1.5-flash' or not gm }}>Gemini 1.5 Flash — stabiel (aanbevolen)</option>
-                        <option value="gemini-1.5-pro"                 {{ 'selected' if gm == 'gemini-1.5-pro' }}>Gemini 1.5 Pro — meest capabel</option>
+                        <option value="gemini-2.0-flash" {{ 'selected' if gm == 'gemini-2.0-flash' or not gm }}>Gemini 2.0 Flash — snel & actueel (aanbevolen)</option>
+                        <option value="gemini-1.5-flash" {{ 'selected' if gm == 'gemini-1.5-flash' }}>Gemini 1.5 Flash — stabiel</option>
+                        <option value="gemini-1.5-pro"   {{ 'selected' if gm == 'gemini-1.5-pro' }}>Gemini 1.5 Pro — meest capabel</option>
                       </select>
                     </div>
                     <div class="col-md-7">
