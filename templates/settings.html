@@ -290,7 +290,11 @@
           <div class="card-header" style="color:#2563eb;">AI Strategie</div>
           <div class="card-body">
 
-            <div class="form-text mb-3">Schakel meerdere providers in voor <strong>consensus-trading</strong> — de meerderheid beslist. Eén provider = enkel dat model.</div>
+            <div class="form-text mb-3">
+              Schakel meerdere providers in voor <strong>gespecialiseerde voting</strong>:
+              <span class="badge bg-primary" style="font-size:.7rem;">Technisch</span> providers analyseren indicatoren en geven BUY/SELL/HOLD.
+              <span class="badge bg-warning text-dark" style="font-size:.7rem;">Sentiment</span> analyseert marktsfeer — bij <em>negatief sentiment</em> wordt een BUY automatisch geblokkeerd. SELL gaat altijd door.
+            </div>
 
             <!-- ── Anthropic ── -->
             <div class="card mb-2" style="border-color:#e0e7ff;">
@@ -298,7 +302,8 @@
                 <div class="d-flex align-items-center justify-content-between">
                   <div>
                     <span class="fw-semibold">Anthropic (Claude)</span>
-                    <span class="text-muted ms-2" style="font-size:.8rem;">betaald per token</span>
+                    <span class="badge bg-primary ms-2" style="font-size:.7rem;">Technisch</span>
+                    <span class="text-muted ms-1" style="font-size:.8rem;">betaald per token</span>
                   </div>
                   <div class="form-check form-switch mb-0">
                     <input class="form-check-input" type="checkbox" name="AI_ANTHROPIC_ENABLED" id="ai_anthropic_chk"
@@ -338,7 +343,8 @@
                 <div class="d-flex align-items-center justify-content-between">
                   <div>
                     <span class="fw-semibold">Google (Gemini)</span>
-                    <span class="text-muted ms-2" style="font-size:.8rem;">gratis tot 1500 req/dag</span>
+                    <span class="badge bg-warning text-dark ms-2" style="font-size:.7rem;">Sentiment</span>
+                    <span class="text-muted ms-1" style="font-size:.8rem;">gratis tot 1500 req/dag</span>
                   </div>
                   <div class="form-check form-switch mb-0">
                     <input class="form-check-input" type="checkbox" name="AI_GOOGLE_ENABLED" id="ai_google_chk"
@@ -378,7 +384,8 @@
                 <div class="d-flex align-items-center justify-content-between">
                   <div>
                     <span class="fw-semibold">Groq (Llama / Mixtral)</span>
-                    <span class="text-muted ms-2" style="font-size:.8rem;">volledig gratis</span>
+                    <span class="badge bg-primary ms-2" style="font-size:.7rem;">Technisch</span>
+                    <span class="text-muted ms-1" style="font-size:.8rem;">volledig gratis</span>
                   </div>
                   <div class="form-check form-switch mb-0">
                     <input class="form-check-input" type="checkbox" name="AI_GROQ_ENABLED" id="ai_groq_chk"

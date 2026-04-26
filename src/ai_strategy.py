@@ -21,6 +21,15 @@ def ai_enabled() -> bool:
 # Backwards-compat alias — gebruik ai_enabled() voor live-waarden
 AI_ENABLED = ai_enabled()
 
+# Welke rol elke provider van nature speelt.
+# Google/Gemini = sentiment-analyst; Groq en Anthropic = technisch analyst.
+# Als Google de enige geconfigureerde provider is, valt hij terug op technisch.
+_NATURAL_ROLE: dict[str, str] = {
+    "groq":      "technical",
+    "anthropic": "technical",
+    "google":    "sentiment",
+}
+
 _SYSTEM_PROMPT = """\
 You are an expert crypto trading analyst for the Bitvavo exchange.
 Your task is to evaluate technical indicator data and return a disciplined trading decision.
@@ -44,6 +53,30 @@ You MUST respond with ONLY a JSON block in this exact format (no extra text):
 }
 ```
 decision must be one of: BUY, SELL, HOLD
+confidence must be a float between 0.0 and 1.0
+reasoning must be a single concise sentence in English\
+"""
+
+_SENTIMENT_SYSTEM_PROMPT = """\
+You are a crypto market sentiment analyst for the Bitvavo exchange.
+Your task is to assess the current market mood based on price action, indicators, and context.
+
+Sentiment guidelines:
+- POSITIVE: Favorable conditions — clear uptrend, healthy volume, fear/greed in neutral-to-greed zone, \
+no extreme reversal signals
+- NEGATIVE: Unfavorable conditions — downtrend confirmed, extreme greed (correction risk), panic-sell \
+patterns, or deteriorating momentum
+- NEUTRAL: Mixed or unclear signals — not enough data or conflicting indicators to take a stance
+
+You MUST respond with ONLY a JSON block in this exact format (no extra text):
+```json
+{
+  "sentiment": "POSITIVE",
+  "confidence": 0.75,
+  "reasoning": "Upward momentum confirmed with healthy volume, Fear & Greed at 45 — neutral zone."
+}
+```
+sentiment must be one of: POSITIVE, NEGATIVE, NEUTRAL
 confidence must be a float between 0.0 and 1.0
 reasoning must be a single concise sentence in English\
 """
@@ -105,8 +138,8 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
         elif price > signals["bb_upper"]:
             bb_pos = "ABOVE upper band (overbought zone)"
         else:
-            bb_mid   = (signals["bb_lower"] + signals["bb_upper"]) / 2
-            bb_pos   = f"inside bands ({'upper half' if price > bb_mid else 'lower half'})"
+            bb_mid = (signals["bb_lower"] + signals["bb_upper"]) / 2
+            bb_pos = f"inside bands ({'upper half' if price > bb_mid else 'lower half'})"
         lines.append(
             f"Bollinger Bands: €{signals['bb_lower']:.4f} — €{signals['bb_upper']:.4f}  ({bb_pos})"
         )
@@ -116,7 +149,6 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
         cross_label = "GOLDEN CROSS (bullish)" if ma_cross == "golden_cross" else "DEATH CROSS (bearish)"
         lines.append(f"MA Cross signal: {cross_label}")
 
-    # Volume vs gemiddelde
     vol     = signals.get("volume")
     vol_avg = signals.get("volume_avg_20")
     if vol is not None and vol_avg and vol_avg > 0:
@@ -125,7 +157,6 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
                     ("below average ↓" if vol_ratio < 0.9 else "average"))
         lines.append(f"Volume: {vol:,.0f}  ({vol_ratio:.1f}× 20-period avg — {vol_label})")
 
-    # ATR / volatiliteit
     atr = signals.get("atr_14")
     if atr is not None and price > 0:
         atr_pct = atr / price * 100
@@ -141,7 +172,6 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
         pnl_pct = (price - pos["avg_price"]) / pos["avg_price"] * 100
         lines.append(f"Unrealized PnL: €{pnl_eur:+.2f} ({pnl_pct:+.2f}%)")
 
-        # Tijd in huidige positie
         buy_ts = get_last_buy_ts(market)
         if buy_ts:
             try:
@@ -153,11 +183,10 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
             except Exception:
                 pass
 
-    # Terugkoppeling: recente afgesloten trades
     past_pairs = get_recent_trade_pairs(market, limit=5)
     if past_pairs:
-        wins   = sum(1 for p in past_pairs if p["pnl_eur"] > 0)
-        total  = len(past_pairs)
+        wins    = sum(1 for p in past_pairs if p["pnl_eur"] > 0)
+        total   = len(past_pairs)
         avg_pnl = sum(p["pnl_eur"] for p in past_pairs) / total
         lines += [
             "",
@@ -172,18 +201,15 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
                 f"PnL: €{p['pnl_eur']:+.2f} ({p['pnl_pct']:+.2f}%)"
             )
 
-    # Dagelijks verlies vs limiet
     from src.database import get_daily_loss
-    daily_loss = get_daily_loss(market)
+    daily_loss  = get_daily_loss(market)
     daily_limit = float(os.getenv("DAILY_LOSS_LIMIT_EUR", "50"))
     if daily_loss < 0:
         lines.append(f"Daily realized loss: €{daily_loss:.2f} / €{daily_limit:.0f} limit ({abs(daily_loss)/daily_limit*100:.0f}% used)")
 
-    # Aaneensluitende verliezen waarschuwing
     if past_pairs:
-        recent_5 = past_pairs[-5:]
         loss_streak = 0
-        for p in reversed(recent_5):
+        for p in reversed(past_pairs[-5:]):
             if p["pnl_eur"] < 0:
                 loss_streak += 1
             else:
@@ -191,7 +217,6 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
         if loss_streak >= 2:
             lines.append(f"⚠️ LOSS STREAK: {loss_streak} consecutive losses — consider HOLD")
 
-    # Orders vandaag vs maximum
     orders_today = _orders_executed_today(market)
     lines.append(f"AI orders today: {orders_today}/{int(os.getenv('AI_MAX_ORDERS_PER_DAY', '3'))}")
 
@@ -222,22 +247,47 @@ def _parse_decision(text: str) -> dict | None:
         if decision not in ("BUY", "SELL", "HOLD"):
             decision = "HOLD"
         confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
-        reasoning = str(data.get("reasoning", ""))
+        reasoning  = str(data.get("reasoning", ""))
         return {"decision": decision, "confidence": confidence, "reasoning": reasoning}
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return None
+
+
+def _parse_sentiment(text: str) -> dict | None:
+    match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if match:
+        json_str = match.group(1)
+    else:
+        match = re.search(r'\{[^{}]*"sentiment"[^{}]*\}', text, re.DOTALL)
+        if not match:
+            return None
+        json_str = match.group(0)
+
+    try:
+        data = json.loads(json_str)
+        sentiment = str(data.get("sentiment", "NEUTRAL")).upper()
+        if sentiment not in ("POSITIVE", "NEGATIVE", "NEUTRAL"):
+            sentiment = "NEUTRAL"
+        confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
+        reasoning  = str(data.get("reasoning", ""))
+        return {"sentiment": sentiment, "confidence": confidence, "reasoning": reasoning}
     except (json.JSONDecodeError, ValueError, TypeError):
         return None
 
 
 def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
     """
-    Vraagt de geconfigureerde AI om een trading beslissing voor de opgegeven markt.
+    Vraagt de geconfigureerde AI providers om een trading beslissing.
+
+    Gespecialiseerde voting:
+    - Groq / Anthropic → technisch analyst → BUY / SELL / HOLD
+    - Google (Gemini)  → sentiment analyst → POSITIVE / NEGATIVE / NEUTRAL
+    - BUY gaat alleen door als sentiment NIET NEGATIVE is.
+    - SELL gaat altijd door (risicobeheer).
+    - Als Google de enige provider is, valt hij terug op de technische rol.
 
     Retourneert: (decision, confidence, reasoning)
-    - decision:   "BUY" | "SELL" | "HOLD"
-    - confidence: 0.0–1.0
-    - reasoning:  uitleg van de beslissing
     """
-    # Lees config dynamisch zodat wijzigingen zonder herstart actief zijn
     min_confidence     = float(os.getenv("AI_MIN_CONFIDENCE", "0.7"))
     max_orders_per_day = int(os.getenv("AI_MAX_ORDERS_PER_DAY", "3"))
     cooldown_minutes   = int(os.getenv("AI_COOLDOWN_MINUTES", "60"))
@@ -258,9 +308,9 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
     recent_signals = get_latest_signals(market, limit=5)
 
     from src.sentiment import get_fear_greed, fmt_fear_greed
-    fg_str = fmt_fear_greed(get_fear_greed())
-
+    fg_str  = fmt_fear_greed(get_fear_greed())
     context = _build_context(market, signals, recent_signals, fg_str)
+    prompt  = "Analyze the following market data and return your trading decision:\n\n" + context
 
     try:
         from src.ai_provider import get_configured_providers, complete_for
@@ -268,39 +318,89 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         if not providers:
             return "HOLD", 0.0, "Geen AI provider geconfigureerd of ingeschakeld"
 
-        prompt = "Analyze the following market data and return your trading decision:\n\n" + context
-        decisions: list[dict] = []
+        # Als Google de enige provider is → technische rol (geen sentiment-filter zonder technisch signaal)
+        has_non_google = any(p != "google" for p, _ in providers)
+        roles = {
+            p: (_NATURAL_ROLE.get(p, "technical") if has_non_google else "technical")
+            for p, _ in providers
+        }
+
+        tech_results: list[dict] = []
+        sent_results: list[dict] = []
 
         for prov, mdl in providers:
+            role       = roles[prov]
+            sys_prompt = _SYSTEM_PROMPT if role == "technical" else _SENTIMENT_SYSTEM_PROMPT
             try:
-                text = complete_for(prov, mdl, _SYSTEM_PROMPT, prompt, max_tokens=1024)
+                text = complete_for(prov, mdl, sys_prompt, prompt, max_tokens=512)
                 logger.debug("[%s] %s raw: %.300s", market, prov, text)
-                parsed = _parse_decision(text)
-                if parsed:
-                    decisions.append({**parsed, "provider": prov})
-                    logger.debug("[%s] %s: %s %.0f%%", market, prov, parsed["decision"], parsed["confidence"] * 100)
+                if role == "technical":
+                    parsed = _parse_decision(text)
+                    if parsed:
+                        parsed["provider"] = prov
+                        tech_results.append(parsed)
+                        logger.debug("[%s] %s (tech): %s %.0f%%",
+                                     market, prov, parsed["decision"], parsed["confidence"] * 100)
+                    else:
+                        logger.warning("[%s] %s: kon technisch besluit niet parsen", market, prov)
                 else:
-                    logger.warning("[%s] %s: kon besluit niet parsen", market, prov)
+                    parsed = _parse_sentiment(text)
+                    if parsed:
+                        parsed["provider"] = prov
+                        sent_results.append(parsed)
+                        logger.debug("[%s] %s (sentiment): %s %.0f%%",
+                                     market, prov, parsed["sentiment"], parsed["confidence"] * 100)
+                    else:
+                        logger.warning("[%s] %s: kon sentiment niet parsen", market, prov)
             except Exception as exc:
                 logger.warning("[%s] Provider %s fout: %s", market, prov, exc)
 
-        if not decisions:
+        if not tech_results and not sent_results:
             return "HOLD", 0.0, "Alle providers gaven geen geldig antwoord"
 
-        if len(decisions) > 1:
-            vote_count: dict[str, int] = {}
-            for d in decisions:
-                vote_count[d["decision"]] = vote_count.get(d["decision"], 0) + 1
-            majority = max(vote_count, key=vote_count.__getitem__)
-            majority_d = [d for d in decisions if d["decision"] == majority]
-            confidence = sum(d["confidence"] for d in majority_d) / len(majority_d)
-            reasoning = " | ".join(f"[{d['provider']}] {d['reasoning']}" for d in majority_d)
-            decision = majority
-            logger.info("[%s] AI consensus %s (%d/%d providers, %.0f%%)", market, decision, len(majority_d), len(decisions), confidence * 100)
+        if not tech_results:
+            return "HOLD", 0.0, "Geen technisch analyse resultaat beschikbaar"
+
+        # Meerderheidsstem technisch
+        tech_vote: dict[str, int] = {}
+        for d in tech_results:
+            tech_vote[d["decision"]] = tech_vote.get(d["decision"], 0) + 1
+        tech_decision = max(tech_vote, key=tech_vote.__getitem__)
+        tech_majority = [d for d in tech_results if d["decision"] == tech_decision]
+        tech_conf     = sum(d["confidence"] for d in tech_majority) / len(tech_majority)
+        tech_reason   = " | ".join(f"[{d['provider']}] {d['reasoning']}" for d in tech_majority)
+
+        if not sent_results:
+            # Geen sentiment-filter — technisch signaal direct gebruiken
+            decision   = tech_decision
+            confidence = tech_conf
+            reasoning  = tech_reason
+            logger.info("[%s] AI technisch: %s (%.0f%%)", market, decision, confidence * 100)
         else:
-            decision   = decisions[0]["decision"]
-            confidence = decisions[0]["confidence"]
-            reasoning  = decisions[0]["reasoning"]
+            # Meerderheidsstem sentiment
+            sent_vote: dict[str, int] = {}
+            for d in sent_results:
+                sent_vote[d["sentiment"]] = sent_vote.get(d["sentiment"], 0) + 1
+            sentiment   = max(sent_vote, key=sent_vote.__getitem__)
+            sent_maj    = [d for d in sent_results if d["sentiment"] == sentiment]
+            sent_conf   = sum(d["confidence"] for d in sent_maj) / len(sent_maj)
+            sent_reason = " | ".join(f"[{d['provider']}] {d['reasoning']}" for d in sent_maj)
+
+            logger.info("[%s] AI technisch: %s (%.0f%%) | sentiment: %s (%.0f%%)",
+                        market, tech_decision, tech_conf * 100, sentiment, sent_conf * 100)
+
+            if tech_decision == "BUY" and sentiment == "NEGATIVE":
+                # Sentiment blokkeert een koop-signaal
+                decision   = "HOLD"
+                confidence = (tech_conf + sent_conf) / 2
+                reasoning  = (f"BUY geblokkeerd door negatief sentiment — "
+                              f"tech: {tech_reason} | sentiment: {sent_reason}")
+                logger.info("[%s] BUY geblokkeerd door negatief sentiment [%s]",
+                            market, ", ".join(d["provider"] for d in sent_maj))
+            else:
+                decision   = tech_decision
+                confidence = (tech_conf + sent_conf) / 2
+                reasoning  = f"tech: {tech_reason} | sentiment ({sentiment}): {sent_reason}"
 
         if confidence < min_confidence:
             logger.info("[%s] AI advies %s afgewezen: confidence %.0f%% < minimum %.0f%%",

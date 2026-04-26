@@ -124,21 +124,23 @@ def _anthropic(system: str, user: str, model: str, max_tokens: int) -> str:
 # ── Google Gemini ─────────────────────────────────────────────────────────────
 
 def _google(system: str, user: str, model: str, max_tokens: int) -> str:
-    import google.generativeai as genai  # type: ignore
+    from google import genai
+    from google.genai import types  # type: ignore
 
     key = os.getenv("GOOGLE_API_KEY", "")
     if not key:
         raise EnvironmentError("GOOGLE_API_KEY niet ingesteld")
 
-    genai.configure(api_key=key)
-    cfg = genai.GenerationConfig(max_output_tokens=max_tokens)
-    client = genai.GenerativeModel(
-        model_name=model,
-        system_instruction=system,
-        generation_config=cfg,
+    client = genai.Client(api_key=key)
+    response = client.models.generate_content(
+        model=model,
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            max_output_tokens=max_tokens,
+        ),
+        contents=user,
     )
-    resp = client.generate_content(user)
-    return resp.text
+    return response.text
 
 
 # ── Groq (Llama / Mixtral) ───────────────────────────────────────────────────
