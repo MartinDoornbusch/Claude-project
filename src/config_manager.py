@@ -50,12 +50,15 @@ DEFAULTS: dict[str, str] = {
     "AI_MIN_CONFIDENCE":        "0.7",
     "AI_MAX_ORDERS_PER_DAY":    "3",
     "AI_COOLDOWN_MINUTES":      "60",
+    "AI_SCORE_THRESHOLD":       "0.5",
     # MQTT
+    "MQTT_ENABLED":             "true",
     "MQTT_HOST":                "",
     "MQTT_PORT":                "1883",
     "MQTT_USER":                "",
     "MQTT_PASS":                "",
     "MQTT_PREFIX":              "bitvavo",
+    "MQTT_CONNECT_TIMEOUT":     "3",
 }
 
 # Keys whose values should never be overwritten with an empty string via the UI
@@ -63,7 +66,7 @@ SENSITIVE_KEYS = {"BITVAVO_API_KEY", "BITVAVO_API_SECRET", "ANTHROPIC_API_KEY", 
 
 # Keys that map to HTML checkboxes (absent in POST = false)
 BOOL_KEYS = {"LIVE_TRADING_ENABLED", "AI_STRATEGY_ENABLED", "MTF_ENABLED", "VOL_SIZING_ENABLED", "CORR_CHECK_ENABLED",
-             "AI_ANTHROPIC_ENABLED", "AI_GOOGLE_ENABLED", "AI_GROQ_ENABLED"}
+             "AI_ANTHROPIC_ENABLED", "AI_GOOGLE_ENABLED", "AI_GROQ_ENABLED", "MQTT_ENABLED"}
 
 
 def read_config() -> dict[str, str]:
