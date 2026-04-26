@@ -29,6 +29,7 @@
     .confidence-bar { height: 6px; border-radius: 3px; background: #e2e8f0; }
     .confidence-fill { height: 100%; border-radius: 3px; transition: width .4s; }
     .ai-badge { font-size: 0.7rem; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+    @media (max-width: 576px) { .hide-sm { display: none !important; } }
     .ai-badge-BUY  { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
     .ai-badge-SELL { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
     .ai-badge-HOLD { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
@@ -126,15 +127,15 @@
           <div class="row text-center mb-3">
             <div class="col-4">
               <div class="stat-label">Prijs</div>
-              <div class="fw-bold">{% if m.price %}€{{ "%.2f"|format(m.price) }}{% else %}—{% endif %}</div>
+              <div class="fw-bold">{{ m.price | fmt_price }}</div>
             </div>
             <div class="col-4">
               <div class="stat-label">SMA 20</div>
-              <div class="fw-bold">{% if m.sma_20 %}€{{ "%.2f"|format(m.sma_20) }}{% else %}—{% endif %}</div>
+              <div class="fw-bold">{{ m.sma_20 | fmt_price }}</div>
             </div>
             <div class="col-4">
               <div class="stat-label">SMA 50</div>
-              <div class="fw-bold">{% if m.sma_50 %}€{{ "%.2f"|format(m.sma_50) }}{% else %}—{% endif %}</div>
+              <div class="fw-bold">{{ m.sma_50 | fmt_price }}</div>
             </div>
           </div>
           {% if m.rsi %}
@@ -270,21 +271,30 @@
         return;
       }
 
+      function fmtEur(v) {
+        if (v < 0.0001) return '€' + v.toFixed(8);
+        if (v < 0.01)   return '€' + v.toFixed(4);
+        return '€' + v.toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2});
+      }
+      function fmtAmt(sym, v) {
+        if (sym === 'EUR') return v.toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2});
+        if (v < 0.001)     return v.toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:8});
+        if (v < 1)         return v.toLocaleString('nl-NL', {minimumFractionDigits:4, maximumFractionDigits:6});
+        return               v.toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:4});
+      }
+
       const rows = d.balances.map(b => {
-        const eurFmt = b.eurValue.toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2});
-        const pct    = d.total_eur > 0 ? (b.eurValue / d.total_eur * 100).toFixed(1) : '0.0';
-        const amtFmt = b.symbol === 'EUR'
-          ? b.total.toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2})
-          : b.total.toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:8});
-        const inOrder = b.inOrder > 0
-          ? `<span class="text-muted" style="font-size:.78rem;"> (${b.inOrder.toFixed(4)} in order)</span>` : '';
+        const pct      = d.total_eur > 0 ? (b.eurValue / d.total_eur * 100).toFixed(1) : '0.0';
+        const amtFmt   = fmtAmt(b.symbol, b.total);
+        const inOrder  = b.inOrder > 0
+          ? `<div class="text-muted" style="font-size:.72rem;">${fmtAmt(b.symbol, b.inOrder)} in order</div>` : '';
         return `<tr>
           <td class="fw-semibold">${b.symbol}</td>
           <td class="text-end font-monospace">${amtFmt}${inOrder}</td>
-          <td class="text-end fw-semibold">€${eurFmt}</td>
-          <td class="text-end" style="min-width:90px;">
+          <td class="text-end fw-semibold">${fmtEur(b.eurValue)}</td>
+          <td class="text-end" style="min-width:80px;">
             <div class="d-flex align-items-center gap-1 justify-content-end">
-              <div style="width:60px;height:6px;border-radius:3px;background:#e2e8f0;">
+              <div style="width:50px;height:6px;border-radius:3px;background:#e2e8f0;flex-shrink:0;">
                 <div style="width:${Math.min(parseFloat(pct),100)}%;height:100%;border-radius:3px;background:#1e40af;"></div>
               </div>
               <small class="text-muted">${pct}%</small>
@@ -294,12 +304,12 @@
       }).join('');
 
       body.innerHTML = `<div class="table-responsive">
-        <table class="table table-hover mb-0" style="font-size:.88rem;">
+        <table class="table table-hover mb-0" style="font-size:.85rem;">
           <thead><tr>
             <th>Coin</th>
             <th class="text-end">Hoeveelheid</th>
             <th class="text-end">EUR waarde</th>
-            <th class="text-end">Aandeel</th>
+            <th class="text-end hide-sm">Aandeel</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>

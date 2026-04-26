@@ -20,6 +20,25 @@ from src.config_manager import read_config, write_config, config_from_form
 
 app = Flask(__name__, template_folder="../templates")
 
+
+@app.template_filter("fmt_price")
+def fmt_price(value):
+    """Adaptieve prijsopmaak: meer decimalen voor goedkope coins."""
+    if value is None:
+        return "—"
+    v = float(value)
+    if v == 0:
+        return "€0"
+    if v < 0.0001:
+        return f"€{v:.8f}"
+    if v < 0.01:
+        return f"€{v:.6f}"
+    if v < 1:
+        return f"€{v:.4f}"
+    if v < 10000:
+        return f"€{v:,.2f}"
+    return f"€{v:,.0f}"
+
 # HA Add-on Ingress: zet SCRIPT_NAME op basis van de X-Ingress-Path header
 # zodat url_for() correcte URLs genereert via de Ingress proxy.
 class _IngressMiddleware:

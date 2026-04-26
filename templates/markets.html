@@ -63,7 +63,7 @@
 </div>
 
 <nav class="navbar navbar-dark px-3 mb-4">
-  <a class="navbar-brand fw-bold text-decoration-none" href="{{ url_for('index') }}">← Dashboard</a>
+  <a class="btn btn-sm btn-outline-light fw-semibold px-3" href="{{ url_for('index') }}">‹ Dashboard</a>
   <span style="font-size:.85rem; color:#93c5fd;">Marktverkenner</span>
 </nav>
 
@@ -177,7 +177,7 @@
                 {% if is_meme %}<span class="badge-meme" title="Meme/speculatief coin — hoog risico, geen onderliggend nut">🎭 Meme</span>{% endif %}
               </td>
               <td class="text-end font-monospace">
-                {% if m.last_price %}€{{ "%.4f"|format(m.last_price) }}{% else %}<span class="text-muted">—</span>{% endif %}
+                {{ m.last_price | fmt_price }}
               </td>
               <td class="text-end hide-sm">
                 {% if m.change_24h is not none %}
