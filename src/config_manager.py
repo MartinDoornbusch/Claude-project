@@ -30,8 +30,12 @@ DEFAULTS: dict[str, str] = {
     "STOP_LOSS_PCT":            "",
     "TAKE_PROFIT_PCT":          "",
     "OCO_ENABLED":              "false",
+    "TRAILING_STOP_ENABLED":    "false",
+    "TRAILING_STOP_PCT":        "2.0",
+    "BREAKEVEN_TRIGGER_PCT":    "",
     "ICEBERG_ENABLED":          "false",
     "ICEBERG_CHUNKS":           "5",
+    "ICEBERG_INTERVAL_SECONDS": "2",
     "MTF_ENABLED":              "true",
     "VOL_SIZING_ENABLED":       "false",
     "CORR_CHECK_ENABLED":       "false",
@@ -72,7 +76,7 @@ SENSITIVE_KEYS = {"BITVAVO_API_KEY", "BITVAVO_API_SECRET", "ANTHROPIC_API_KEY", 
 
 # Keys that map to HTML checkboxes (absent in POST = false)
 BOOL_KEYS = {"LIVE_TRADING_ENABLED", "AI_STRATEGY_ENABLED", "MTF_ENABLED", "VOL_SIZING_ENABLED",
-             "CORR_CHECK_ENABLED", "OCO_ENABLED", "ICEBERG_ENABLED",
+             "CORR_CHECK_ENABLED", "OCO_ENABLED", "ICEBERG_ENABLED", "TRAILING_STOP_ENABLED",
              "AI_ANTHROPIC_ENABLED", "AI_GOOGLE_ENABLED", "AI_GROQ_ENABLED", "MQTT_ENABLED"}
 
 

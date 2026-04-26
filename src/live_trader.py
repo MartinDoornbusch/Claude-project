@@ -125,7 +125,9 @@ def _buy_iceberg(client: Bitvavo, market: str, current_price: float,
             break
 
         if i < n_chunks - 1:
-            time.sleep(2)
+            _interval = float(os.getenv("ICEBERG_INTERVAL_SECONDS", "2"))
+            if _interval > 0:
+                time.sleep(_interval)
 
     if total_amount <= 0:
         return None

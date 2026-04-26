@@ -113,6 +113,12 @@ def init_db() -> None:
                 total_eur REAL NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS position_meta (
+                market        TEXT PRIMARY KEY,
+                peak_price    REAL NOT NULL DEFAULT 0,
+                breakeven_set INTEGER NOT NULL DEFAULT 0
+            );
+
             CREATE TABLE IF NOT EXISTS bot_settings (
                 key   TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -477,6 +483,36 @@ def reset_paper_trading(starting_capital: float = 1000.0) -> None:
         conn.execute("INSERT OR REPLACE INTO paper_cash (id, eur) VALUES (1, ?)", (starting_capital,))
         conn.execute("DELETE FROM portfolio_snapshots")
         conn.execute("DELETE FROM daily_pnl")
+        conn.execute("DELETE FROM position_meta")
+
+
+def get_position_meta(market: str) -> dict:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT peak_price, breakeven_set FROM position_meta WHERE market=?", (market,)
+        ).fetchone()
+    return dict(row) if row else {"peak_price": 0.0, "breakeven_set": 0}
+
+
+def update_position_peak(market: str, price: float) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO position_meta (market, peak_price, breakeven_set) VALUES (?,?,0)
+            ON CONFLICT(market) DO UPDATE SET peak_price=?
+        """, (market, price, price))
+
+
+def set_breakeven_activated(market: str) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO position_meta (market, peak_price, breakeven_set) VALUES (?,0,1)
+            ON CONFLICT(market) DO UPDATE SET breakeven_set=1
+        """, (market,))
+
+
+def clear_position_meta(market: str) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM position_meta WHERE market=?", (market,))
 
 
 def save_portfolio_snapshot(cash_eur: float, pos_eur: float, total_eur: float) -> None:

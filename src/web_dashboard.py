@@ -11,7 +11,7 @@ from src.database import (
     get_latest_signals, get_paper_trades, get_cash, get_position, get_ai_decisions,
     get_watchlist, get_enabled_markets, set_market_enabled, upsert_market_stats, save_market_advice,
     get_all_paper_trades_asc, get_daily_pnl_series, get_trading_paused, set_trading_paused,
-    get_live_trades, reset_paper_trading,
+    get_live_trades, reset_paper_trading, get_portfolio_snapshots,
 )
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
@@ -167,6 +167,20 @@ def api_paper_reset():
     capital = float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
     reset_paper_trading(capital)
     return jsonify({"ok": True, "capital": capital})
+
+
+@app.route("/api/orderbook/<market>")
+def api_orderbook(market: str):
+    try:
+        client = get_client()
+        book = client.book(market.upper(), {"depth": 25})
+        if isinstance(book, dict) and "error" in book:
+            return jsonify({"error": book["error"]}), 500
+        bids = [[float(p), float(q)] for p, q in (book.get("bids") or [])[:15]]
+        asks = [[float(p), float(q)] for p, q in (book.get("asks") or [])[:15]]
+        return jsonify({"bids": bids, "asks": asks, "market": market.upper()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/settings", methods=["GET"])
@@ -513,6 +527,34 @@ def api_analytics():
         wins   = [p for p in pairs if p["pnl_eur"] > 0]
         losses = [p for p in pairs if p["pnl_eur"] <= 0]
 
+        # ── Sharpe Ratio + Max Drawdown uit portfolio snapshots ───────────────
+        sharpe_ratio        = None
+        max_drawdown_pct    = None
+        current_drawdown_pct = None
+        try:
+            import math, statistics as _stats
+            snaps  = get_portfolio_snapshots(limit=500)
+            totals = [s["total_eur"] for s in snaps]
+            if len(totals) >= 5:
+                rets = [(totals[i] - totals[i-1]) / totals[i-1]
+                        for i in range(1, len(totals)) if totals[i-1] > 0]
+                if len(rets) > 1:
+                    m_r, s_r = _stats.mean(rets), _stats.stdev(rets)
+                    sharpe_ratio = round((m_r / s_r * math.sqrt(365)) if s_r > 0 else 0.0, 3)
+                peak_v, max_dd = totals[0], 0.0
+                for t in totals:
+                    if t > peak_v:
+                        peak_v = t
+                    dd = (peak_v - t) / peak_v if peak_v > 0 else 0.0
+                    max_dd = max(max_dd, dd)
+                max_drawdown_pct = round(max_dd * 100, 2)
+                cur_peak = max(totals)
+                current_drawdown_pct = round(
+                    (cur_peak - totals[-1]) / cur_peak * 100 if cur_peak > 0 else 0.0, 2
+                )
+        except Exception:
+            pass
+
         return jsonify({
             "pairs":        pairs_sorted,
             "equity":       equity,
@@ -527,6 +569,9 @@ def api_analytics():
             "avg_loss_eur": round(sum(p["pnl_eur"] for p in losses) / len(losses), 2) if losses else 0.0,
             "best_trade":   round(max((p["pnl_eur"] for p in pairs), default=0), 2),
             "worst_trade":  round(min((p["pnl_eur"] for p in pairs), default=0), 2),
+            "sharpe_ratio":        sharpe_ratio,
+            "max_drawdown_pct":    max_drawdown_pct,
+            "current_drawdown_pct": current_drawdown_pct,
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
