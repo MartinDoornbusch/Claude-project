@@ -30,8 +30,6 @@ def ai_enabled() -> bool:
     return os.getenv("AI_STRATEGY_ENABLED", "false").lower() == "true"
 
 
-AI_ENABLED = ai_enabled()
-
 # Numerieke score per uitkomst voor gewogen combinatie
 _DECISION_SCORE:  dict[str, float] = {"BUY": 1.0, "HOLD": 0.0, "SELL": -1.0}
 _SENTIMENT_SCORE: dict[str, float] = {"POSITIVE": 1.0, "NEUTRAL": 0.0, "NEGATIVE": -1.0}
