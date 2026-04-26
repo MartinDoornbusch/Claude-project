@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pandas as pd
 import ta.trend as ta_trend
 import ta.momentum as ta_momentum
@@ -82,6 +84,33 @@ def get_atr_fraction(df: pd.DataFrame, base_fraction: float = 0.95, target_vol_p
         return base_fraction
     fraction = base_fraction * (target_vol_pct / atr_pct)
     return round(min(max(fraction, 0.2), base_fraction), 3)
+
+
+def get_risk_fraction(
+    df: pd.DataFrame,
+    portfolio_total: float,
+    available_cash: float,
+    risk_pct: float | None = None,
+    sl_pct: float | None = None,
+) -> float:
+    """
+    Berekent de positiefractie van beschikbaar cash op basis van risico per trade.
+
+    Formule: positie_eur = portfolio_total × risk_pct / stop_loss_pct
+    De fractie wordt teruggerekend naar het deel van beschikbaar cash.
+    """
+    if risk_pct is None:
+        risk_pct = float(os.getenv("RISK_PER_TRADE_PCT", "1.0"))
+    if sl_pct is None:
+        sl_raw = os.getenv("STOP_LOSS_PCT", "").strip()
+        sl_pct = abs(float(sl_raw)) if sl_raw else 5.0
+
+    if sl_pct <= 0 or portfolio_total <= 0 or available_cash <= 0:
+        return float(os.getenv("PAPER_TRADE_FRACTION", "0.15"))
+
+    position_eur = portfolio_total * (risk_pct / 100) / (sl_pct / 100)
+    fraction = position_eur / available_cash
+    return round(min(max(fraction, 0.05), 0.95), 3)
 
 
 _HTF_MAP: dict[str, str] = {

@@ -31,6 +31,12 @@
     .badge-ai-no   { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
     .badge-ai-none { background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0; }
     .ai-badge { font-size: .72rem; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+    .ai-prov-badge { font-size: .7rem; padding: 2px 6px; border-radius: 6px; display:inline-block; }
+    .prov-yes { background: #dcfce7; color: #166534; }
+    .prov-no  { background: #f1f5f9; color: #94a3b8; }
+    .prov-groq      { border: 1px solid #93c5fd; }
+    .prov-google    { border: 1px solid #fcd34d; }
+    .prov-anthropic { border: 1px solid #fca5a5; }
     .form-check-input { cursor: pointer; }
     .form-check-input:checked { background-color: #16a34a; border-color: #16a34a; }
     .reasoning-tip { font-size: .78rem; color: #64748b; font-style: italic; }
@@ -57,7 +63,7 @@
 </div>
 
 <nav class="navbar navbar-dark px-3 mb-4">
-  <a class="navbar-brand fw-bold text-decoration-none" href="{{ url_for('index') }}">← Dashboard</a>
+  <a class="btn btn-sm btn-outline-light fw-semibold px-3" href="{{ url_for('index') }}">‹ Dashboard</a>
   <span style="font-size:.85rem; color:#93c5fd;">Marktverkenner</span>
 </nav>
 
@@ -171,7 +177,7 @@
                 {% if is_meme %}<span class="badge-meme" title="Meme/speculatief coin — hoog risico, geen onderliggend nut">🎭 Meme</span>{% endif %}
               </td>
               <td class="text-end font-monospace">
-                {% if m.last_price %}€{{ "%.4f"|format(m.last_price) }}{% else %}<span class="text-muted">—</span>{% endif %}
+                {{ m.last_price | fmt_price }}
               </td>
               <td class="text-end hide-sm">
                 {% if m.change_24h is not none %}
@@ -183,15 +189,21 @@
               <td class="text-end hide-sm">
                 {% if m.volume_eur %}€{{ "{:,.0f}".format(m.volume_eur) }}{% else %}<span class="text-muted">—</span>{% endif %}
               </td>
-              <td class="text-center" style="min-width:110px;">
+              <td class="text-center" style="min-width:120px;">
                 {% if m.last_advised %}
-                  {% if m.ai_recommended %}
-                  <span class="ai-badge badge-ai-yes" title="{{ m.ai_reasoning or '' }}">✓ Ja {% if m.ai_confidence %}{{ "%.0f"|format(m.ai_confidence * 100) }}%{% endif %}</span>
+                  {% if m.provider_votes %}
+                    <div class="d-flex flex-wrap gap-1 justify-content-center">
+                    {% for prov, vote in m.provider_votes.items() %}
+                      {% set lbl = {'groq': 'G', 'google': 'Gem', 'anthropic': 'C'}.get(prov, prov[:3]) %}
+                      {% set tip = {'groq': 'Groq (tactisch)', 'google': 'Gemini (sentiment)', 'anthropic': 'Claude (risico)'}.get(prov, prov) %}
+                      <span class="ai-prov-badge prov-{{ prov }} {{ 'prov-yes' if vote.yes else 'prov-no' }}"
+                            title="{{ tip }}{% if vote.reasoning %}: {{ vote.reasoning }}{% endif %}">{{ lbl }} {{ '✓' if vote.yes else '✗' }}</span>
+                    {% endfor %}
+                    </div>
+                  {% elif m.ai_recommended %}
+                  <span class="ai-badge badge-ai-yes">✓ Ja {% if m.ai_confidence %}{{ "%.0f"|format(m.ai_confidence * 100) }}%{% endif %}</span>
                   {% else %}
-                  <span class="ai-badge badge-ai-no" title="{{ m.ai_reasoning or '' }}">✗ Nee</span>
-                  {% endif %}
-                  {% if m.ai_reasoning %}
-                  <div class="reasoning-tip mt-1 d-none d-md-block" style="max-width:200px;">{{ m.ai_reasoning[:80] }}{% if m.ai_reasoning|length > 80 %}…{% endif %}</div>
+                  <span class="ai-badge badge-ai-no">✗ Nee</span>
                   {% endif %}
                 {% else %}
                   <span class="ai-badge badge-ai-none">? Onbekend</span>
@@ -266,6 +278,22 @@
     }
   }
 
+  // ── Provider badge helpers ──
+  const _PROV_LABEL = {groq: 'G', google: 'Gem', anthropic: 'C'};
+  const _PROV_TITLE = {groq: 'Groq (tactisch)', google: 'Gemini (sentiment)', anthropic: 'Claude (risico)'};
+
+  function buildProviderBadges(votes) {
+    // votes: {groq: true/false, google: true/false, ...}
+    const entries = Object.entries(votes);
+    if (!entries.length) return '<span class="ai-badge badge-ai-none">? Onbekend</span>';
+    const parts = entries.map(([prov, yes]) => {
+      const lbl = _PROV_LABEL[prov] || prov.slice(0,3);
+      const tip = _PROV_TITLE[prov] || prov;
+      return `<span class="ai-prov-badge prov-${prov} ${yes ? 'prov-yes' : 'prov-no'}" title="${tip}">${lbl} ${yes ? '✓' : '✗'}</span>`;
+    });
+    return `<div class="d-flex flex-wrap gap-1 justify-content-center">${parts.join('')}</div>`;
+  }
+
   // ── AI Advies aanvragen ──
   async function getAiAdvice() {
     showSpinner('Alle AI providers raadplegen... (kan 60+ seconden duren)');
@@ -276,8 +304,35 @@
       hideSpinner();
 
       const provs = data.providers || {};
-      const card  = document.getElementById('ai-summary-card');
-      const body  = document.getElementById('ai-summary-body');
+
+      // Build per-market per-provider yes/no map
+      const perMarket = {};
+      for (const [prov, info] of Object.entries(provs)) {
+        if (!info.error) {
+          const recSet = new Set(info.recommended || []);
+          document.querySelectorAll('.market-row').forEach(row => {
+            const market = row.dataset.market;
+            if (!perMarket[market]) perMarket[market] = {};
+            perMarket[market][prov] = recSet.has(market);
+          });
+        }
+      }
+
+      // Live-update each row's AI badge cell
+      document.querySelectorAll('.market-row').forEach(row => {
+        const market = row.dataset.market;
+        const votes  = perMarket[market] || {};
+        const aiCell = row.querySelector('td:nth-child(5)');
+        if (aiCell) {
+          aiCell.innerHTML = buildProviderBadges(votes);
+          const anyYes = Object.values(votes).some(v => v);
+          row.dataset.ai = anyYes ? '1' : '0';
+        }
+      });
+
+      // Summary card
+      const card = document.getElementById('ai-summary-card');
+      const body = document.getElementById('ai-summary-body');
       if (card && body) {
         card.style.display = '';
         const rec = data.recommended || [];
@@ -290,12 +345,13 @@
             html += `<div class="reasoning-tip" style="color:#dc2626;">✗ ${prov}: ${info.error}</div>`;
           } else {
             const n = (info.recommended || []).length;
-            html += `<div class="reasoning-tip"><strong>${prov}</strong> → ${n} aanbevolen · ${info.summary || ''}</div>`;
+            html += `<div class="reasoning-tip"><strong>${_PROV_TITLE[prov] || prov}</strong> → ${n} aanbevolen · ${info.summary || ''}</div>`;
           }
         }
         html += `<div class="mt-2"><button class="btn btn-sm btn-outline-primary" onclick="location.reload()">↻ Tabel vernieuwen</button></div>`;
         body.innerHTML = html;
       }
+      updateCounts();
     } catch(e) {
       alert('AI advies mislukt: ' + e.message);
       hideSpinner();
@@ -337,7 +393,8 @@
       const existing = document.querySelector(`tr[data-market="${m.market}"]`);
       const enabled  = existing ? existing.dataset.enabled === '1' : 0;
       const ai       = existing ? existing.dataset.ai       === '1' : 0;
-      const aiBadge  = existing ? existing.querySelector('.ai-badge')?.outerHTML || '<span class="ai-badge badge-ai-none">? Onbekend</span>' : '<span class="ai-badge badge-ai-none">? Onbekend</span>';
+      const aiCellEl = existing ? existing.querySelector('td:nth-child(5)') : null;
+      const aiBadge  = aiCellEl ? aiCellEl.innerHTML : '<span class="ai-badge badge-ai-none">? Onbekend</span>';
       const change   = m.change_24h;
       const trend    = trendInfo(change);
       const changeHtml = change !== null

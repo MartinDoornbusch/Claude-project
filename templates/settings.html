@@ -45,7 +45,7 @@
 <body>
 
 <nav class="navbar navbar-dark px-3 mb-4">
-  <a class="navbar-brand fw-bold text-decoration-none" href="{{ url_for('index') }}">← Dashboard</a>
+  <a class="btn btn-sm btn-outline-light fw-semibold px-3" href="{{ url_for('index') }}">‹ Dashboard</a>
   <span style="font-size:.85rem; color:#93c5fd;">Instellingen</span>
 </nav>
 
@@ -201,11 +201,50 @@
               </div>
               <div class="form-text">Alleen actief bij een nieuw (leeg) portfolio</div>
             </div>
-            <div>
-              <label class="form-label">Trade fractie (0.05–1.0)</label>
-              <input type="number" class="form-control" name="PAPER_TRADE_FRACTION"
-                     value="{{ config.PAPER_TRADE_FRACTION }}" step="0.05" min="0.05" max="1.0">
-              <div class="form-text">Deel van cash per trade — 0.95 = 95%</div>
+            <!-- Position sizing -->
+            <div class="border rounded p-3" style="background:#f8fafc;">
+              <div class="fw-semibold mb-2" style="font-size:.88rem;">Positiegrootte methode</div>
+              <div class="d-flex gap-4 mb-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="POSITION_SIZING_MODE"
+                         id="sizing-fraction" value="fraction"
+                         {{ 'checked' if config.POSITION_SIZING_MODE != 'risk_pct' }}
+                         onchange="toggleSizingMode('fraction')">
+                  <label class="form-check-label" for="sizing-fraction">Vaste fractie</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="POSITION_SIZING_MODE"
+                         id="sizing-risk" value="risk_pct"
+                         {{ 'checked' if config.POSITION_SIZING_MODE == 'risk_pct' }}
+                         onchange="toggleSizingMode('risk_pct')">
+                  <label class="form-check-label" for="sizing-risk">Risico per trade %</label>
+                </div>
+              </div>
+
+              <div id="sizing-fraction-fields" {% if config.POSITION_SIZING_MODE == 'risk_pct' %}style="display:none"{% endif %}>
+                <label class="form-label mb-1">Trade fractie</label>
+                <div class="input-group">
+                  <input type="number" class="form-control" name="PAPER_TRADE_FRACTION"
+                         value="{{ config.PAPER_TRADE_FRACTION }}" step="0.05" min="0.05" max="1.0">
+                  <span class="input-group-text">van cash</span>
+                </div>
+                <div class="form-text">0.15 = 15% van beschikbaar cash per trade</div>
+              </div>
+
+              <div id="sizing-risk-fields" {% if config.POSITION_SIZING_MODE != 'risk_pct' %}style="display:none"{% endif %}>
+                <label class="form-label mb-1">Risico per trade (%)</label>
+                <div class="input-group">
+                  <input type="number" class="form-control" name="RISK_PER_TRADE_PCT"
+                         value="{{ config.RISK_PER_TRADE_PCT }}" step="0.1" min="0.1" max="5.0">
+                  <span class="input-group-text">%</span>
+                </div>
+                <div class="form-text">
+                  Formule: <code>Positie = Kapitaal × Risico% ÷ Stop-Loss%</code><br>
+                  Voorbeeld bij €{{ config.PAPER_STARTING_CAPITAL|float|int }} kapitaal, {{ config.RISK_PER_TRADE_PCT }}% risico,
+                  {{ config.STOP_LOSS_PCT or '5' }}% SL →
+                  <strong>€{{ ((config.PAPER_STARTING_CAPITAL|float) * (config.RISK_PER_TRADE_PCT|float) / 100 / ((config.STOP_LOSS_PCT|float or 5) / 100))|round(0)|int }}</strong>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -219,6 +258,18 @@
         <div class="card mb-4">
           <div class="card-header">Risicobeheer</div>
           <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label">Dagelijkse verliesgrens</label>
+              <div class="input-group">
+                <input type="number" class="form-control" name="DAILY_LOSS_LIMIT_PCT"
+                       value="{{ config.DAILY_LOSS_LIMIT_PCT }}" step="0.5" min="0.5" max="20">
+                <span class="input-group-text">% van kapitaal</span>
+              </div>
+              <div class="form-text">
+                Bot stopt met kopen als het dagverlies dit % van het startkapitaal overschrijdt.
+                Nu: €{{ (config.PAPER_STARTING_CAPITAL|float * config.DAILY_LOSS_LIMIT_PCT|float / 100)|round(2) }} bij €{{ config.PAPER_STARTING_CAPITAL|float|int }} kapitaal
+              </div>
+            </div>
             <div class="mb-3">
               <label class="form-label">Stop-loss % (leeg = uit)</label>
               <div class="input-group">
@@ -236,6 +287,22 @@
                 <span class="input-group-text" style="cursor:default;">%</span>
               </div>
               <div class="form-text">Verkoopt automatisch bij dit % winst t.o.v. koop. Positief getal, bijv. 10</div>
+            </div>
+            <div class="mb-3">
+              <div class="d-flex align-items-center justify-content-between">
+                <div>
+                  <label class="form-label mb-0">OCO Modus <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem;">One-Cancels-Other</span></label>
+                  <div class="form-text mt-0">Na elke koop worden SL én TP bewaakt — de eerste die raakt annuleert de ander</div>
+                </div>
+                <div class="form-check form-switch m-0">
+                  <input class="form-check-input" type="checkbox" role="switch"
+                         name="OCO_ENABLED"
+                         {{ 'checked' if config.OCO_ENABLED == 'true' }}>
+                </div>
+              </div>
+              {% if config.OCO_ENABLED == 'true' and (not config.STOP_LOSS_PCT or not config.TAKE_PROFIT_PCT) %}
+              <div class="mt-1" style="font-size:.75rem; color:#b45309;">⚠ OCO vereist zowel Stop-Loss % als Take-Profit % ingesteld</div>
+              {% endif %}
             </div>
             <div class="mb-3">
               <div class="d-flex align-items-center justify-content-between">
@@ -475,15 +542,6 @@
               </div>
               <div class="form-text">Stop met kopen als open posities dit bedrag overschrijden</div>
             </div>
-            <div>
-              <label class="form-label">Dagelijks verlies limiet (EUR)</label>
-              <div class="input-group">
-                <span class="input-group-text" style="cursor:default;">€</span>
-                <input type="number" class="form-control" name="DAILY_LOSS_LIMIT_EUR"
-                       value="{{ config.DAILY_LOSS_LIMIT_EUR }}" min="10" step="10">
-              </div>
-              <div class="form-text">Bot stopt met traden als dit dagverlies bereikt wordt</div>
-            </div>
           </div>
         </div>
 
@@ -572,6 +630,12 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+  // ── Positiegrootte methode ──
+  function toggleSizingMode(mode) {
+    document.getElementById('sizing-fraction-fields').style.display = mode === 'fraction' ? '' : 'none';
+    document.getElementById('sizing-risk-fields').style.display     = mode === 'risk_pct'  ? '' : 'none';
+  }
+
   // ── Show/hide password fields ──
   document.querySelectorAll('.toggle-pw').forEach(btn => {
     btn.addEventListener('click', () => {

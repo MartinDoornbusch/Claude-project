@@ -275,6 +275,26 @@ def get_daily_loss(market: str) -> float:
     return row["realized_eur"] if row else 0.0
 
 
+def get_total_daily_loss() -> float:
+    """Retourneert het gerealiseerde PnL van vandaag over alle markten (negatief = verlies)."""
+    today = datetime.utcnow().date().isoformat()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(realized_eur), 0) AS total FROM daily_pnl WHERE date=?",
+            (today,)
+        ).fetchone()
+    return row["total"] if row else 0.0
+
+
+def get_latest_portfolio_total() -> float:
+    """Retourneert de meest recente portfolio-totaalwaarde uit snapshots, of 0.0 als er nog geen is."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT total_eur FROM portfolio_snapshots ORDER BY ts DESC LIMIT 1"
+        ).fetchone()
+    return row["total_eur"] if row else 0.0
+
+
 def add_daily_pnl(market: str, pnl_eur: float) -> None:
     today = datetime.utcnow().date().isoformat()
     with get_conn() as conn:

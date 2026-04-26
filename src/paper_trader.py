@@ -29,12 +29,25 @@ def buy(market: str, price: float, reason: str = "", fraction: float | None = No
         logger.info("[%s] BUY overgeslagen — te weinig cash (€%.2f)", market, cash)
         return None
 
+    daily_loss_pct = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "2.0"))
+    if daily_loss_pct > 0:
+        from src.database import get_total_daily_loss
+        portfolio_basis  = float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
+        daily_loss_limit = portfolio_basis * daily_loss_pct / 100
+        today_loss       = get_total_daily_loss()
+        if today_loss < 0 and abs(today_loss) >= daily_loss_limit:
+            logger.warning(
+                "[%s] BUY geblokkeerd — dagelijkse verliesgrens %.1f%% (€%.2f) bereikt: €%.2f verlies vandaag",
+                market, daily_loss_pct, daily_loss_limit, abs(today_loss),
+            )
+            return None
+
     position = get_position(market)
     if position["amount"] > 0:
         logger.info("[%s] BUY overgeslagen — positie al open (%.6f)", market, position["amount"])
         return None
 
-    trade_fraction = float(os.getenv("PAPER_TRADE_FRACTION", "0.95"))
+    trade_fraction = float(os.getenv("PAPER_TRADE_FRACTION", "0.15"))
     used_fraction = fraction if fraction is not None else trade_fraction
     spend_eur = cash * used_fraction
     fee = spend_eur * FEE_RATE
