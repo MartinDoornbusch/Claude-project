@@ -34,6 +34,8 @@
     .ai-badge-SELL { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
     .ai-badge-HOLD { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
     .reasoning-text { font-size: 0.82rem; color: #64748b; font-style: italic; }
+    .pos-strip { font-size: 0.72rem; border-radius: 6px; padding: 4px 8px; background: #f0fdf4; border: 1px solid #86efac; }
+    .ai-votes-strip { font-size: 0.7rem; border-top: 1px dashed #e2e8f0; padding-top: 6px; margin-top: 8px; color: #64748b; }
   </style>
 <script>const BASE_URL = '{{ url_for("index") }}'.replace(/\/$/, '');</script>
 </head>
@@ -97,6 +99,24 @@
       <div class="card p-3 text-center">
         <div class="stat-label">Cash</div>
         <div class="stat-value">€{{ "%.2f"|format(portfolio.cash_eur) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card p-3">
+        <div class="stat-label text-center">Dag Risico</div>
+        <div class="fw-bold text-center {% if daily_loss.pct_used >= 80 %}pnl-neg{% elif daily_loss.pct_used >= 50 %}text-warning{% else %}text-muted{% endif %}"
+             style="font-size:1.1rem; margin-top:4px;">
+          {{ "%+.2f"|format(daily_loss.loss_eur) }} EUR
+        </div>
+        <div class="mt-2">
+          <div class="rsi-bar">
+            <div class="rsi-fill {% if daily_loss.pct_used >= 80 %}bg-danger{% elif daily_loss.pct_used >= 50 %}bg-warning{% else %}bg-success{% endif %}"
+                 style="width: {{ [daily_loss.pct_used, 2] | max }}%"></div>
+          </div>
+          <div style="font-size:.7rem; color:#94a3b8; margin-top:3px; text-align:center;">
+            {{ daily_loss.pct_used }}% / {{ daily_loss.limit_pct }}% limiet
+          </div>
+        </div>
       </div>
     </div>
     {% for market, pos in portfolio.positions.items() %}
@@ -166,6 +186,30 @@
                  style="width: {{ m.rsi }}%"></div>
           </div>
           {% endif %}
+
+          {% if ai_enabled and ai_votes_by_market.get(m.market) %}
+          {% set av = ai_votes_by_market[m.market] %}
+          <div class="ai-votes-strip d-flex align-items-center flex-wrap gap-1">
+            <span style="font-weight:600; color:#94a3b8; margin-right:2px; font-size:.68rem;">AI</span>
+            {% for prov, text in av.providers.items() %}
+            <span class="badge rounded-pill"
+                  style="background:#f8fafc; color:#475569; border:1px solid #e2e8f0; font-weight:500; font-size:.65rem; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                  title="{{ text }}">{{ prov }}: {{ text[:38] }}{% if text|length > 38 %}…{% endif %}</span>
+            {% endfor %}
+            <span class="ai-badge ai-badge-{{ av.decision }} ms-auto">{{ av.decision }} {{ "%.0f"|format(av.confidence * 100) }}%</span>
+          </div>
+          {% endif %}
+
+          {% if positions_data.get(m.market) %}
+          {% set pd = positions_data[m.market] %}
+          <div class="pos-strip d-flex align-items-center flex-wrap gap-2 mt-2">
+            <span class="text-success fw-semibold">▲ {{ pd.avg_price | fmt_price }}</span>
+            {% if pd.tp_price %}<span class="pnl-pos">TP&nbsp;{{ pd.tp_price | fmt_price }}</span>{% endif %}
+            {% if pd.sl_price %}<span class="pnl-neg">{% if pd.trailing_active %}TSL{% else %}SL{% endif %}&nbsp;{{ pd.sl_price | fmt_price }}</span>{% endif %}
+            {% if pd.house_money %}<span style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:8px;padding:1px 5px;font-size:.65rem;">huisgeld</span>{% endif %}
+          </div>
+          {% endif %}
+
           <div class="chart-placeholder mt-3" style="display:none; text-align:center; padding:12px 0; font-size:.78rem; color:#94a3b8;">
             Wachten op eerste scheduler-cyclus…
           </div>
@@ -452,6 +496,8 @@
 
   // RSI grafieken per markt
   const markets = {{ markets | tojson }};
+  const positionsData = {{ positions_data | tojson }};
+
   markets.forEach((market, i) => {
     const canvas = document.getElementById('chart-' + (i + 1));
     if (!canvas) return;
@@ -473,16 +519,27 @@
         const sma20  = reversed.map(d => d.sma_20 ?? null);
         const sma50  = reversed.map(d => d.sma_50 ?? null);
 
+        const datasets = [
+          { label: 'Prijs',  data: prices, borderColor: '#2563eb', borderWidth: 1.5, pointRadius: 0, tension: 0.3, spanGaps: true },
+          { label: 'SMA 20', data: sma20,  borderColor: '#f97316', borderWidth: 1,   pointRadius: 0, borderDash: [4,2], tension: 0.3, spanGaps: true },
+          { label: 'SMA 50', data: sma50,  borderColor: '#8b5cf6', borderWidth: 1,   pointRadius: 0, borderDash: [4,2], tension: 0.3, spanGaps: true },
+        ];
+
+        const pos = positionsData[market];
+        if (pos) {
+          if (pos.tp_price) {
+            datasets.push({ label: 'TP', data: Array(labels.length).fill(pos.tp_price),
+              borderColor: '#16a34a', borderWidth: 1.5, borderDash: [5,3], pointRadius: 0, spanGaps: true });
+          }
+          if (pos.sl_price) {
+            datasets.push({ label: pos.trailing_active ? 'TSL' : 'SL', data: Array(labels.length).fill(pos.sl_price),
+              borderColor: '#dc2626', borderWidth: 1.5, borderDash: [5,3], pointRadius: 0, spanGaps: true });
+          }
+        }
+
         new Chart(canvas, {
           type: 'line',
-          data: {
-            labels,
-            datasets: [
-              { label: 'Prijs',  data: prices, borderColor: '#2563eb', borderWidth: 1.5, pointRadius: 0, tension: 0.3, spanGaps: true },
-              { label: 'SMA 20', data: sma20,  borderColor: '#f97316', borderWidth: 1,   pointRadius: 0, borderDash: [4,2], tension: 0.3, spanGaps: true },
-              { label: 'SMA 50', data: sma50,  borderColor: '#8b5cf6', borderWidth: 1,   pointRadius: 0, borderDash: [4,2], tension: 0.3, spanGaps: true },
-            ]
-          },
+          data: { labels, datasets },
           options: {
             responsive: true,
             plugins: {

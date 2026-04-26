@@ -12,7 +12,7 @@ from src.database import (
     get_watchlist, get_enabled_markets, set_market_enabled, upsert_market_stats, save_market_advice,
     get_all_paper_trades_asc, get_daily_pnl_series, get_trading_paused, set_trading_paused,
     get_live_trades, reset_paper_trading, get_portfolio_snapshots,
-    get_all_positions,
+    get_all_positions, get_total_daily_loss, get_latest_portfolio_total, get_position_meta,
 )
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
@@ -84,6 +84,17 @@ def _build_portfolio() -> dict:
     return pf
 
 
+def _parse_ai_reasoning(reasoning: str) -> dict[str, str]:
+    """Parse '[provider] text | [provider] text' format into a per-provider dict."""
+    import re
+    result: dict[str, str] = {}
+    for part in re.split(r"\s*\|\s*", reasoning or ""):
+        m = re.match(r"\[(\w+)\]\s*(.*)", part.strip())
+        if m:
+            result[m.group(1).lower()] = m.group(2).strip()
+    return result
+
+
 def _build_market_data() -> list[dict]:
     rows = []
     for market in _dashboard_markets():
@@ -128,6 +139,69 @@ def index():
     from src.ai_provider import get_configured_providers
     active_providers = [p for p, _ in get_configured_providers()]
 
+    # ── Daily Loss Risk Meter ──────────────────────────────────────────────────
+    daily_loss_data: dict = {"loss_eur": 0.0, "limit_eur": 0.0, "limit_pct": 2.0, "pct_used": 0.0}
+    try:
+        loss_eur  = get_total_daily_loss()  # negative = loss
+        limit_pct = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "2.0"))
+        ptotal    = get_latest_portfolio_total() or float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
+        limit_eur = ptotal * limit_pct / 100
+        pct_used  = min(100.0, abs(loss_eur) / limit_eur * 100) if limit_eur > 0 and loss_eur < 0 else 0.0
+        daily_loss_data = {
+            "loss_eur":  round(loss_eur, 2),
+            "limit_eur": round(limit_eur, 2),
+            "limit_pct": limit_pct,
+            "pct_used":  round(pct_used, 1),
+        }
+    except Exception:
+        pass
+
+    # ── AI Votes per market ────────────────────────────────────────────────────
+    ai_votes_by_market: dict = {}
+    if ai_enabled():
+        try:
+            for market in _dashboard_markets():
+                decisions = get_ai_decisions(market, limit=1)
+                if decisions:
+                    d = decisions[0]
+                    ai_votes_by_market[market] = {
+                        "decision":   d["decision"],
+                        "confidence": d["confidence"],
+                        "ts":         d["ts"],
+                        "providers":  _parse_ai_reasoning(d.get("reasoning", "")),
+                    }
+        except Exception:
+            pass
+
+    # ── Open Positions SL/TP per market ───────────────────────────────────────
+    positions_data: dict = {}
+    try:
+        sl_pct           = float(os.getenv("STOP_LOSS_PCT") or "0")
+        tp_pct           = float(os.getenv("TAKE_PROFIT_PCT") or "0")
+        trailing_enabled = os.getenv("TRAILING_STOP_ENABLED", "false").lower() == "true"
+        trailing_pct     = float(os.getenv("TRAILING_STOP_PCT", "2.0"))
+        for market in _dashboard_markets():
+            pos = get_position(market)
+            if pos["amount"] > 0 and pos["avg_price"] > 0:
+                avg      = pos["avg_price"]
+                sl_price = avg * (1 - sl_pct / 100) if sl_pct > 0 else None
+                tp_price = avg * (1 + tp_pct / 100) if tp_pct > 0 else None
+                meta     = get_position_meta(market)
+                peak     = meta.get("peak_price") or 0.0
+                t_sl     = peak * (1 - trailing_pct / 100) if trailing_enabled and peak > 0 else None
+                candidates   = [x for x in [sl_price, t_sl] if x is not None]
+                effective_sl = max(candidates) if candidates else None
+                positions_data[market] = {
+                    "amount":          pos["amount"],
+                    "avg_price":       avg,
+                    "sl_price":        effective_sl,
+                    "tp_price":        tp_price,
+                    "trailing_active": trailing_enabled and peak > 0,
+                    "house_money":     bool(meta.get("house_money_activated")),
+                }
+    except Exception:
+        pass
+
     return render_template(
         "index.html",
         live_mode=live_mode,
@@ -138,6 +212,9 @@ def index():
         ai_enabled=ai_enabled(),
         ai_decisions=ai_decisions,
         active_providers=active_providers,
+        daily_loss=daily_loss_data,
+        ai_votes_by_market=ai_votes_by_market,
+        positions_data=positions_data,
     )
 
 
