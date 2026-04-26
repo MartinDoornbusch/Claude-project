@@ -1,4 +1,14 @@
-"""AI strategie — gebruikt een configureerbare AI provider als trading brein met guardrails."""
+"""AI Trading Orchestrator — drie gespecialiseerde providers in volgorde.
+
+Stap 1  Groq        Tactische Verkenner  — snelle TA, altijd uitgevoerd
+Stap 2  Gemini      Sentiment Analist    — nieuws/marktsfeer, alleen bij potentieel signaal
+Stap 3  Anthropic   Risicomanager        — finale validatie, alleen bij concrete trade
+
+Rolverdeling is automatisch op basis van geconfigureerde providers:
+- Groq  → tactisch (technisch)
+- Google → sentiment (alleen als er ook een tactisch provider is)
+- Anthropic → risicomanager (alleen als Groq tactisch is; anders zelf tactisch)
+"""
 
 from __future__ import annotations
 
@@ -15,70 +25,87 @@ from src.database import (
 
 logger = logging.getLogger(__name__)
 
+
 def ai_enabled() -> bool:
     return os.getenv("AI_STRATEGY_ENABLED", "false").lower() == "true"
 
-# Backwards-compat alias — gebruik ai_enabled() voor live-waarden
+
 AI_ENABLED = ai_enabled()
 
-# Welke rol elke provider van nature speelt.
-# Google/Gemini = sentiment-analyst; Groq en Anthropic = technisch analyst.
-# Als Google de enige geconfigureerde provider is, valt hij terug op technisch.
-_NATURAL_ROLE: dict[str, str] = {
-    "groq":      "technical",
-    "anthropic": "technical",
-    "google":    "sentiment",
-}
+# Numerieke score per uitkomst voor gewogen combinatie
+_DECISION_SCORE:  dict[str, float] = {"BUY": 1.0, "HOLD": 0.0, "SELL": -1.0}
+_SENTIMENT_SCORE: dict[str, float] = {"POSITIVE": 1.0, "NEUTRAL": 0.0, "NEGATIVE": -1.0}
 
-_SYSTEM_PROMPT = """\
-You are an expert crypto trading analyst for the Bitvavo exchange.
-Your task is to evaluate technical indicator data and return a disciplined trading decision.
+# ── System prompts ────────────────────────────────────────────────────────────
 
-Trading rules:
-- Recommend BUY only when there is strong bullish confluence (e.g. golden cross + RSI not overbought, \
-price near lower Bollinger Band with rising MACD)
-- Recommend SELL only when there is strong bearish confluence (e.g. death cross, RSI overbought > 70, \
-or significant unrealized loss threatening the daily loss limit)
-- Default to HOLD when signals are mixed, unclear, or there is insufficient data
-- Capital preservation is the priority — missing a move is better than a bad trade
-- Do NOT buy if there is already an open position unless the signal is exceptionally strong
+_TACTICAL_PROMPT = """\
+You are an expert crypto technical analyst for the Bitvavo exchange.
+Evaluate the provided indicator data and return a fast, disciplined trading signal.
+
+Rules:
+- BUY  → strong bullish confluence: golden cross + RSI not overbought, price near lower BB with rising MACD
+- SELL → strong bearish confluence: death cross, RSI > 70, or significant unrealized loss
+- HOLD → mixed/unclear signals or insufficient data; capital preservation takes priority
+- Do NOT buy if there is already an open position (unless signal is exceptionally strong)
 - Do NOT sell if there is no open position
 
-You MUST respond with ONLY a JSON block in this exact format (no extra text):
+Respond with ONLY a JSON block — no other text:
 ```json
 {
   "decision": "BUY",
   "confidence": 0.82,
-  "reasoning": "Golden cross confirmed with RSI at 45 — not overbought, clear upward momentum."
+  "reasoning": "Golden cross confirmed, RSI at 45, MACD histogram rising."
 }
 ```
-decision must be one of: BUY, SELL, HOLD
-confidence must be a float between 0.0 and 1.0
-reasoning must be a single concise sentence in English\
+decision: BUY | SELL | HOLD  —  confidence: 0.0–1.0  —  reasoning: one concise English sentence\
 """
 
-_SENTIMENT_SYSTEM_PROMPT = """\
+_SENTIMENT_PROMPT = """\
 You are a crypto market sentiment analyst for the Bitvavo exchange.
-Your task is to assess the current market mood based on price action, indicators, and context.
+Assess the current market mood from the price action, volume, and macro context provided.
 
-Sentiment guidelines:
-- POSITIVE: Favorable conditions — clear uptrend, healthy volume, fear/greed in neutral-to-greed zone, \
-no extreme reversal signals
-- NEGATIVE: Unfavorable conditions — downtrend confirmed, extreme greed (correction risk), panic-sell \
-patterns, or deteriorating momentum
-- NEUTRAL: Mixed or unclear signals — not enough data or conflicting indicators to take a stance
+Guidelines:
+- POSITIVE → clear uptrend, healthy volume, fear/greed in neutral-to-greed zone, no reversal signs
+- NEGATIVE → downtrend, extreme greed (correction risk), panic-sell patterns, deteriorating momentum
+- NEUTRAL  → mixed or insufficient signals
 
-You MUST respond with ONLY a JSON block in this exact format (no extra text):
+Respond with ONLY a JSON block — no other text:
 ```json
 {
   "sentiment": "POSITIVE",
   "confidence": 0.75,
-  "reasoning": "Upward momentum confirmed with healthy volume, Fear & Greed at 45 — neutral zone."
+  "reasoning": "Uptrend intact with above-average volume; Fear & Greed at 48 — neutral territory."
 }
 ```
-sentiment must be one of: POSITIVE, NEGATIVE, NEUTRAL
-confidence must be a float between 0.0 and 1.0
-reasoning must be a single concise sentence in English\
+sentiment: POSITIVE | NEGATIVE | NEUTRAL  —  confidence: 0.0–1.0  —  reasoning: one concise English sentence\
+"""
+
+_RISK_PROMPT = """\
+You are a risk manager for a crypto trading bot on the Bitvavo exchange.
+You receive a proposed trade action and all available analysis. Decide if the trade is safe to execute.
+
+Approve if:
+- Proposed action aligns with market data and portfolio state
+- No excessive loss streak (fewer than 3 consecutive losses)
+- Daily loss limit is not nearly exhausted (< 80% used)
+- Combined AI confidence is convincing
+
+Reject if:
+- 3+ consecutive losing trades (bot is in a bad streak)
+- Daily loss limit > 80% used
+- Extreme volatility makes the outcome unpredictable
+- Proposed action clearly contradicts the market data
+- Open position already shows a deep unrealized loss (> 15%)
+
+Respond with ONLY a JSON block — no other text:
+```json
+{
+  "approved": true,
+  "confidence": 0.88,
+  "reasoning": "Technical and sentiment agree; portfolio well-positioned with no loss streak."
+}
+```
+approved: true | false  —  confidence: 0.0–1.0  —  reasoning: one concise English sentence\
 """
 
 
@@ -105,7 +132,6 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
         f"Current price: €{price:.4f}",
     ]
 
-    # 24u koersverandering
     change_24h = get_market_change_24h(market)
     if change_24h is not None:
         direction = "▲" if change_24h >= 0 else "▼"
@@ -121,7 +147,7 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
     if signals.get("sma_50") is not None:
         lines.append(f"SMA 50: €{signals['sma_50']:.4f}")
     if signals.get("rsi_14") is not None:
-        rsi = signals["rsi_14"]
+        rsi   = signals["rsi_14"]
         label = " (OVERBOUGHT ⚠)" if rsi > 70 else (" (OVERSOLD ⚠)" if rsi < 30 else "")
         lines.append(f"RSI 14: {rsi:.2f}{label}")
     if signals.get("macd") is not None:
@@ -153,13 +179,14 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
     vol_avg = signals.get("volume_avg_20")
     if vol is not None and vol_avg and vol_avg > 0:
         vol_ratio = vol / vol_avg
-        vol_label = "HIGH ↑↑" if vol_ratio > 1.5 else ("above average ↑" if vol_ratio > 1.1 else
-                    ("below average ↓" if vol_ratio < 0.9 else "average"))
+        vol_label = ("HIGH ↑↑" if vol_ratio > 1.5 else
+                     "above average ↑" if vol_ratio > 1.1 else
+                     "below average ↓" if vol_ratio < 0.9 else "average")
         lines.append(f"Volume: {vol:,.0f}  ({vol_ratio:.1f}× 20-period avg — {vol_label})")
 
     atr = signals.get("atr_14")
     if atr is not None and price > 0:
-        atr_pct = atr / price * 100
+        atr_pct   = atr / price * 100
         vol_level = "HIGH volatility ⚠" if atr_pct > 4 else ("elevated" if atr_pct > 2 else "low/normal")
         lines.append(f"ATR-14: €{atr:.4f} ({atr_pct:.2f}% of price — {vol_level})")
 
@@ -175,9 +202,9 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
         buy_ts = get_last_buy_ts(market)
         if buy_ts:
             try:
-                elapsed = datetime.utcnow() - datetime.fromisoformat(buy_ts[:19])
-                hours   = int(elapsed.total_seconds() / 3600)
-                days    = hours // 24
+                elapsed      = datetime.utcnow() - datetime.fromisoformat(buy_ts[:19])
+                hours        = int(elapsed.total_seconds() / 3600)
+                days         = hours // 24
                 duration_str = f"{days}d {hours % 24}h" if days > 0 else f"{hours}h"
                 lines.append(f"Position open for: {duration_str}")
             except Exception:
@@ -205,7 +232,10 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
     daily_loss  = get_daily_loss(market)
     daily_limit = float(os.getenv("DAILY_LOSS_LIMIT_EUR", "50"))
     if daily_loss < 0:
-        lines.append(f"Daily realized loss: €{daily_loss:.2f} / €{daily_limit:.0f} limit ({abs(daily_loss)/daily_limit*100:.0f}% used)")
+        lines.append(
+            f"Daily realized loss: €{daily_loss:.2f} / €{daily_limit:.0f} limit "
+            f"({abs(daily_loss) / daily_limit * 100:.0f}% used)"
+        )
 
     if past_pairs:
         loss_streak = 0
@@ -231,19 +261,23 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
     return "\n".join(lines)
 
 
-def _parse_decision(text: str) -> dict | None:
-    match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-    if match:
-        json_str = match.group(1)
-    else:
-        match = re.search(r'\{[^{}]*"decision"[^{}]*\}', text, re.DOTALL)
-        if not match:
-            return None
-        json_str = match.group(0)
+# ── Parsers ───────────────────────────────────────────────────────────────────
 
+def _extract_json(text: str, key: str) -> str | None:
+    m = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if m:
+        return m.group(1)
+    m = re.search(rf'\{{[^{{}}]*"{key}"[^{{}}]*\}}', text, re.DOTALL)
+    return m.group(0) if m else None
+
+
+def _parse_decision(text: str) -> dict | None:
+    raw = _extract_json(text, "decision")
+    if not raw:
+        return None
     try:
-        data = json.loads(json_str)
-        decision = str(data.get("decision", "HOLD")).upper()
+        data      = json.loads(raw)
+        decision  = str(data.get("decision", "HOLD")).upper()
         if decision not in ("BUY", "SELL", "HOLD"):
             decision = "HOLD"
         confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
@@ -254,17 +288,11 @@ def _parse_decision(text: str) -> dict | None:
 
 
 def _parse_sentiment(text: str) -> dict | None:
-    match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-    if match:
-        json_str = match.group(1)
-    else:
-        match = re.search(r'\{[^{}]*"sentiment"[^{}]*\}', text, re.DOTALL)
-        if not match:
-            return None
-        json_str = match.group(0)
-
+    raw = _extract_json(text, "sentiment")
+    if not raw:
+        return None
     try:
-        data = json.loads(json_str)
+        data      = json.loads(raw)
         sentiment = str(data.get("sentiment", "NEUTRAL")).upper()
         if sentiment not in ("POSITIVE", "NEGATIVE", "NEUTRAL"):
             sentiment = "NEUTRAL"
@@ -275,34 +303,76 @@ def _parse_sentiment(text: str) -> dict | None:
         return None
 
 
+def _parse_risk(text: str) -> dict | None:
+    raw = _extract_json(text, "approved")
+    if not raw:
+        return None
+    try:
+        data       = json.loads(raw)
+        approved   = bool(data.get("approved", False))
+        confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
+        reasoning  = str(data.get("reasoning", ""))
+        return {"approved": approved, "confidence": confidence, "reasoning": reasoning}
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return None
+
+
+# ── Orchestrator ──────────────────────────────────────────────────────────────
+
+def _assign_roles(providers: list[tuple[str, str]]) -> dict[str, str]:
+    """
+    Wijst rollen toe op basis van beschikbare providers.
+
+    Resultaat: {"groq": "tactical", "google": "sentiment", "anthropic": "risk"}
+    Mogelijke rollen: "tactical" | "sentiment" | "risk" | "tactical_only"
+    """
+    pdict = dict(providers)
+    roles: dict[str, str] = {}
+
+    has_groq      = "groq" in pdict
+    has_google    = "google" in pdict
+    has_anthropic = "anthropic" in pdict
+
+    if has_groq:
+        roles["groq"] = "tactical"
+        if has_anthropic:
+            roles["anthropic"] = "risk"
+        if has_google:
+            roles["google"] = "sentiment"
+    elif has_anthropic:
+        # Geen Groq → Anthropic speelt zowel tactisch als risico niet dubbel;
+        # gebruik het als enige tactische analyst.
+        roles["anthropic"] = "tactical_only"
+        if has_google:
+            roles["google"] = "sentiment"
+    elif has_google:
+        # Alleen Google → tactisch fallback
+        roles["google"] = "tactical_only"
+
+    return roles
+
+
 def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
     """
-    Vraagt de geconfigureerde AI providers om een trading beslissing.
-
-    Gespecialiseerde voting:
-    - Groq / Anthropic → technisch analyst → BUY / SELL / HOLD
-    - Google (Gemini)  → sentiment analyst → POSITIVE / NEGATIVE / NEUTRAL
-    - BUY gaat alleen door als sentiment NIET NEGATIVE is.
-    - SELL gaat altijd door (risicobeheer).
-    - Als Google de enige provider is, valt hij terug op de technische rol.
+    Trading Orchestrator: drie AI-providers in volgorde van snelheid en kosten.
 
     Retourneert: (decision, confidence, reasoning)
     """
     min_confidence     = float(os.getenv("AI_MIN_CONFIDENCE", "0.7"))
     max_orders_per_day = int(os.getenv("AI_MAX_ORDERS_PER_DAY", "3"))
     cooldown_minutes   = int(os.getenv("AI_COOLDOWN_MINUTES", "60"))
+    score_threshold    = float(os.getenv("AI_SCORE_THRESHOLD", "0.5"))
 
     if not ai_enabled():
         return "HOLD", 0.0, "AI strategie uitgeschakeld"
 
     if _orders_executed_today(market) >= max_orders_per_day:
-        logger.info("[%s] AI: dagelijks maximum van %d orders bereikt", market, max_orders_per_day)
+        logger.info("[%s] AI: dagelijks maximum bereikt (%d)", market, max_orders_per_day)
         return "HOLD", 0.0, f"Max {max_orders_per_day} orders per dag bereikt"
 
     minutes_ago = _last_trade_minutes_ago(market)
     if minutes_ago is not None and minutes_ago < cooldown_minutes:
         remaining = int(cooldown_minutes - minutes_ago)
-        logger.info("[%s] AI: cooldown actief, nog %d minuten", market, remaining)
         return "HOLD", 0.0, f"Cooldown: wacht nog {remaining} minuten"
 
     recent_signals = get_latest_signals(market, limit=5)
@@ -310,7 +380,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
     from src.sentiment import get_fear_greed, fmt_fear_greed
     fg_str  = fmt_fear_greed(get_fear_greed())
     context = _build_context(market, signals, recent_signals, fg_str)
-    prompt  = "Analyze the following market data and return your trading decision:\n\n" + context
+    prompt  = "Analyze the following market data:\n\n" + context
 
     try:
         from src.ai_provider import get_configured_providers, complete_for
@@ -318,97 +388,138 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         if not providers:
             return "HOLD", 0.0, "Geen AI provider geconfigureerd of ingeschakeld"
 
-        # Als Google de enige provider is → technische rol (geen sentiment-filter zonder technisch signaal)
-        has_non_google = any(p != "google" for p, _ in providers)
-        roles = {
-            p: (_NATURAL_ROLE.get(p, "technical") if has_non_google else "technical")
-            for p, _ in providers
-        }
+        pdict = dict(providers)
+        roles = _assign_roles(providers)
 
-        tech_results: list[dict] = []
-        sent_results: list[dict] = []
+        # ── Stap 1: Tactische Verkenner (Groq of fallback) ───────────────────
+        tactical_prov = next(
+            (p for p, r in roles.items() if r in ("tactical", "tactical_only")), None
+        )
+        tactical_result: dict | None = None
+        tactical_score = 0.0
 
-        for prov, mdl in providers:
-            role       = roles[prov]
-            sys_prompt = _SYSTEM_PROMPT if role == "technical" else _SENTIMENT_SYSTEM_PROMPT
+        if tactical_prov:
             try:
-                text = complete_for(prov, mdl, sys_prompt, prompt, max_tokens=512)
-                logger.debug("[%s] %s raw: %.300s", market, prov, text)
-                if role == "technical":
-                    parsed = _parse_decision(text)
-                    if parsed:
-                        parsed["provider"] = prov
-                        tech_results.append(parsed)
-                        logger.debug("[%s] %s (tech): %s %.0f%%",
-                                     market, prov, parsed["decision"], parsed["confidence"] * 100)
-                    else:
-                        logger.warning("[%s] %s: kon technisch besluit niet parsen", market, prov)
+                text = complete_for(tactical_prov, pdict[tactical_prov],
+                                    _TACTICAL_PROMPT, prompt, max_tokens=512)
+                logger.debug("[%s] %s raw: %.200s", market, tactical_prov, text)
+                parsed = _parse_decision(text)
+                if parsed:
+                    tactical_result = parsed
+                    tactical_score  = _DECISION_SCORE[parsed["decision"]] * parsed["confidence"]
+                    logger.info("[%s] %s (tactisch): %s %.0f%% score=%+.2f",
+                                market, tactical_prov, parsed["decision"],
+                                parsed["confidence"] * 100, tactical_score)
                 else:
-                    parsed = _parse_sentiment(text)
-                    if parsed:
-                        parsed["provider"] = prov
-                        sent_results.append(parsed)
-                        logger.debug("[%s] %s (sentiment): %s %.0f%%",
-                                     market, prov, parsed["sentiment"], parsed["confidence"] * 100)
-                    else:
-                        logger.warning("[%s] %s: kon sentiment niet parsen", market, prov)
+                    logger.warning("[%s] %s: kon tactisch besluit niet parsen", market, tactical_prov)
             except Exception as exc:
-                logger.warning("[%s] Provider %s fout: %s", market, prov, exc)
+                logger.warning("[%s] %s (tactisch) fout: %s", market, tactical_prov, exc)
 
-        if not tech_results and not sent_results:
-            return "HOLD", 0.0, "Alle providers gaven geen geldig antwoord"
+        if tactical_result is None:
+            return "HOLD", 0.0, "Geen tactisch analyse resultaat beschikbaar"
 
-        if not tech_results:
-            return "HOLD", 0.0, "Geen technisch analyse resultaat beschikbaar"
+        # Snelle HOLD: als de score te laag is en er is geen sentimentprovider, stop hier
+        sentiment_prov = next((p for p, r in roles.items() if r == "sentiment"), None)
+        if not sentiment_prov and abs(tactical_score) < score_threshold:
+            return "HOLD", abs(tactical_score), (
+                f"Score {tactical_score:+.2f} onder drempel {score_threshold:.1f} — "
+                f"{tactical_result['reasoning']}"
+            )
 
-        # Meerderheidsstem technisch
-        tech_vote: dict[str, int] = {}
-        for d in tech_results:
-            tech_vote[d["decision"]] = tech_vote.get(d["decision"], 0) + 1
-        tech_decision = max(tech_vote, key=tech_vote.__getitem__)
-        tech_majority = [d for d in tech_results if d["decision"] == tech_decision]
-        tech_conf     = sum(d["confidence"] for d in tech_majority) / len(tech_majority)
-        tech_reason   = " | ".join(f"[{d['provider']}] {d['reasoning']}" for d in tech_majority)
+        # ── Stap 2: Sentiment Analist (Gemini, alleen bij potentieel signaal) ─
+        sentiment_result: dict | None = None
+        sentiment_score = 0.0
 
-        if not sent_results:
-            # Geen sentiment-filter — technisch signaal direct gebruiken
-            decision   = tech_decision
-            confidence = tech_conf
-            reasoning  = tech_reason
-            logger.info("[%s] AI technisch: %s (%.0f%%)", market, decision, confidence * 100)
+        if sentiment_prov and abs(tactical_score) >= 0.3:
+            try:
+                text = complete_for(sentiment_prov, pdict[sentiment_prov],
+                                    _SENTIMENT_PROMPT, prompt, max_tokens=512)
+                logger.debug("[%s] %s raw: %.200s", market, sentiment_prov, text)
+                parsed = _parse_sentiment(text)
+                if parsed:
+                    sentiment_result = parsed
+                    sentiment_score  = _SENTIMENT_SCORE[parsed["sentiment"]] * parsed["confidence"]
+                    logger.info("[%s] %s (sentiment): %s %.0f%% score=%+.2f",
+                                market, sentiment_prov, parsed["sentiment"],
+                                parsed["confidence"] * 100, sentiment_score)
+                else:
+                    logger.warning("[%s] %s: kon sentiment niet parsen", market, sentiment_prov)
+            except Exception as exc:
+                logger.warning("[%s] %s (sentiment) fout: %s", market, sentiment_prov, exc)
+        elif sentiment_prov:
+            logger.debug("[%s] Gemini overgeslagen — tactische score te laag (%+.2f)", market, tactical_score)
+
+        # ── Stap 3: Gewogen gecombineerde score ──────────────────────────────
+        if sentiment_result is not None:
+            combined_score = tactical_score * 0.7 + sentiment_score * 0.3
+            logger.info("[%s] Score: tactisch=%+.2f × 70%% + sentiment=%+.2f × 30%% = %+.2f",
+                        market, tactical_score, sentiment_score, combined_score)
         else:
-            # Meerderheidsstem sentiment
-            sent_vote: dict[str, int] = {}
-            for d in sent_results:
-                sent_vote[d["sentiment"]] = sent_vote.get(d["sentiment"], 0) + 1
-            sentiment   = max(sent_vote, key=sent_vote.__getitem__)
-            sent_maj    = [d for d in sent_results if d["sentiment"] == sentiment]
-            sent_conf   = sum(d["confidence"] for d in sent_maj) / len(sent_maj)
-            sent_reason = " | ".join(f"[{d['provider']}] {d['reasoning']}" for d in sent_maj)
+            combined_score = tactical_score
+            logger.info("[%s] Score: tactisch=%+.2f (geen sentiment)", market, combined_score)
 
-            logger.info("[%s] AI technisch: %s (%.0f%%) | sentiment: %s (%.0f%%)",
-                        market, tech_decision, tech_conf * 100, sentiment, sent_conf * 100)
+        if abs(combined_score) < score_threshold:
+            parts = [f"[{tactical_prov}] {tactical_result['reasoning']}"]
+            if sentiment_result:
+                parts.append(f"[{sentiment_prov}] {sentiment_result['reasoning']}")
+            return "HOLD", abs(combined_score), (
+                f"Score {combined_score:+.2f} onder drempel {score_threshold:.1f} — "
+                + " | ".join(parts)
+            )
 
-            if tech_decision == "BUY" and sentiment == "NEGATIVE":
-                # Sentiment blokkeert een koop-signaal
-                decision   = "HOLD"
-                confidence = (tech_conf + sent_conf) / 2
-                reasoning  = (f"BUY geblokkeerd door negatief sentiment — "
-                              f"tech: {tech_reason} | sentiment: {sent_reason}")
-                logger.info("[%s] BUY geblokkeerd door negatief sentiment [%s]",
-                            market, ", ".join(d["provider"] for d in sent_maj))
-            else:
-                decision   = tech_decision
-                confidence = (tech_conf + sent_conf) / 2
-                reasoning  = f"tech: {tech_reason} | sentiment ({sentiment}): {sent_reason}"
+        potential_action = "BUY" if combined_score > 0 else "SELL"
 
-        if confidence < min_confidence:
-            logger.info("[%s] AI advies %s afgewezen: confidence %.0f%% < minimum %.0f%%",
-                        market, decision, confidence * 100, min_confidence * 100)
-            return "HOLD", confidence, f"Confidence {confidence:.0%} onder minimum {min_confidence:.0%}: {reasoning}"
+        # ── Stap 4: Risicomanager (Claude, alleen bij concrete trade) ─────────
+        risk_prov = next((p for p, r in roles.items() if r == "risk"), None)
+        final_confidence = min(abs(combined_score), 1.0)
+        base_reasoning_parts = [f"[{tactical_prov}] {tactical_result['reasoning']}"]
+        if sentiment_result:
+            base_reasoning_parts.append(f"[{sentiment_prov}] {sentiment_result['reasoning']}")
 
-        logger.info("[%s] AI besluit: %s (%.0f%%) — %s", market, decision, confidence * 100, reasoning)
-        return decision, confidence, reasoning
+        if risk_prov:
+            risk_prompt = (
+                f"Proposed action: {potential_action}\n"
+                f"Combined score: {combined_score:+.2f} (threshold: {score_threshold:.1f})\n"
+                f"Technical [{tactical_prov}]: {tactical_result['reasoning']}\n"
+            )
+            if sentiment_result:
+                risk_prompt += f"Sentiment [{sentiment_prov}]: {sentiment_result['reasoning']}\n"
+            risk_prompt += f"\nFull market context:\n{context}"
+
+            try:
+                text = complete_for(risk_prov, pdict[risk_prov],
+                                    _RISK_PROMPT, risk_prompt, max_tokens=512)
+                logger.debug("[%s] %s raw: %.200s", market, risk_prov, text)
+                risk = _parse_risk(text)
+                if risk:
+                    logger.info("[%s] %s (risico): %s %.0f%% — %s",
+                                market, risk_prov,
+                                "GOEDGEKEURD" if risk["approved"] else "AFGEWEZEN",
+                                risk["confidence"] * 100, risk["reasoning"])
+                    if not risk["approved"]:
+                        return "HOLD", risk["confidence"], (
+                            f"[{risk_prov}] risicobeheer: {risk['reasoning']} | "
+                            + " | ".join(base_reasoning_parts)
+                        )
+                    final_confidence = (abs(combined_score) + risk["confidence"]) / 2
+                    base_reasoning_parts.append(f"[{risk_prov}] {risk['reasoning']}")
+                else:
+                    logger.warning("[%s] %s: kon risico-check niet parsen", market, risk_prov)
+            except Exception as exc:
+                logger.warning("[%s] %s (risico) fout: %s — trade gaat door op score", market, risk_prov, exc)
+
+        # Finale confidence check
+        if final_confidence < min_confidence:
+            logger.info("[%s] Afgewezen: confidence %.0f%% < minimum %.0f%%",
+                        market, final_confidence * 100, min_confidence * 100)
+            return "HOLD", final_confidence, (
+                f"Confidence {final_confidence:.0%} onder minimum {min_confidence:.0%}: "
+                + " | ".join(base_reasoning_parts)
+            )
+
+        reasoning = " | ".join(base_reasoning_parts)
+        logger.info("[%s] Besluit: %s (%.0f%%) — %s", market, potential_action, final_confidence * 100, reasoning)
+        return potential_action, final_confidence, reasoning
 
     except EnvironmentError as exc:
         logger.error("AI configuratiefout: %s", exc)

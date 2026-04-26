@@ -291,9 +291,10 @@
           <div class="card-body">
 
             <div class="form-text mb-3">
-              Schakel meerdere providers in voor <strong>gespecialiseerde voting</strong>:
-              <span class="badge bg-primary" style="font-size:.7rem;">Technisch</span> providers analyseren indicatoren en geven BUY/SELL/HOLD.
-              <span class="badge bg-warning text-dark" style="font-size:.7rem;">Sentiment</span> analyseert marktsfeer — bij <em>negatief sentiment</em> wordt een BUY automatisch geblokkeerd. SELL gaat altijd door.
+              <strong>Orchestrator-modus</strong> — providers werken in volgorde:
+              <span class="badge bg-primary" style="font-size:.7rem;">Tactisch</span> <strong>Groq</strong> scoort razendsnel de indicatoren.
+              <span class="badge bg-warning text-dark" style="font-size:.7rem;">Sentiment</span> <strong>Gemini</strong> controleert de marktsfeer (alleen bij een potentieel signaal).
+              <span class="badge bg-danger" style="font-size:.7rem;">Risico</span> <strong>Claude</strong> keurt de trade goed of af (alleen bij concrete actie — bespaart API-kosten).
             </div>
 
             <!-- ── Anthropic ── -->
@@ -302,7 +303,7 @@
                 <div class="d-flex align-items-center justify-content-between">
                   <div>
                     <span class="fw-semibold">Anthropic (Claude)</span>
-                    <span class="badge bg-primary ms-2" style="font-size:.7rem;">Technisch</span>
+                    <span class="badge bg-danger ms-2" style="font-size:.7rem;">Risico</span>
                     <span class="text-muted ms-1" style="font-size:.8rem;">betaald per token</span>
                   </div>
                   <div class="form-check form-switch mb-0">
@@ -384,7 +385,7 @@
                 <div class="d-flex align-items-center justify-content-between">
                   <div>
                     <span class="fw-semibold">Groq (Llama / Mixtral)</span>
-                    <span class="badge bg-primary ms-2" style="font-size:.7rem;">Technisch</span>
+                    <span class="badge bg-primary ms-2" style="font-size:.7rem;">Tactisch</span>
                     <span class="text-muted ms-1" style="font-size:.8rem;">volledig gratis</span>
                   </div>
                   <div class="form-check form-switch mb-0">
@@ -481,12 +482,20 @@
 
         <!-- MQTT -->
         <div class="card mb-4">
-          <div class="card-header">MQTT (Home Assistant)</div>
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span>MQTT (Home Assistant)</span>
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" name="MQTT_ENABLED" id="mqtt_enabled_chk"
+                     {{ 'checked' if config.MQTT_ENABLED != 'false' }}>
+              <label class="form-check-label" for="mqtt_enabled_chk" style="font-size:.8rem;color:#64748b;">Ingeschakeld</label>
+            </div>
+          </div>
           <div class="card-body">
+            <div class="form-text mb-3">Uitschakelen voorkomt timeouts als er geen MQTT-broker beschikbaar is. Verbindingstime-out: <strong>{{ config.MQTT_CONNECT_TIMEOUT }}s</strong> (instelbaar via <code>MQTT_CONNECT_TIMEOUT</code>).</div>
             <div class="mb-3">
               <label class="form-label">Host</label>
               <input type="text" class="form-control" name="MQTT_HOST"
-                     value="{{ config.MQTT_HOST }}" placeholder="Leeg = MQTT uitgeschakeld">
+                     value="{{ config.MQTT_HOST }}" placeholder="bijv. 192.168.1.x of core-mosquitto">
             </div>
             <div class="row g-2 mb-3">
               <div class="col-5">
