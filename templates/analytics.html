@@ -110,6 +110,14 @@
       <div class="stat-label">Winst / Verlies</div>
       <div class="stat-value" id="v-wl">—</div>
     </div></div>
+    <div class="col-6 col-md-3"><div class="card p-3 text-center">
+      <div class="stat-label">Sharpe Ratio</div>
+      <div class="stat-value" id="v-sharpe">—</div>
+    </div></div>
+    <div class="col-6 col-md-3"><div class="card p-3 text-center">
+      <div class="stat-label">Max Drawdown</div>
+      <div class="stat-value neg" id="v-maxdd">—</div>
+    </div></div>
   </div>
 
   <!-- Cumulatieve PnL curve -->
@@ -262,6 +270,9 @@
     setVal('v-best', fmt(d.best_trade, true) + ' EUR', 'pos');
     setVal('v-worst', fmt(d.worst_trade, true) + ' EUR', 'neg');
     setVal('v-wl', d.num_wins + 'W / ' + d.num_losses + 'L', '');
+    document.getElementById('v-sharpe').textContent = d.sharpe_ratio != null ? d.sharpe_ratio.toFixed(2) : '—';
+    document.getElementById('v-sharpe').className = 'stat-value ' + (d.sharpe_ratio > 1 ? 'pos' : d.sharpe_ratio < 0 ? 'neg' : '');
+    document.getElementById('v-maxdd').textContent = d.max_drawdown_pct != null ? '-' + d.max_drawdown_pct.toFixed(1) + '%' : '—';
   }
 
   function setVal(id, text, cls) {

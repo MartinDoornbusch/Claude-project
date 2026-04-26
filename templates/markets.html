@@ -144,6 +144,7 @@
               <th class="text-end hide-sm">24u %</th>
               <th class="text-end hide-sm">Volume EUR</th>
               <th class="text-center">AI Advies</th>
+              <th class="text-center hide-sm" style="width:40px;"></th>
               <th class="text-center">Actief</th>
             </tr>
           </thead>
@@ -209,6 +210,11 @@
                   <span class="ai-badge badge-ai-none">? Onbekend</span>
                 {% endif %}
               </td>
+              <td class="text-center hide-sm">
+                <button class="btn btn-xs btn-outline-secondary py-0 px-1"
+                        style="font-size:.7rem;"
+                        onclick="showOrderBook('{{ m.market }}')">📊</button>
+              </td>
               <td class="text-center">
                 <div class="form-check form-switch d-flex justify-content-center m-0">
                   <input class="form-check-input" type="checkbox" role="switch"
@@ -231,9 +237,26 @@
     </div>
   </div>
 
+<!-- Order Book Modal -->
+<div class="modal fade" id="obModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="background:#fff; border:1px solid #e2e8f0;">
+      <div class="modal-header py-2 px-3" style="border-color:#e2e8f0;">
+        <span class="fw-semibold" id="ob-title">Order Book</span>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div id="ob-loading" style="text-align:center; color:#94a3b8; padding:1rem;">Laden...</div>
+        <div id="ob-error"   style="display:none; color:#dc2626; font-size:.85rem;"></div>
+        <canvas id="ob-chart" height="220" style="display:none;"></canvas>
+        <div id="ob-spread" style="text-align:center; font-size:.78rem; color:#64748b; margin-top:.5rem;"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
   let currentFilter = 'all';
 
@@ -408,6 +431,10 @@
         <td class="text-end hide-sm">${changeHtml}</td>
         <td class="text-end hide-sm">${m.volume_eur ? '€' + Math.round(m.volume_eur).toLocaleString('nl-NL') : '<span class="text-muted">—</span>'}</td>
         <td class="text-center" style="min-width:110px;">${aiBadge}</td>
+        <td class="text-center hide-sm">
+          <button class="btn btn-xs btn-outline-secondary py-0 px-1" style="font-size:.7rem;"
+                  onclick="showOrderBook('${m.market}')">📊</button>
+        </td>
         <td class="text-center">
           <div class="form-check form-switch d-flex justify-content-center m-0">
             <input class="form-check-input" type="checkbox" role="switch"
@@ -464,6 +491,89 @@
     document.getElementById('count-total').textContent   = rows.length;
     document.getElementById('count-enabled').textContent = enabled;
     document.getElementById('count-ai').textContent      = ai;
+  }
+
+  // ── Order Book depth chart ──
+  let _obChart = null;
+
+  async function showOrderBook(market) {
+    document.getElementById('ob-title').textContent = market + ' — Order Book';
+    document.getElementById('ob-loading').style.display = 'block';
+    document.getElementById('ob-error').style.display   = 'none';
+    document.getElementById('ob-chart').style.display   = 'none';
+    document.getElementById('ob-spread').textContent    = '';
+    const modal = new bootstrap.Modal(document.getElementById('obModal'));
+    modal.show();
+
+    try {
+      const r = await fetch(BASE_URL + '/api/orderbook/' + market);
+      const d = await r.json();
+      if (d.error) {
+        document.getElementById('ob-loading').style.display = 'none';
+        document.getElementById('ob-error').style.display   = 'block';
+        document.getElementById('ob-error').textContent     = 'Fout: ' + d.error;
+        return;
+      }
+
+      // Aggregeer bids en asks in prijsniveaus
+      const bids = d.bids.slice(0, 12).reverse(); // laagste bid bovenaan
+      const asks = d.asks.slice(0, 12);
+
+      const labels    = [];
+      const bidQtys   = [];
+      const askQtys   = [];
+      const bgColors  = [];
+
+      asks.forEach(([p, q]) => {
+        labels.push('€' + parseFloat(p).toLocaleString('nl-NL', {maximumFractionDigits:6}));
+        bidQtys.push(0);
+        askQtys.push(parseFloat(q));
+        bgColors.push('rgba(220,38,38,.7)');
+      });
+      bids.forEach(([p, q]) => {
+        labels.push('€' + parseFloat(p).toLocaleString('nl-NL', {maximumFractionDigits:6}));
+        bidQtys.push(parseFloat(q));
+        askQtys.push(0);
+        bgColors.push('rgba(22,163,74,.7)');
+      });
+
+      const bestBid = d.bids[0]  ? d.bids[0][0]  : null;
+      const bestAsk = d.asks[0]  ? d.asks[0][0]  : null;
+      if (bestBid && bestAsk) {
+        const spread = ((bestAsk - bestBid) / bestBid * 100).toFixed(4);
+        document.getElementById('ob-spread').textContent =
+          `Spread: €${parseFloat(bestBid).toFixed(6)} — €${parseFloat(bestAsk).toFixed(6)} (${spread}%)`;
+      }
+
+      document.getElementById('ob-loading').style.display = 'none';
+      const canvas = document.getElementById('ob-chart');
+      canvas.style.display = 'block';
+
+      if (_obChart) _obChart.destroy();
+      _obChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Asks (verkoop)', data: askQtys, backgroundColor: 'rgba(220,38,38,.7)' },
+            { label: 'Bids (koop)',    data: bidQtys, backgroundColor: 'rgba(22,163,74,.7)' },
+          ],
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          plugins: { legend: { position: 'top', labels: { font: { size: 10 } } } },
+          scales: {
+            x: { stacked: true, ticks: { font: { size: 9 } } },
+            y: { stacked: true, ticks: { font: { size: 9 } } },
+          },
+        },
+      });
+    } catch(e) {
+      document.getElementById('ob-loading').style.display = 'none';
+      document.getElementById('ob-error').style.display   = 'block';
+      document.getElementById('ob-error').textContent     = 'Fout: ' + e.message;
+    }
   }
 </script>
 </body>
