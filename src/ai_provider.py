@@ -15,9 +15,9 @@ PROVIDER_MODELS: dict[str, list[dict]] = {
         {"value": "claude-haiku-4-5",  "label": "Claude Haiku 4.5 — snel & goedkoop (betaald)"},
     ],
     "google": [
-        {"value": "gemini-2.5-flash-preview-05-20", "label": "Gemini 2.5 Flash — nieuwste (gratis preview)"},
-        {"value": "gemini-1.5-flash",               "label": "Gemini 1.5 Flash — stabiel (gratis tier)"},
-        {"value": "gemini-1.5-pro",                 "label": "Gemini 1.5 Pro — meest capabel (beperkt gratis)"},
+        {"value": "gemini-2.0-flash",  "label": "Gemini 2.0 Flash — snel & actueel (aanbevolen)"},
+        {"value": "gemini-1.5-flash",  "label": "Gemini 1.5 Flash — stabiel (gratis tier)"},
+        {"value": "gemini-1.5-pro",    "label": "Gemini 1.5 Pro — meest capabel (beperkt gratis)"},
     ],
     "groq": [
         {"value": "llama-3.3-70b-versatile", "label": "Llama 3.3 70B — beste kwaliteit (gratis)"},
@@ -28,7 +28,7 @@ PROVIDER_MODELS: dict[str, list[dict]] = {
 
 _DEFAULT_MODEL: dict[str, str] = {
     "anthropic": "claude-opus-4-7",
-    "google":    "gemini-1.5-flash",
+    "google":    "gemini-2.0-flash",
     "groq":      "llama-3.3-70b-versatile",
 }
 
@@ -70,6 +70,31 @@ def complete_for(provider: str, model: str, system: str, user: str, max_tokens: 
     if provider == "groq":
         return _groq(system, user, model, max_tokens)
     raise ValueError(f"Onbekende AI provider: {provider!r}")
+
+
+def list_google_models() -> list[dict]:
+    """Geeft beschikbare Gemini-modellen terug via de live Google API."""
+    from google import genai  # type: ignore
+    key = os.getenv("GOOGLE_API_KEY", "")
+    if not key:
+        return []
+    try:
+        client = genai.Client(api_key=key)
+        result = []
+        for m in client.models.list():
+            actions = getattr(m, "supported_actions", None) or []
+            if "generateContent" not in actions:
+                continue
+            name = getattr(m, "name", "") or ""
+            model_id = name.replace("models/", "")
+            display  = getattr(m, "display_name", None) or model_id
+            result.append({"value": model_id, "label": display})
+        # Sortering: nieuwste modellen (hogere versienummers) eerst
+        result.sort(key=lambda x: x["value"], reverse=True)
+        return result
+    except Exception as exc:
+        logger.warning("Kon Google modellen niet ophalen: %s", exc)
+        return []
 
 
 def complete(system: str, user: str, max_tokens: int = 2048) -> str:

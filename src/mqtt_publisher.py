@@ -145,7 +145,9 @@ def publish_all(portfolio: dict, market_signals: dict[str, dict]) -> None:
 
     except OSError as exc:
         socket.setdefaulttimeout(old_timeout)
-        logger.warning("MQTT niet beschikbaar: %s", exc)
+        logger.warning(
+            "MQTT niet beschikbaar: %s — zet MQTT_ENABLED=false in Instellingen als je geen broker gebruikt", exc
+        )
         try:
             client.loop_stop()
             client.disconnect()

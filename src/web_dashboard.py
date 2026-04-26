@@ -309,6 +309,15 @@ def api_test_connection():
     return jsonify(result)
 
 
+@app.route("/api/ai/google/models")
+def api_google_models():
+    try:
+        from src.ai_provider import list_google_models
+        return jsonify({"models": list_google_models()})
+    except Exception as e:
+        return jsonify({"error": str(e), "models": []}), 500
+
+
 @app.route("/api/markets/available")
 def api_markets_available():
     try:

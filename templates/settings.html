@@ -357,15 +357,22 @@
                   <div class="row g-2 mt-1">
                     <div class="col-md-5">
                       {% set gm = config.AI_MODEL_GOOGLE %}
-                      <select class="form-select form-select-sm" name="AI_MODEL_GOOGLE">
-                        <option value="gemini-2.5-flash-preview-05-20" {{ 'selected' if gm == 'gemini-2.5-flash-preview-05-20' }}>Gemini 2.5 Flash — nieuwste (preview)</option>
-                        <option value="gemini-1.5-flash"               {{ 'selected' if gm == 'gemini-1.5-flash' or not gm }}>Gemini 1.5 Flash — stabiel (aanbevolen)</option>
-                        <option value="gemini-1.5-pro"                 {{ 'selected' if gm == 'gemini-1.5-pro' }}>Gemini 1.5 Pro — meest capabel</option>
-                      </select>
+                      <div class="input-group input-group-sm">
+                        <select class="form-select form-select-sm" name="AI_MODEL_GOOGLE" id="google-model-select">
+                          <option value="gemini-2.0-flash" {{ 'selected' if gm == 'gemini-2.0-flash' or not gm }}>Gemini 2.0 Flash (aanbevolen)</option>
+                          <option value="gemini-1.5-flash" {{ 'selected' if gm == 'gemini-1.5-flash' }}>Gemini 1.5 Flash — stabiel</option>
+                          <option value="gemini-1.5-pro"   {{ 'selected' if gm == 'gemini-1.5-pro' }}>Gemini 1.5 Pro — capabel</option>
+                          {% if gm and gm not in ('gemini-2.0-flash','gemini-1.5-flash','gemini-1.5-pro') %}
+                          <option value="{{ gm }}" selected>{{ gm }}</option>
+                          {% endif %}
+                        </select>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="detectGoogleModels()" title="Haal live modellen op via je API key">↻</button>
+                      </div>
+                      <div class="form-text" id="google-model-status"></div>
                     </div>
                     <div class="col-md-7">
                       <div class="input-group input-group-sm">
-                        <input type="password" class="form-control font-monospace" name="GOOGLE_API_KEY"
+                        <input type="password" class="form-control font-monospace" name="GOOGLE_API_KEY" id="google-api-key-input"
                                placeholder="{{ '●●●●●●●● (ingesteld)' if config.GOOGLE_API_KEY else 'AIza...' }}">
                         <span class="input-group-text toggle-pw">Toon</span>
                       </div>
@@ -693,6 +700,34 @@
   function syncMarketsInput() {
     const checked = [...document.querySelectorAll('.market-cb:checked')].map(cb => cb.value);
     document.getElementById('trading_markets_input').value = checked.join(',');
+  }
+
+  async function detectGoogleModels() {
+    const status = document.getElementById('google-model-status');
+    const sel    = document.getElementById('google-model-select');
+    status.textContent = 'Modellen ophalen…';
+    status.style.color = '#64748b';
+    try {
+      const r = await fetch(BASE_URL + '/api/ai/google/models');
+      const d = await r.json();
+      if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#dc2626'; return; }
+      if (!d.models || !d.models.length) { status.textContent = 'Geen modellen gevonden (API key ingesteld?)'; status.style.color = '#f59e0b'; return; }
+      const current = sel.value;
+      sel.innerHTML = '';
+      d.models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.value;
+        opt.textContent = m.label || m.value;
+        if (m.value === current) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      if (!sel.value && d.models.length) sel.value = d.models[0].value;
+      status.textContent = `✓ ${d.models.length} modellen geladen`;
+      status.style.color = '#16a34a';
+    } catch(e) {
+      status.textContent = 'Netwerk fout: ' + e.message;
+      status.style.color = '#dc2626';
+    }
   }
 </script>
 </body>
