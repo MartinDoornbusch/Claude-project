@@ -387,6 +387,19 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         remaining = int(cooldown_minutes - minutes_ago)
         return "HOLD", 0.0, f"Cooldown: wacht nog {remaining} minuten"
 
+    # ── Lokale ATR pre-filter — VÓÓR elke API-call ────────────────────────────
+    price         = float(signals.get("close") or 0)
+    atr           = signals.get("atr_14")
+    atr_threshold = env_float("ATR_FLAT_THRESHOLD", 0.5)
+    if atr is not None and price > 0:
+        atr_pct = float(atr) / price * 100
+        if atr_pct < atr_threshold:
+            logger.info(
+                "[%s] Platte markt (ATR %.2f%% < %.2f%%) — HOLD (lokaal, geen API)",
+                market, atr_pct, atr_threshold,
+            )
+            return "HOLD", 0.0, f"Platte markt (Lokaal gefilterd, ATR {atr_pct:.2f}%)"
+
     recent_signals = get_latest_signals(market, limit=5)
 
     from src.sentiment import get_fear_greed, fmt_fear_greed
@@ -429,19 +442,6 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
 
         if tactical_result is None:
             return "HOLD", 0.0, "Geen tactisch analyse resultaat beschikbaar"
-
-        # ATR-snelpadcheck — platte markt: Gemini en Claude niet nodig, direct HOLD
-        price = float(signals.get("close") or 0)
-        atr = signals.get("atr_14")
-        atr_flat = False
-        if atr is not None and price > 0:
-            atr_pct = atr / price * 100
-            atr_flat = atr_pct < 0.5
-            if atr_flat:
-                logger.info("[%s] Platte markt (ATR %.2f%% < 0.5%%) — HOLD zonder Gemini/Claude", market, atr_pct)
-                return "HOLD", abs(tactical_score), (
-                    f"Platte markt (ATR {atr_pct:.2f}% < 0.5%%) — {tactical_result['reasoning']}"
-                )
 
         # Snelle HOLD: score te laag en geen sentimentprovider
         sentiment_prov = next((p for p, r in roles.items() if r == "sentiment"), None)

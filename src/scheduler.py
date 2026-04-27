@@ -57,9 +57,17 @@ def run_cycle() -> None:
     check_minutes   = env_int("CHECK_INTERVAL_MINUTES", 60)
     vol_sizing      = os.getenv("VOL_SIZING_ENABLED", "false").lower() == "true"
     corr_check      = os.getenv("CORR_CHECK_ENABLED", "false").lower() == "true"
-    sizing_mode     = os.getenv("POSITION_SIZING_MODE", "fraction")
     iceberg_enabled = os.getenv("ICEBERG_ENABLED", "false").lower() == "true"
     iceberg_chunks  = env_int("ICEBERG_CHUNKS", 5) if iceberg_enabled else 1
+
+    # Auto-activeer risk-based sizing als STOP_LOSS_PCT + RISK_PER_TRADE_PCT beide zijn ingesteld
+    from src.env_utils import env_float_opt
+    _sl_set      = env_float_opt("STOP_LOSS_PCT") is not None
+    _risk_set    = env_float("RISK_PER_TRADE_PCT", 0) > 0
+    sizing_mode  = (
+        "risk_pct" if (_sl_set and _risk_set)
+        else os.getenv("POSITION_SIZING_MODE", "fraction")
+    )
 
     # Portfolio totaal voor positiegroottes (gebruik laatste snapshot als startpunt)
     portfolio_total = get_latest_portfolio_total() or env_float("PAPER_STARTING_CAPITAL", 1000)
@@ -138,7 +146,8 @@ def run_cycle() -> None:
                         # Positiegroottes op basis van gekozen methode
                         base_frac = env_float("PAPER_TRADE_FRACTION", 0.15)
                         if sizing_mode == "risk_pct":
-                            fraction = get_risk_fraction(df, portfolio_total, get_cash())
+                            fraction = get_risk_fraction(df, portfolio_total, get_cash(),
+                                                         entry_price=current_price)
                         elif vol_sizing:
                             fraction = get_atr_fraction(df, base_frac)
                         else:
