@@ -22,6 +22,7 @@ from src.strategy import evaluate
 from src.ai_strategy import ai_enabled, ai_evaluate
 from src.mqtt_publisher import publish_all
 from src.trade_manager import execute_buy, execute_sell, check_sl_tp, check_house_money, mode
+from src.env_utils import env_float, env_int
 
 logger = logging.getLogger(__name__)
 
@@ -53,15 +54,15 @@ def run_cycle() -> None:
 
     # Lees alle config dynamisch
     interval        = os.getenv("CANDLE_INTERVAL", "1h")
-    check_minutes   = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
+    check_minutes   = env_int("CHECK_INTERVAL_MINUTES", 60)
     vol_sizing      = os.getenv("VOL_SIZING_ENABLED", "false").lower() == "true"
     corr_check      = os.getenv("CORR_CHECK_ENABLED", "false").lower() == "true"
     sizing_mode     = os.getenv("POSITION_SIZING_MODE", "fraction")
     iceberg_enabled = os.getenv("ICEBERG_ENABLED", "false").lower() == "true"
-    iceberg_chunks  = int(os.getenv("ICEBERG_CHUNKS", "5")) if iceberg_enabled else 1
+    iceberg_chunks  = env_int("ICEBERG_CHUNKS", 5) if iceberg_enabled else 1
 
     # Portfolio totaal voor positiegroottes (gebruik laatste snapshot als startpunt)
-    portfolio_total = get_latest_portfolio_total() or float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
+    portfolio_total = get_latest_portfolio_total() or env_float("PAPER_STARTING_CAPITAL", 1000)
 
     # Herplan scheduler als interval gewijzigd is
     if _scheduler is not None:
@@ -135,7 +136,7 @@ def run_cycle() -> None:
 
                     if signal == "BUY":
                         # Positiegroottes op basis van gekozen methode
-                        base_frac = float(os.getenv("PAPER_TRADE_FRACTION", "0.15"))
+                        base_frac = env_float("PAPER_TRADE_FRACTION", 0.15)
                         if sizing_mode == "risk_pct":
                             fraction = get_risk_fraction(df, portfolio_total, get_cash())
                         elif vol_sizing:
@@ -191,15 +192,15 @@ def start() -> None:
         logger.warning("=" * 60)
         logger.warning("  LIVE TRADING ACTIEF — ECHTE ORDERS WORDEN GEPLAATST")
         logger.warning("  MAX_TRADE_EUR=%.2f  MAX_EXPOSURE_EUR=%.2f",
-                       float(os.getenv("MAX_TRADE_EUR", "25")),
-                       float(os.getenv("MAX_EXPOSURE_EUR", "100")))
+                       env_float("MAX_TRADE_EUR", 25),
+                       env_float("MAX_EXPOSURE_EUR", 100))
         logger.warning("=" * 60)
 
     init_db()
     run_cycle()
 
     global _scheduler
-    check_minutes = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
+    check_minutes = env_int("CHECK_INTERVAL_MINUTES", 60)
     _scheduler = BlockingScheduler(timezone="Europe/Amsterdam")
     _scheduler.add_job(
         run_cycle,
