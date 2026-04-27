@@ -431,6 +431,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
             return "HOLD", 0.0, "Geen tactisch analyse resultaat beschikbaar"
 
         # ATR-snelpadcheck — platte markt: Gemini en Claude niet nodig, direct HOLD
+        price = float(signals.get("close") or 0)
         atr = signals.get("atr_14")
         atr_flat = False
         if atr is not None and price > 0:
