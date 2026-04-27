@@ -94,23 +94,29 @@ def get_risk_fraction(
     available_cash: float,
     risk_pct: float | None = None,
     sl_pct: float | None = None,
+    entry_price: float | None = None,
 ) -> float:
     """
-    Berekent de positiefractie van beschikbaar cash op basis van risico per trade.
+    PositionSize = (Equity × RiskPercent) / (EntryPrice - StopLossPrice)
 
-    Formule: positie_eur = portfolio_total × risk_pct / stop_loss_pct
-    De fractie wordt teruggerekend naar het deel van beschikbaar cash.
+    Retourneert een fractie van available_cash zodat de verliesbeperking
+    precies risk_pct × portfolio_total EUR bedraagt.
     """
     if risk_pct is None:
         risk_pct = env_float("RISK_PER_TRADE_PCT", 1.0)
     if sl_pct is None:
         sl_pct = abs(env_float_opt("STOP_LOSS_PCT") or 5.0)
+    if entry_price is None:
+        entry_price = float(df.iloc[-1]["close"])
 
-    if sl_pct <= 0 or portfolio_total <= 0 or available_cash <= 0:
+    if sl_pct <= 0 or portfolio_total <= 0 or available_cash <= 0 or entry_price <= 0:
         return env_float("PAPER_TRADE_FRACTION", 0.15)
 
-    position_eur = portfolio_total * (risk_pct / 100) / (sl_pct / 100)
-    fraction = position_eur / available_cash
+    sl_price     = entry_price * (1 - sl_pct / 100)
+    risk_eur     = portfolio_total * (risk_pct / 100)
+    units        = risk_eur / (entry_price - sl_price)      # crypto units risked
+    position_eur = units * entry_price
+    fraction     = position_eur / available_cash
     return round(min(max(fraction, 0.05), 0.95), 3)
 
 
