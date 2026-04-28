@@ -203,6 +203,18 @@ def index():
     except Exception:
         pass
 
+    # ── Groq Token Gauge ──────────────────────────────────────────────────────
+    groq_tokens_data: dict = {"used": 0, "limit": 500_000, "pct_used": 0.0}
+    if "groq" in active_providers:
+        try:
+            from src.database import get_groq_daily_tokens
+            used      = get_groq_daily_tokens()
+            limit     = 500_000
+            pct_used  = min(100.0, used / limit * 100) if limit > 0 else 0.0
+            groq_tokens_data = {"used": used, "limit": limit, "pct_used": round(pct_used, 1)}
+        except Exception:
+            pass
+
     return render_template(
         "index.html",
         live_mode=live_mode,
@@ -216,6 +228,7 @@ def index():
         daily_loss=daily_loss_data,
         ai_votes_by_market=ai_votes_by_market,
         positions_data=positions_data,
+        groq_tokens=groq_tokens_data,
     )
 
 
@@ -598,15 +611,21 @@ def api_analytics():
                     buy = open_buys[m].pop(0)
                     pnl_eur = t["eur_total"] - buy["eur_total"]
                     pnl_pct = (t["price"] - buy["price"]) / buy["price"] * 100
+                    planned = buy.get("planned_price")
+                    if planned and planned > 0 and buy["price"] > 0:
+                        slippage_pct = round((planned - buy["price"]) / planned * 100, 3)
+                    else:
+                        slippage_pct = None
                     result.append({
-                        "market":     m,
-                        "buy_ts":     buy["ts"],
-                        "sell_ts":    t["ts"],
-                        "buy_price":  buy["price"],
-                        "sell_price": t["price"],
-                        "amount":     buy["amount"],
-                        "pnl_eur":    round(pnl_eur, 4),
-                        "pnl_pct":    round(pnl_pct, 3),
+                        "market":       m,
+                        "buy_ts":       buy["ts"],
+                        "sell_ts":      t["ts"],
+                        "buy_price":    buy["price"],
+                        "sell_price":   t["price"],
+                        "amount":       buy["amount"],
+                        "pnl_eur":      round(pnl_eur, 4),
+                        "pnl_pct":      round(pnl_pct, 3),
+                        "slippage_pct": slippage_pct,
                     })
             return result
 

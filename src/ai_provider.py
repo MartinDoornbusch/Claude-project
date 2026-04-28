@@ -186,4 +186,10 @@ def _groq(system: str, user: str, model: str, max_tokens: int) -> str:
         ],
         max_tokens=max_tokens,
     )
+    try:
+        if resp.usage and resp.usage.total_tokens:
+            from src.database import save_groq_tokens
+            save_groq_tokens(resp.usage.total_tokens)
+    except Exception:
+        pass
     return resp.choices[0].message.content

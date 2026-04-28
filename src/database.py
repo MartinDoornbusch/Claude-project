@@ -153,14 +153,24 @@ def init_db() -> None:
                 sl_price     REAL,
                 status       TEXT NOT NULL DEFAULT 'open'
             );
+
+            CREATE TABLE IF NOT EXISTS groq_token_log (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts          TEXT NOT NULL,
+                date        TEXT NOT NULL,
+                tokens_used INTEGER NOT NULL DEFAULT 0
+            );
         """)
-    # Migration: add columns to position_meta if they're missing (existing DB from prior version)
+    # Migration: add columns to existing tables if missing
     with get_conn() as conn:
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(position_meta)").fetchall()}
         if "house_money_activated" not in cols:
             conn.execute(
                 "ALTER TABLE position_meta ADD COLUMN house_money_activated INTEGER NOT NULL DEFAULT 0"
             )
+        trade_cols = {r["name"] for r in conn.execute("PRAGMA table_info(paper_trades)").fetchall()}
+        if "planned_price" not in trade_cols:
+            conn.execute("ALTER TABLE paper_trades ADD COLUMN planned_price REAL")
 
 
 # --- Signals ---
@@ -227,14 +237,17 @@ def set_position(market: str, amount: float, avg_price: float) -> None:
         """, (market, amount, avg_price))
 
 
-def save_paper_trade(market: str, side: str, price: float, amount: float, reason: str = "") -> None:
+def save_paper_trade(
+    market: str, side: str, price: float, amount: float,
+    reason: str = "", planned_price: float | None = None,
+) -> None:
     with get_conn() as conn:
         conn.execute("""
-            INSERT INTO paper_trades (ts, market, side, price, amount, eur_total, reason)
-            VALUES (?,?,?,?,?,?,?)
+            INSERT INTO paper_trades (ts, market, side, price, amount, eur_total, reason, planned_price)
+            VALUES (?,?,?,?,?,?,?,?)
         """, (
             datetime.utcnow().isoformat(),
-            market, side, price, amount, price * amount, reason,
+            market, side, price, amount, price * amount, reason, planned_price,
         ))
 
 
@@ -678,6 +691,27 @@ def cancel_all_oco_orders(market: str) -> None:
 
 
 # --- Live trade PnL helper ---
+
+def save_groq_tokens(tokens: int) -> None:
+    """Sla het aantal gebruikte Groq tokens op voor vandaag."""
+    today = datetime.utcnow().date().isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO groq_token_log (ts, date, tokens_used) VALUES (?,?,?)",
+            (datetime.utcnow().isoformat(), today, tokens),
+        )
+
+
+def get_groq_daily_tokens() -> int:
+    """Geeft het totaal aantal Groq tokens gebruikt vandaag."""
+    today = datetime.utcnow().date().isoformat()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(tokens_used), 0) AS total FROM groq_token_log WHERE date=?",
+            (today,),
+        ).fetchone()
+    return int(row["total"]) if row else 0
+
 
 def get_last_live_trade_pnl(market: str) -> float | None:
     """Gerealiseerde PnL van het meest recente LIVE BUY→SELL paar, of None."""

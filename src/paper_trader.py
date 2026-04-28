@@ -79,7 +79,7 @@ def _buy_iceberg(market: str, price: float, reason: str, used_fraction: float,
         return None
 
     iceberg_reason = f"[Iceberg {n_chunks}×] {reason}"
-    save_paper_trade(market, "BUY", price, total_amount, iceberg_reason)
+    save_paper_trade(market, "BUY", price, total_amount, iceberg_reason, planned_price=price)
     logger.info(
         "[%s] PAPER ICEBERG BUY — prijs: €%.4f | totaal: %.6f | kosten: €%.2f | %d chunks",
         market, price, total_amount, total_cost, n_chunks,
@@ -120,7 +120,7 @@ def buy(market: str, price: float, reason: str = "", fraction: float | None = No
 
     set_cash(cash - spend_eur)
     set_position(market, amount, price)
-    save_paper_trade(market, "BUY", price, amount, reason)
+    save_paper_trade(market, "BUY", price, amount, reason, planned_price=price)
 
     logger.info(
         "[%s] PAPER BUY  — prijs: €%.4f | bedrag: %.6f | kosten: €%.2f | fee: €%.4f | fractie: %.0f%%",
@@ -152,7 +152,7 @@ def sell(market: str, price: float, reason: str = "") -> dict | None:
     set_cash(cash + net_eur)
     set_position(market, 0.0, 0.0)
     add_daily_pnl(market, pnl)
-    save_paper_trade(market, "SELL", price, amount, reason)
+    save_paper_trade(market, "SELL", price, amount, reason, planned_price=price)
 
     logger.info(
         "[%s] PAPER SELL — prijs: €%.4f | bedrag: %.6f | opbrengst: €%.2f | PnL: €%.2f",
@@ -183,7 +183,7 @@ def partial_sell(market: str, amount: float, price: float, reason: str = "") -> 
         set_position(market, 0.0, 0.0)
         add_daily_pnl(market, pnl)
 
-    save_paper_trade(market, "SELL", price, amount, reason)
+    save_paper_trade(market, "SELL", price, amount, reason, planned_price=price)
     logger.info(
         "[%s] PAPER PARTIAL SELL — prijs: €%.4f | bedrag: %.6f | opbrengst: €%.2f | resterend: %.6f",
         market, price, amount, net_eur, remaining,
