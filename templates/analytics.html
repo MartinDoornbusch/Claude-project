@@ -152,10 +152,11 @@
               <th class="text-end hide-sm">Verkoop prijs</th>
               <th class="text-end">PnL EUR</th>
               <th class="text-end">PnL %</th>
+              <th class="text-end hide-sm" title="(Gepland - Uitvoering) / Gepland × 100%">Slippage</th>
             </tr>
           </thead>
           <tbody id="pairs-tbody">
-            <tr><td colspan="6" class="text-center empty-state py-4">Laden...</td></tr>
+            <tr><td colspan="7" class="text-center empty-state py-4">Laden...</td></tr>
           </tbody>
         </table>
       </div>
@@ -367,11 +368,14 @@
     document.getElementById('pairs-header').textContent = 'Afgesloten trades (' + pairs.length + ')';
     const tbody = document.getElementById('pairs-tbody');
     if (!pairs.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center empty-state py-4">Geen afgesloten trades gevonden.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center empty-state py-4">Geen afgesloten trades gevonden.</td></tr>';
       return;
     }
     tbody.innerHTML = pairs.slice().reverse().map(p => {
       const cls = p.pnl_eur >= 0 ? 'pos' : 'neg';
+      const slip = p.slippage_pct != null
+        ? `<span style="color:${Math.abs(p.slippage_pct) > 0.1 ? '#dc2626' : '#64748b'};">${p.slippage_pct > 0 ? '+' : ''}${p.slippage_pct.toFixed(3)}%</span>`
+        : '<span class="text-muted">—</span>';
       return `<tr>
         <td class="font-monospace" style="font-size:.78rem;">${p.sell_ts.slice(0,16)}</td>
         <td class="hide-sm fw-semibold">${p.market}</td>
@@ -379,6 +383,7 @@
         <td class="text-end hide-sm">€${p.sell_price.toFixed(4)}</td>
         <td class="text-end ${cls} fw-semibold">${p.pnl_eur >= 0 ? '+' : ''}€${p.pnl_eur.toFixed(2)}</td>
         <td class="text-end ${cls}">${p.pnl_pct >= 0 ? '+' : ''}${p.pnl_pct.toFixed(2)}%</td>
+        <td class="text-end hide-sm" style="font-size:.8rem;">${slip}</td>
       </tr>`;
     }).join('');
   }

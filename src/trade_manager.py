@@ -153,13 +153,18 @@ def execute_buy(
         logger.info("[%s] BUY overgeslagen — markt staat op blacklist", market)
         return None
 
-    # Huisgeld: alleen kopen als vorige trade winstgevend was
+    # Winst-exclusiviteit: blokkeer nieuwe kopen als laatste trade verlies maakte
     if os.getenv("HOUSE_MONEY_ONLY_PROFIT", "false").lower() == "true":
-        from src.database import get_last_trade_pnl
-        last_pnl = get_last_trade_pnl(market)
+        if os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true":
+            from src.database import get_last_live_trade_pnl
+            last_pnl = get_last_live_trade_pnl(market)
+        else:
+            from src.database import get_last_trade_pnl
+            last_pnl = get_last_trade_pnl(market)
         if last_pnl is not None and last_pnl <= 0:
             logger.info(
-                "[%s] BUY overgeslagen — huisgeld: vorige trade verliesgevend (€%.2f)", market, last_pnl
+                "[%s] BUY overgeslagen — winst-exclusiviteit: vorige trade verliesgevend (€%.2f)",
+                market, last_pnl,
             )
             return None
 
@@ -171,8 +176,16 @@ def execute_buy(
         result = paper.buy(market, price, reason, fraction=fraction, iceberg_chunks=iceberg_chunks)
     if result:
         notify_trade(market, "BUY", price, reason)
-        from src.database import update_position_peak
+        from src.database import update_position_peak, cancel_all_oco_orders
         update_position_peak(market, price)
+        cancel_all_oco_orders(market)   # wis eventuele stale OCO orders van vorige positie
+        # OCO: plaats TP + SL orders na een LIVE koop
+        if (os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
+                and os.getenv("OCO_ENABLED", "false").lower() == "true"):
+            filled_amount = result.get("amount", 0)
+            filled_price  = result.get("price", price)
+            if filled_amount > 0:
+                live.place_oco_orders(client, market, filled_amount, filled_price)
     return result
 
 
@@ -186,4 +199,6 @@ def execute_sell(client: Bitvavo, market: str, price: float, reason: str = "") -
         result = paper.sell(market, price, reason)
     if result:
         notify_trade(market, "SELL", price, reason)
+        from src.database import cancel_all_oco_orders
+        cancel_all_oco_orders(market)
     return result

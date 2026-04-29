@@ -141,14 +141,39 @@ def init_db() -> None:
                 win_rate    REAL,
                 num_trades  INTEGER
             );
+
+            CREATE TABLE IF NOT EXISTS oco_orders (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts           TEXT NOT NULL,
+                market       TEXT NOT NULL,
+                amount       REAL NOT NULL,
+                tp_order_id  TEXT,
+                sl_order_id  TEXT,
+                tp_price     REAL,
+                sl_price     REAL,
+                status       TEXT NOT NULL DEFAULT 'open'
+            );
+
+            CREATE TABLE IF NOT EXISTS groq_token_log (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts          TEXT NOT NULL,
+                date        TEXT NOT NULL,
+                tokens_used INTEGER NOT NULL DEFAULT 0
+            );
         """)
-    # Migration: add columns to position_meta if they're missing (existing DB from prior version)
+    # Migration: add columns to existing tables if missing
     with get_conn() as conn:
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(position_meta)").fetchall()}
         if "house_money_activated" not in cols:
             conn.execute(
                 "ALTER TABLE position_meta ADD COLUMN house_money_activated INTEGER NOT NULL DEFAULT 0"
             )
+        trade_cols = {r["name"] for r in conn.execute("PRAGMA table_info(paper_trades)").fetchall()}
+        if "planned_price" not in trade_cols:
+            conn.execute("ALTER TABLE paper_trades ADD COLUMN planned_price REAL")
+        sig_cols = {r["name"] for r in conn.execute("PRAGMA table_info(signals)").fetchall()}
+        if "atr_14" not in sig_cols:
+            conn.execute("ALTER TABLE signals ADD COLUMN atr_14 REAL")
 
 
 # --- Signals ---
@@ -157,8 +182,8 @@ def save_signal(market: str, interval: str, indicators: dict, signal: str | None
     with get_conn() as conn:
         conn.execute("""
             INSERT INTO signals (ts, market, interval, close, sma_20, sma_50,
-                                 rsi_14, macd, macd_signal, bb_lower, bb_upper, signal)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                                 rsi_14, macd, macd_signal, bb_lower, bb_upper, signal, atr_14)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             datetime.utcnow().isoformat(),
             market, interval,
@@ -171,6 +196,7 @@ def save_signal(market: str, interval: str, indicators: dict, signal: str | None
             indicators.get("bb_lower"),
             indicators.get("bb_upper"),
             signal,
+            indicators.get("atr_14"),
         ))
 
 
@@ -215,14 +241,17 @@ def set_position(market: str, amount: float, avg_price: float) -> None:
         """, (market, amount, avg_price))
 
 
-def save_paper_trade(market: str, side: str, price: float, amount: float, reason: str = "") -> None:
+def save_paper_trade(
+    market: str, side: str, price: float, amount: float,
+    reason: str = "", planned_price: float | None = None,
+) -> None:
     with get_conn() as conn:
         conn.execute("""
-            INSERT INTO paper_trades (ts, market, side, price, amount, eur_total, reason)
-            VALUES (?,?,?,?,?,?,?)
+            INSERT INTO paper_trades (ts, market, side, price, amount, eur_total, reason, planned_price)
+            VALUES (?,?,?,?,?,?,?,?)
         """, (
             datetime.utcnow().isoformat(),
-            market, side, price, amount, price * amount, reason,
+            market, side, price, amount, price * amount, reason, planned_price,
         ))
 
 
@@ -624,3 +653,85 @@ def save_market_advice(market: str, recommended: bool, confidence: float | None,
                 ai_reasoning=excluded.ai_reasoning,
                 last_advised=excluded.last_advised
         """, (market, 1 if recommended else 0, confidence, reasoning, now))
+
+
+# --- OCO orders ---
+
+def save_oco_order(
+    market: str, amount: float,
+    tp_order_id: str | None, sl_order_id: str | None,
+    tp_price: float | None, sl_price: float | None,
+) -> int:
+    with get_conn() as conn:
+        cur = conn.execute("""
+            INSERT INTO oco_orders (ts, market, amount, tp_order_id, sl_order_id, tp_price, sl_price)
+            VALUES (?,?,?,?,?,?,?)
+        """, (datetime.utcnow().isoformat(), market, amount,
+              tp_order_id, sl_order_id, tp_price, sl_price))
+        return cur.lastrowid
+
+
+def get_open_oco_orders(market: str) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM oco_orders WHERE market=? AND status='open' ORDER BY ts DESC",
+            (market,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_oco_status(oco_id: int, status: str) -> None:
+    with get_conn() as conn:
+        conn.execute("UPDATE oco_orders SET status=? WHERE id=?", (status, oco_id))
+
+
+def cancel_all_oco_orders(market: str) -> None:
+    """Markeer alle open OCO orders als geannuleerd (bijv. na handmatige verkoop)."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE oco_orders SET status='cancelled' WHERE market=? AND status='open'",
+            (market,)
+        )
+
+
+# --- Live trade PnL helper ---
+
+def save_groq_tokens(tokens: int) -> None:
+    """Sla het aantal gebruikte Groq tokens op voor vandaag."""
+    today = datetime.utcnow().date().isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO groq_token_log (ts, date, tokens_used) VALUES (?,?,?)",
+            (datetime.utcnow().isoformat(), today, tokens),
+        )
+
+
+def get_groq_daily_tokens() -> int:
+    """Geeft het totaal aantal Groq tokens gebruikt vandaag."""
+    today = datetime.utcnow().date().isoformat()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(tokens_used), 0) AS total FROM groq_token_log WHERE date=?",
+            (today,),
+        ).fetchone()
+    return int(row["total"]) if row else 0
+
+
+def get_last_live_trade_pnl(market: str) -> float | None:
+    """Gerealiseerde PnL van het meest recente LIVE BUY→SELL paar, of None."""
+    with get_conn() as conn:
+        sell = conn.execute(
+            "SELECT price, amount, ts FROM live_trades "
+            "WHERE market=? AND side='SELL' AND status='filled' ORDER BY ts DESC LIMIT 1",
+            (market,)
+        ).fetchone()
+        if not sell:
+            return None
+        buy = conn.execute(
+            "SELECT price FROM live_trades "
+            "WHERE market=? AND side='BUY' AND status='filled' AND ts<=? ORDER BY ts DESC LIMIT 1",
+            (market, sell["ts"])
+        ).fetchone()
+        if not buy:
+            return None
+    return (float(sell["price"]) - float(buy["price"])) * float(sell["amount"])

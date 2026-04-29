@@ -13,6 +13,7 @@ from src.database import (
     get_all_paper_trades_asc, get_daily_pnl_series, get_trading_paused, set_trading_paused,
     get_live_trades, reset_paper_trading, get_portfolio_snapshots,
     get_all_positions, get_total_daily_loss, get_latest_portfolio_total, get_position_meta,
+    get_last_buy_ts,
 )
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
@@ -192,6 +193,10 @@ def index():
                 t_sl     = peak * (1 - trailing_pct / 100) if trailing_enabled and peak > 0 else None
                 candidates   = [x for x in [sl_price, t_sl] if x is not None]
                 effective_sl = max(candidates) if candidates else None
+                try:
+                    buy_ts = get_last_buy_ts(market)
+                except Exception:
+                    buy_ts = None
                 positions_data[market] = {
                     "amount":          pos["amount"],
                     "avg_price":       avg,
@@ -199,9 +204,22 @@ def index():
                     "tp_price":        tp_price,
                     "trailing_active": trailing_enabled and peak > 0,
                     "house_money":     bool(meta.get("house_money_activated")),
+                    "buy_ts":          buy_ts,
                 }
     except Exception:
         pass
+
+    # ── Groq Token Gauge ──────────────────────────────────────────────────────
+    groq_tokens_data: dict = {"used": 0, "limit": 500_000, "pct_used": 0.0}
+    if "groq" in active_providers:
+        try:
+            from src.database import get_groq_daily_tokens
+            used      = get_groq_daily_tokens()
+            limit     = 500_000
+            pct_used  = min(100.0, used / limit * 100) if limit > 0 else 0.0
+            groq_tokens_data = {"used": used, "limit": limit, "pct_used": round(pct_used, 1)}
+        except Exception:
+            pass
 
     return render_template(
         "index.html",
@@ -216,6 +234,7 @@ def index():
         daily_loss=daily_loss_data,
         ai_votes_by_market=ai_votes_by_market,
         positions_data=positions_data,
+        groq_tokens=groq_tokens_data,
     )
 
 
@@ -598,15 +617,21 @@ def api_analytics():
                     buy = open_buys[m].pop(0)
                     pnl_eur = t["eur_total"] - buy["eur_total"]
                     pnl_pct = (t["price"] - buy["price"]) / buy["price"] * 100
+                    planned = buy.get("planned_price")
+                    if planned and planned > 0 and buy["price"] > 0:
+                        slippage_pct = round((planned - buy["price"]) / planned * 100, 3)
+                    else:
+                        slippage_pct = None
                     result.append({
-                        "market":     m,
-                        "buy_ts":     buy["ts"],
-                        "sell_ts":    t["ts"],
-                        "buy_price":  buy["price"],
-                        "sell_price": t["price"],
-                        "amount":     buy["amount"],
-                        "pnl_eur":    round(pnl_eur, 4),
-                        "pnl_pct":    round(pnl_pct, 3),
+                        "market":       m,
+                        "buy_ts":       buy["ts"],
+                        "sell_ts":      t["ts"],
+                        "buy_price":    buy["price"],
+                        "sell_price":   t["price"],
+                        "amount":       buy["amount"],
+                        "pnl_eur":      round(pnl_eur, 4),
+                        "pnl_pct":      round(pnl_pct, 3),
+                        "slippage_pct": slippage_pct,
                     })
             return result
 

@@ -6,7 +6,7 @@ import logging
 import os
 import time
 
-from src.env_utils import env_float
+from src.env_utils import env_float, env_float_opt
 
 from python_bitvavo_api.bitvavo import Bitvavo
 
@@ -293,3 +293,90 @@ def partial_sell(client: Bitvavo, market: str, amount: float, current_price: flo
         update_live_trade(trade_id, current_price, amount, gross_eur, "timeout")
         logger.warning("[%s] LIVE PARTIAL SELL niet gevuld binnen timeout", market)
         return None
+
+
+def place_oco_orders(client, market: str, amount: float, entry_price: float) -> dict:
+    """
+    Na een BUY: plaatst takeProfit- en/of stopLoss-orders op Bitvavo.
+    Slaat order-IDs op in oco_orders voor leg-annulering.
+    """
+    from src.database import save_oco_order
+
+    tp_pct = env_float_opt("TAKE_PROFIT_PCT")
+    sl_pct = env_float_opt("STOP_LOSS_PCT")
+
+    tp_order_id: str | None = None
+    sl_order_id: str | None = None
+    tp_price: float | None = None
+    sl_price: float | None = None
+
+    if tp_pct and tp_pct > 0:
+        tp_price = round(entry_price * (1 + tp_pct / 100), 8)
+        r = client.placeOrder(market, "sell", "takeProfit", {
+            "amount": str(amount), "triggerPrice": str(tp_price),
+        })
+        if isinstance(r, dict) and "orderId" in r:
+            tp_order_id = r["orderId"]
+            logger.info("[%s] OCO TP @ €%.4f — id: %s", market, tp_price, tp_order_id)
+        else:
+            logger.warning("[%s] OCO TP mislukt: %s", market, r)
+
+    if sl_pct and sl_pct > 0:
+        sl_price = round(entry_price * (1 - sl_pct / 100), 8)
+        r = client.placeOrder(market, "sell", "stopLoss", {
+            "amount": str(amount), "triggerPrice": str(sl_price),
+        })
+        if isinstance(r, dict) and "orderId" in r:
+            sl_order_id = r["orderId"]
+            logger.info("[%s] OCO SL @ €%.4f — id: %s", market, sl_price, sl_order_id)
+        else:
+            logger.warning("[%s] OCO SL mislukt: %s", market, r)
+
+    if tp_order_id or sl_order_id:
+        save_oco_order(market, amount, tp_order_id, sl_order_id, tp_price, sl_price)
+
+    return {"tp_order_id": tp_order_id, "sl_order_id": sl_order_id,
+            "tp_price": tp_price, "sl_price": sl_price}
+
+
+def check_cancel_oco(client, market: str) -> str | None:
+    """
+    Controleert open OCO legs op Bitvavo. Als één leg gevuld is,
+    annuleert de andere en update de DB. Retourneert 'TP', 'SL', of None.
+    """
+    from src.database import get_open_oco_orders, update_oco_status, clear_position_meta
+
+    for oco in get_open_oco_orders(market):
+        oco_id = oco["id"]
+        tp_oid = oco.get("tp_order_id")
+        sl_oid = oco.get("sl_order_id")
+        tp_filled = sl_filled = False
+
+        if tp_oid:
+            try:
+                o = client.getOrder(market, tp_oid)
+                tp_filled = isinstance(o, dict) and o.get("status") == "filled"
+            except Exception:
+                pass
+
+        if sl_oid:
+            try:
+                o = client.getOrder(market, sl_oid)
+                sl_filled = isinstance(o, dict) and o.get("status") == "filled"
+            except Exception:
+                pass
+
+        if tp_filled or sl_filled:
+            leg     = "TP" if tp_filled else "SL"
+            cancel  = sl_oid if tp_filled else tp_oid
+            if cancel:
+                try:
+                    client.cancelOrder(market, cancel)
+                except Exception:
+                    pass
+            update_oco_status(oco_id, f"filled_{leg.lower()}")
+            clear_position_meta(market)
+            logger.info("[%s] OCO %s gevuld — andere leg geannuleerd", market, leg)
+            return leg
+
+    return None

@@ -101,8 +101,19 @@ def run_cycle() -> None:
             sig = latest_signals(df)
             current_price = sig["close"]
 
+            # OCO leg-check (LIVE modus): annuleer tegengestelde leg als één gevuld is
+            sl_tp_triggered = False
+            if (not paused
+                    and os.getenv("OCO_ENABLED", "false").lower() == "true"
+                    and os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"):
+                from src.live_trader import check_cancel_oco
+                oco_result = check_cancel_oco(client, market)
+                if oco_result:
+                    sl_tp_triggered = True
+
             # Stop-loss / take-profit check — ook bij pauze (veiligheidsnet)
-            sl_tp_triggered = check_sl_tp(client, market, current_price) if not paused else False
+            if not sl_tp_triggered:
+                sl_tp_triggered = check_sl_tp(client, market, current_price) if not paused else False
 
             # Huisgeld-check: verkoopt inleg terug als positie X% in de winst staat
             if not sl_tp_triggered and not paused:
