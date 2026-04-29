@@ -53,12 +53,10 @@ def run_cycle() -> None:
     load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
 
     # Lees alle config dynamisch
-    interval        = os.getenv("CANDLE_INTERVAL", "1h")
-    check_minutes   = env_int("CHECK_INTERVAL_MINUTES", 60)
-    vol_sizing      = os.getenv("VOL_SIZING_ENABLED", "false").lower() == "true"
-    corr_check      = os.getenv("CORR_CHECK_ENABLED", "false").lower() == "true"
-    iceberg_enabled = os.getenv("ICEBERG_ENABLED", "false").lower() == "true"
-    iceberg_chunks  = env_int("ICEBERG_CHUNKS", 5) if iceberg_enabled else 1
+    interval      = os.getenv("CANDLE_INTERVAL", "1h")
+    check_minutes = env_int("CHECK_INTERVAL_MINUTES", 60)
+    vol_sizing    = os.getenv("VOL_SIZING_ENABLED", "false").lower() == "true"
+    corr_check    = os.getenv("CORR_CHECK_ENABLED", "false").lower() == "true"
 
     # Auto-activeer risk-based sizing als STOP_LOSS_PCT + RISK_PER_TRADE_PCT beide zijn ingesteld
     from src.env_utils import env_float_opt
@@ -177,7 +175,7 @@ def run_cycle() -> None:
                         else:
                             fraction = None
                         result = execute_buy(client, market, current_price, reason=reason,
-                                             fraction=fraction, iceberg_chunks=iceberg_chunks)
+                                             fraction=fraction)
                         if result and ai_decision_id:
                             mark_ai_decision_executed(ai_decision_id)
                 elif signal == "SELL":

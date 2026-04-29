@@ -503,25 +503,52 @@
                 Splits een grote koop op in meerdere kleinere deelorders om marktimpact te beperken op illiquide markten.
               </div>
               <div id="icebergChunksRow" style="display:{{ 'block' if config.ICEBERG_ENABLED == 'true' else 'none' }}">
-                <label class="form-label">Aantal chunks</label>
-                <input type="number" class="form-control" name="ICEBERG_CHUNKS"
-                       id="icebergChunks"
-                       value="{{ config.ICEBERG_CHUNKS }}" min="2" max="20" step="1"
-                       style="max-width:120px;">
-                <div class="form-text">
-                  Elke chunk = MAX_TRADE_EUR / chunks
-                  {% if config.MAX_TRADE_EUR and config.ICEBERG_CHUNKS %}
-                    (≈ €{{ "%.2f"|format(config.MAX_TRADE_EUR|float / config.ICEBERG_CHUNKS|int) }} per order)
-                  {% endif %}
-                </div>
-                <div class="mt-2">
-                  <label class="form-label">Interval tussen chunks</label>
-                  <div class="input-group" style="max-width:180px;">
-                    <input type="number" class="form-control" name="ICEBERG_INTERVAL_SECONDS"
-                           value="{{ config.ICEBERG_INTERVAL_SECONDS }}" min="0" max="300" step="1">
-                    <span class="input-group-text">seconden</span>
+                <div class="row g-3">
+                  <div class="col-sm-6">
+                    <label class="form-label">Activeer drempel</label>
+                    <div class="input-group" style="max-width:180px;">
+                      <span class="input-group-text">€</span>
+                      <input type="number" class="form-control" name="ICEBERG_THRESHOLD"
+                             value="{{ config.ICEBERG_THRESHOLD }}" min="50" step="50">
+                    </div>
+                    <div class="form-text">Iceberg alleen activeren als orderbedrag ≥ deze waarde</div>
                   </div>
-                  <div class="form-text">0 = direct achter elkaar · 30+ = TWAP-stijl spreiding</div>
+                  <div class="col-sm-6">
+                    <label class="form-label">Min. chunkgrootte</label>
+                    <div class="input-group" style="max-width:180px;">
+                      <span class="input-group-text">€</span>
+                      <input type="number" class="form-control" name="MIN_ICEBERG_CHUNK"
+                             value="{{ config.MIN_ICEBERG_CHUNK }}" min="5" step="5">
+                    </div>
+                    <div class="form-text">Aantal chunks = orderbedrag / min. chunkgrootte</div>
+                  </div>
+                  <div class="col-sm-6">
+                    <label class="form-label">Chunk-variatie</label>
+                    <div class="input-group" style="max-width:180px;">
+                      <input type="number" class="form-control" name="ICEBERG_VARIANCE"
+                             value="{{ config.ICEBERG_VARIANCE }}" min="0" max="0.5" step="0.05">
+                      <span class="input-group-text">±</span>
+                    </div>
+                    <div class="form-text">0.15 = ±15% willekeurige spreiding per chunk</div>
+                  </div>
+                  <div class="col-sm-6">
+                    <label class="form-label">Interval tussen chunks</label>
+                    <div class="input-group" style="max-width:180px;">
+                      <input type="number" class="form-control" name="ICEBERG_INTERVAL_SECONDS"
+                             value="{{ config.ICEBERG_INTERVAL_SECONDS }}" min="0" max="300" step="1">
+                      <span class="input-group-text">sec</span>
+                    </div>
+                    <div class="form-text">0 = direct · 30+ = TWAP-stijl</div>
+                  </div>
+                  <div class="col-sm-6">
+                    <label class="form-label">Slippage guard <span class="badge bg-secondary">LIVE</span></label>
+                    <div class="input-group" style="max-width:180px;">
+                      <input type="number" class="form-control" name="ICEBERG_SLIPPAGE_GUARD_PCT"
+                             value="{{ config.ICEBERG_SLIPPAGE_GUARD_PCT }}" min="0" max="5" step="0.1">
+                      <span class="input-group-text">%</span>
+                    </div>
+                    <div class="form-text">Stop chunks als koers meer dan X% afwijkt van instap (0 = uit)</div>
+                  </div>
                 </div>
               </div>
             </div>
