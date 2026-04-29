@@ -53,15 +53,10 @@ Volatility rule (IMPORTANT):
   In that case return HOLD with low confidence — do not act on RSI or MA signals alone.
   A flat market produces false signals; wait for a real breakout.
 
-Respond with ONLY a JSON block — no other text:
-```json
-{
-  "decision": "BUY",
-  "confidence": 0.82,
-  "reasoning": "Golden cross confirmed, RSI at 45, MACD histogram rising, ATR above 1.2%."
-}
-```
-decision: BUY | SELL | HOLD  —  confidence: 0.0–1.0  —  reasoning: one concise English sentence\
+IMPORTANT: respond with ONLY raw JSON — no markdown, no code blocks, no explanation before or after.
+Output format (copy exactly, fill in values):
+{"decision": "BUY", "confidence": 0.82, "reasoning": "one concise English sentence"}
+decision: BUY | SELL | HOLD  —  confidence: 0.0–1.0\
 """
 
 _SENTIMENT_PROMPT = """\
@@ -79,15 +74,10 @@ Guidelines:
 - NEGATIVE → downtrend, extreme greed (correction risk), panic-sell patterns, or deteriorating momentum
 - NEUTRAL  → mixed or insufficient signals
 
-Respond with ONLY a JSON block — no other text:
-```json
-{
-  "sentiment": "POSITIVE",
-  "confidence": 0.75,
-  "reasoning": "1h uptrend intact with above-average volume; Fear & Greed at 48 — neutral territory."
-}
-```
-sentiment: POSITIVE | NEGATIVE | NEUTRAL  —  confidence: 0.0–1.0  —  reasoning: one concise English sentence\
+IMPORTANT: respond with ONLY raw JSON — no markdown, no code blocks, no explanation before or after.
+Output format (copy exactly, fill in values):
+{"sentiment": "POSITIVE", "confidence": 0.75, "reasoning": "one concise English sentence"}
+sentiment: POSITIVE | NEGATIVE | NEUTRAL  —  confidence: 0.0–1.0\
 """
 
 _RISK_PROMPT = """\
@@ -107,15 +97,10 @@ Reject if:
 - Proposed action clearly contradicts the market data
 - Open position already shows a deep unrealized loss (> 15%)
 
-Respond with ONLY a JSON block — no other text:
-```json
-{
-  "approved": true,
-  "confidence": 0.88,
-  "reasoning": "Technical and sentiment agree; portfolio well-positioned with no loss streak."
-}
-```
-approved: true | false  —  confidence: 0.0–1.0  —  reasoning: one concise English sentence\
+IMPORTANT: respond with ONLY raw JSON — no markdown, no code blocks, no explanation before or after.
+Output format (copy exactly, fill in values):
+{"approved": true, "confidence": 0.88, "reasoning": "one concise English sentence"}
+approved: true | false  —  confidence: 0.0–1.0\
 """
 
 
@@ -279,68 +264,83 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
 # ── Parsers ───────────────────────────────────────────────────────────────────
 
 def _extract_json(text: str, key: str) -> str | None:
-    # 1. ```json ... ``` or ``` ... ``` code block
-    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-    if m and f'"{key}"' in m.group(1):
-        return m.group(1)
+    if not text:
+        return None
 
-    # 2. Brace-depth scan — handles nested objects, multi-line JSON, and
-    #    responses where reasoning text contains curly braces.
-    i = 0
-    while i < len(text):
-        if text[i] != '{':
-            i += 1
+    # 1. Strip markdown code fences (```json ... ``` of ``` ... ```)
+    #    Gemini / nieuwere modellen wikkelen output soms hierin ook al vraag je dat niet.
+    cleaned = re.sub(r"```(?:json)?\s*", "", text)
+    cleaned = re.sub(r"```", "", cleaned).strip()
+
+    # 2. Brace-depth scan op de schoongemaakte tekst.
+    #    Handelt geneste objecten, multi-line JSON en accolades in strings af.
+    for i, ch in enumerate(cleaned):
+        if ch != '{':
             continue
         depth = 0
-        for j in range(i, len(text)):
-            if text[j] == '{':
+        for j in range(i, len(cleaned)):
+            if cleaned[j] == '{':
                 depth += 1
-            elif text[j] == '}':
+            elif cleaned[j] == '}':
                 depth -= 1
                 if depth == 0:
-                    candidate = text[i:j + 1]
+                    candidate = cleaned[i:j + 1]
                     if f'"{key}"' in candidate:
                         return candidate
                     break
-        i += 1
     return None
 
 
 def _parse_decision(text: str) -> dict | None:
     raw = _extract_json(text, "decision")
     if not raw:
+        logger.debug("_parse_decision: geen JSON gevonden in: %.300s", text)
         return None
     try:
         data      = json.loads(raw)
-        decision  = str(data.get("decision", "HOLD")).upper()
+        decision  = str(data.get("decision", "HOLD")).upper().strip()
         if decision not in ("BUY", "SELL", "HOLD"):
             decision = "HOLD"
         confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
         reasoning  = str(data.get("reasoning", ""))
         return {"decision": decision, "confidence": confidence, "reasoning": reasoning}
-    except (json.JSONDecodeError, ValueError, TypeError):
+    except (json.JSONDecodeError, ValueError, TypeError) as exc:
+        logger.debug("_parse_decision: JSON-parse fout (%s) in: %.300s", exc, raw)
         return None
 
 
 def _parse_sentiment(text: str) -> dict | None:
     raw = _extract_json(text, "sentiment")
     if not raw:
+        logger.warning("_parse_sentiment: geen JSON gevonden — raw: %.400s", text)
         return None
     try:
-        data      = json.loads(raw)
-        sentiment = str(data.get("sentiment", "NEUTRAL")).upper()
-        if sentiment not in ("POSITIVE", "NEGATIVE", "NEUTRAL"):
-            sentiment = "NEUTRAL"
-        confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
-        reasoning  = str(data.get("reasoning", ""))
+        data = json.loads(raw)
+        sent_raw = data.get("sentiment", "NEUTRAL")
+        if isinstance(sent_raw, (int, float)):
+            # Numerieke score: >0.2 = POSITIVE, <-0.2 = NEGATIVE
+            s = float(sent_raw)
+            sentiment = "POSITIVE" if s > 0.2 else ("NEGATIVE" if s < -0.2 else "NEUTRAL")
+        else:
+            sentiment = str(sent_raw).upper().strip()
+            if "POS" in sentiment:
+                sentiment = "POSITIVE"
+            elif "NEG" in sentiment:
+                sentiment = "NEGATIVE"
+            else:
+                sentiment = "NEUTRAL"
+        confidence = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
+        reasoning  = str(data.get("reasoning", data.get("reason", data.get("analysis", ""))))
         return {"sentiment": sentiment, "confidence": confidence, "reasoning": reasoning}
-    except (json.JSONDecodeError, ValueError, TypeError):
+    except (json.JSONDecodeError, ValueError, TypeError) as exc:
+        logger.warning("_parse_sentiment: JSON-parse fout (%s) — raw: %.400s", exc, raw)
         return None
 
 
 def _parse_risk(text: str) -> dict | None:
     raw = _extract_json(text, "approved")
     if not raw:
+        logger.debug("_parse_risk: geen JSON gevonden in: %.300s", text)
         return None
     try:
         data       = json.loads(raw)
@@ -348,7 +348,8 @@ def _parse_risk(text: str) -> dict | None:
         confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
         reasoning  = str(data.get("reasoning", ""))
         return {"approved": approved, "confidence": confidence, "reasoning": reasoning}
-    except (json.JSONDecodeError, ValueError, TypeError):
+    except (json.JSONDecodeError, ValueError, TypeError) as exc:
+        logger.debug("_parse_risk: JSON-parse fout (%s) in: %.300s", exc, raw)
         return None
 
 
