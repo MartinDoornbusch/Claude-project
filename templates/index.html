@@ -329,7 +329,9 @@
                 {% elif t.status == 'error' %}<span class="text-danger">✗ Fout</span>
                 {% else %}<span class="text-muted">{{ t.status }}</span>{% endif %}
               </td>
-              <td class="reasoning-text">{{ t.reason or '—' }}</td>
+              <td class="reasoning-text" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ t.reason or '' }}">
+                {{ t.reason[:60] if t.reason else '—' }}{% if t.reason and t.reason|length > 60 %}…{% endif %}
+              </td>
             </tr>
             {% else %}
             <tr><td colspan="7" class="text-center text-muted py-3">Nog geen live orders uitgevoerd</td></tr>
@@ -349,7 +351,8 @@
           <thead>
             <tr>
               <th>Tijd</th><th>Markt</th><th>Side</th>
-              <th class="text-end">Prijs</th><th class="text-end">Bedrag</th><th class="text-end">EUR</th>
+              <th class="text-end">Prijs</th><th class="text-end hide-sm">Bedrag</th>
+              <th class="text-end">EUR</th><th class="hide-sm">Reden</th>
             </tr>
           </thead>
           <tbody>
@@ -359,11 +362,14 @@
               <td>{{ t.market }}</td>
               <td class="signal-{{ t.side }}">{{ t.side }}</td>
               <td class="text-end">€{{ "%.4f"|format(t.price) }}</td>
-              <td class="text-end">{{ "%.6f"|format(t.amount) }}</td>
+              <td class="text-end hide-sm">{{ "%.6f"|format(t.amount) }}</td>
               <td class="text-end">€{{ "%.2f"|format(t.eur_total) }}</td>
+              <td class="hide-sm reasoning-text" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ t.reason or '' }}">
+                {{ t.reason[:60] if t.reason else '—' }}{% if t.reason and t.reason|length > 60 %}…{% endif %}
+              </td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="text-center text-muted py-3">Nog geen trades</td></tr>
+            <tr><td colspan="7" class="text-center text-muted py-3">Nog geen trades</td></tr>
             {% endfor %}
           </tbody>
         </table>
