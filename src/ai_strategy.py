@@ -341,14 +341,22 @@ def _parse_sentiment(text: str) -> dict | None:
 
     # ── Pad C: keyword-scan voor vrije tekst (JSON-instructie genegeerd) ─────
     upper = cleaned.upper()
-    if any(w in upper for w in ("BULLISH", "POSITIVE", "UPTREND", "UPWARD")):
+    if any(w in upper for w in ("BULLISH", "POSITIVE", "UPTREND", "UPWARD", "STRONG BUY")):
         kw_sent = "POSITIVE"
-    elif any(w in upper for w in ("BEARISH", "NEGATIVE", "DOWNTREND", "BEAR")):
+    elif any(w in upper for w in ("BEARISH", "NEGATIVE", "DOWNTREND", "BEAR", "STRONG SELL")):
         kw_sent = "NEGATIVE"
-    elif any(w in upper for w in ("NEUTRAL", "SIDEWAYS", "MIXED", "FLAT")):
+    elif any(w in upper for w in ("NEUTRAL", "SIDEWAYS", "MIXED", "FLAT",
+                                   "UNCERTAIN", "CONSOLIDAT", "RANGE", "LOW VOLUME",
+                                   "ALIGN", "INDECIS")):
         kw_sent = "NEUTRAL"
+    elif cleaned:
+        # Pad D: niet-lege response maar geen enkel herkenbaar signaal →
+        # val terug op NEUTRAL 0.30 zodat de eindscore onveranderd blijft (+0.00)
+        logger.debug("_parse_sentiment: Pad D (default NEUTRAL) voor '%.80s'", cleaned[:80])
+        return {"sentiment": "NEUTRAL", "confidence": 0.30,
+                "reasoning": f"(geen signaal: {cleaned[:60]})"}
     else:
-        logger.warning("_parse_sentiment: kon niets parsen — raw: %.400s", text)
+        logger.warning("_parse_sentiment: lege response")
         return None
     logger.debug("_parse_sentiment: Pad C (keyword) voor '%.80s'", cleaned[:80])
     return {"sentiment": kw_sent, "confidence": 0.40,
