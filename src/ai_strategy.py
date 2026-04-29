@@ -310,31 +310,45 @@ def _parse_decision(text: str) -> dict | None:
 
 
 def _parse_sentiment(text: str) -> dict | None:
+    """Parse Gemini sentiment — probeert JSON eerst, valt terug op regex bij truncatie."""
+    if not text:
+        return None
+
+    # ── Pad A: volledige JSON-extractie ─────────────────────────────────────
     raw = _extract_json(text, "sentiment")
-    if not raw:
-        logger.warning("_parse_sentiment: geen JSON gevonden — raw: %.400s", text)
-        return None
-    try:
-        data = json.loads(raw)
-        sent_raw = data.get("sentiment", "NEUTRAL")
-        if isinstance(sent_raw, (int, float)):
-            # Numerieke score: >0.2 = POSITIVE, <-0.2 = NEGATIVE
-            s = float(sent_raw)
-            sentiment = "POSITIVE" if s > 0.2 else ("NEGATIVE" if s < -0.2 else "NEUTRAL")
-        else:
-            sentiment = str(sent_raw).upper().strip()
-            if "POS" in sentiment:
-                sentiment = "POSITIVE"
-            elif "NEG" in sentiment:
-                sentiment = "NEGATIVE"
+    if raw:
+        try:
+            data     = json.loads(raw)
+            sent_raw = data.get("sentiment", "NEUTRAL")
+            if isinstance(sent_raw, (int, float)):
+                s = float(sent_raw)
+                sentiment = "POSITIVE" if s > 0.2 else ("NEGATIVE" if s < -0.2 else "NEUTRAL")
             else:
-                sentiment = "NEUTRAL"
-        confidence = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
-        reasoning  = str(data.get("reasoning", data.get("reason", data.get("analysis", ""))))
+                s = str(sent_raw).upper().strip()
+                sentiment = "POSITIVE" if "POS" in s else ("NEGATIVE" if "NEG" in s else "NEUTRAL")
+            confidence = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
+            reasoning  = str(data.get("reasoning", data.get("reason", data.get("analysis", ""))))
+            return {"sentiment": sentiment, "confidence": confidence, "reasoning": reasoning}
+        except (json.JSONDecodeError, ValueError, TypeError) as exc:
+            logger.debug("_parse_sentiment JSON-parse fout (%s) — valt terug op regex", exc)
+
+    # ── Pad B: regex-fallback voor afgebroken JSON ───────────────────────────
+    # Gemini geeft altijd "sentiment" en "confidence" eerst, dan "reasoning" — die
+    # wordt afgekapt. We kunnen de bruikbare data altijd redden.
+    cleaned = re.sub(r"```(?:json)?\s*|```", "", text).strip()
+    sent_m = re.search(r'"sentiment"\s*:\s*"([^"]*)"', cleaned, re.IGNORECASE)
+    conf_m = re.search(r'"confidence"\s*:\s*([0-9.]+)', cleaned)
+    if sent_m:
+        s = sent_m.group(1).upper().strip()
+        sentiment  = "POSITIVE" if "POS" in s else ("NEGATIVE" if "NEG" in s else "NEUTRAL")
+        confidence = max(0.0, min(1.0, float(conf_m.group(1)))) if conf_m else 0.5
+        reason_m   = re.search(r'"(?:reasoning|reason)"\s*:\s*"([^"]*)"', cleaned)
+        reasoning  = reason_m.group(1) if reason_m else "(afgebroken)"
+        logger.debug("_parse_sentiment: regex-fallback gebruikt voor '%s'", cleaned[:80])
         return {"sentiment": sentiment, "confidence": confidence, "reasoning": reasoning}
-    except (json.JSONDecodeError, ValueError, TypeError) as exc:
-        logger.warning("_parse_sentiment: JSON-parse fout (%s) — raw: %.400s", exc, raw)
-        return None
+
+    logger.warning("_parse_sentiment: kon niets parsen — raw: %.400s", text)
+    return None
 
 
 def _parse_risk(text: str) -> dict | None:
@@ -500,7 +514,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         if sentiment_prov:
             try:
                 text = complete_for(sentiment_prov, pdict[sentiment_prov],
-                                    _SENTIMENT_PROMPT, prompt, max_tokens=512)
+                                    _SENTIMENT_PROMPT, prompt, max_tokens=150)
                 logger.debug("[%s] %s raw: %.200s", market, sentiment_prov, text)
                 parsed = _parse_sentiment(text)
                 if parsed:
