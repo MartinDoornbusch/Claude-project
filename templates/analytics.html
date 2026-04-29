@@ -165,6 +165,35 @@
     </div>
   </div>
 
+  <!-- AI Nauwkeurigheid -->
+  <div class="card mb-4" id="ai-accuracy-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      AI Sentiment Nauwkeurigheid
+      <span id="ai-acc-overall" class="badge bg-secondary">Laden...</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive tbl-scroll">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Markt</th>
+              <th>Beslissing</th>
+              <th class="text-end">Totaal</th>
+              <th class="text-end">Correct</th>
+              <th class="text-end">Fout</th>
+              <th class="text-end">Nauwk.</th>
+              <th class="text-end hide-sm">Gem. PnL%</th>
+              <th class="text-end hide-sm">Gem. conf.</th>
+            </tr>
+          </thead>
+          <tbody id="ai-acc-tbody">
+            <tr><td colspan="8" class="text-center empty-state py-4">Laden...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -392,6 +421,53 @@
 
   // Laad direct bij pagina open
   loadAnalytics();
+  loadAiAccuracy();
+
+  async function loadAiAccuracy() {
+    try {
+      const r = await fetch(BASE_URL + '/api/ai/accuracy');
+      const d = await r.json();
+      renderAiAccuracy(d);
+    } catch(e) {
+      document.getElementById('ai-acc-tbody').innerHTML =
+        `<tr><td colspan="8" class="text-center text-muted py-3">Kon accuracy niet laden: ${e.message}</td></tr>`;
+    }
+  }
+
+  function renderAiAccuracy(d) {
+    const rows = d.per_market || [];
+    const overall = d.overall || {};
+    const tbody   = document.getElementById('ai-acc-tbody');
+    const badge   = document.getElementById('ai-acc-overall');
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center empty-state py-4">Nog geen AI-beslissingen geëvalueerd (horizon nog niet bereikt)</td></tr>';
+      badge.textContent = '–';
+      return;
+    }
+
+    const tot = overall.total || 0;
+    const win = overall.wins  || 0;
+    const acc = tot > 0 ? Math.round(win / tot * 100) : 0;
+    badge.textContent = `${acc}% correct (${tot} beoordeeld)`;
+    badge.className   = `badge ${acc >= 55 ? 'bg-success' : acc >= 45 ? 'bg-warning text-dark' : 'bg-danger'}`;
+
+    tbody.innerHTML = rows.map(r => {
+      const rowAcc = r.total > 0 ? Math.round(r.wins / r.total * 100) : 0;
+      const pnlColor = (r.avg_pnl_pct || 0) >= 0 ? '#16a34a' : '#dc2626';
+      const accColor = rowAcc >= 55 ? '#16a34a' : rowAcc >= 45 ? '#b45309' : '#dc2626';
+      return `<tr>
+        <td>${r.market}</td>
+        <td><span class="badge ${r.decision === 'BUY' ? 'bg-success' : 'bg-danger'}">${r.decision}</span></td>
+        <td class="text-end">${r.total}</td>
+        <td class="text-end">${r.wins}</td>
+        <td class="text-end">${r.losses}</td>
+        <td class="text-end" style="color:${accColor}; font-weight:600;">${rowAcc}%</td>
+        <td class="text-end hide-sm" style="color:${pnlColor};">${r.avg_pnl_pct != null ? (r.avg_pnl_pct > 0 ? '+' : '') + r.avg_pnl_pct.toFixed(2) + '%' : '–'}</td>
+        <td class="text-end hide-sm">${r.avg_confidence != null ? Math.round(r.avg_confidence * 100) + '%' : '–'}</td>
+      </tr>`;
+    }).join('');
+  }
 </script>
 </body>
 </html>
