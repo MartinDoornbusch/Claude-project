@@ -143,7 +143,7 @@ def check_house_money(client: Bitvavo, market: str, current_price: float) -> boo
 
 def execute_buy(
     client: Bitvavo, market: str, price: float, reason: str = "",
-    fraction: float | None = None, iceberg_chunks: int = 1,
+    fraction: float | None = None,
 ) -> dict | None:
     from src.notifier import notify_trade
 
@@ -198,10 +198,10 @@ def execute_buy(
 
     if os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true":
         logger.info("[%s] Mode: LIVE — BUY uitvoeren", market)
-        result = live.buy(client, market, price, reason, iceberg_chunks=iceberg_chunks)
+        result = live.buy(client, market, price, reason)
     else:
         logger.info("[%s] Mode: PAPER — BUY simuleren", market)
-        result = paper.buy(market, price, reason, fraction=fraction, iceberg_chunks=iceberg_chunks)
+        result = paper.buy(market, price, reason, fraction=fraction)
     if result:
         notify_trade(market, "BUY", price, reason)
         from src.database import update_position_peak, cancel_all_oco_orders

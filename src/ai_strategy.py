@@ -16,7 +16,7 @@ import json
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from src.database import (
     get_latest_signals, get_cash, get_position, get_paper_trades,
@@ -129,7 +129,10 @@ def _last_trade_minutes_ago(market: str) -> float | None:
     if not trades:
         return None
     ts = datetime.fromisoformat(trades[0]["ts"])
-    return (datetime.utcnow() - ts).total_seconds() / 60
+    if ts.tzinfo is None:                          # legacy naive timestamps
+        from zoneinfo import ZoneInfo
+        ts = ts.replace(tzinfo=ZoneInfo("Europe/Amsterdam"))
+    return (datetime.now(timezone.utc) - ts).total_seconds() / 60
 
 
 def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_str: str = "") -> str:
@@ -408,17 +411,35 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         return "HOLD", 0.0, f"Cooldown: wacht nog {remaining} minuten"
 
     # ── Lokale ATR pre-filter — VÓÓR elke API-call ────────────────────────────
-    price         = float(signals.get("close") or 0)
-    atr           = signals.get("atr_14")
-    atr_threshold = env_float("ATR_FLAT_THRESHOLD", 0.5)
+    price       = float(signals.get("close") or 0)
+    atr         = signals.get("atr_14")
+    sensitivity = env_float("ATR_SENSITIVITY", 0.8)
+
     if atr is not None and price > 0:
         atr_pct = float(atr) / price * 100
-        if atr_pct < atr_threshold:
-            logger.info(
-                "[%s] Platte markt (ATR %.2f%% < %.2f%%) — HOLD (lokaal, geen API)",
-                market, atr_pct, atr_threshold,
-            )
-            return "HOLD", 0.0, f"Platte markt (Lokaal gefilterd, ATR {atr_pct:.2f}%)"
+
+        avg_atr_24h = signals.get("avg_atr_24h")
+        if sensitivity > 0 and avg_atr_24h is not None and avg_atr_24h > 0:
+            # Route B: dynamische drempel — vergelijk met 24-candle gemiddelde
+            avg_atr_pct   = float(avg_atr_24h) / price * 100
+            dyn_threshold = avg_atr_pct * sensitivity
+            if atr_pct < dyn_threshold:
+                logger.info(
+                    "[%s] Platte markt — ATR %.2f%% < %.2f%% (%.0f%% van 24h-gem %.2f%%) — HOLD",
+                    market, atr_pct, dyn_threshold, sensitivity * 100, avg_atr_pct,
+                )
+                return "HOLD", 0.0, (
+                    f"Platte markt (Relatief: ATR {atr_pct:.2f}% < {dyn_threshold:.2f}%)"
+                )
+        else:
+            # Route A: statische drempel (fallback of ATR_SENSITIVITY=0)
+            atr_threshold = env_float("ATR_FLAT_THRESHOLD", 0.5)
+            if atr_pct < atr_threshold:
+                logger.info(
+                    "[%s] Platte markt (ATR %.2f%% < %.2f%%) — HOLD (lokaal, geen API)",
+                    market, atr_pct, atr_threshold,
+                )
+                return "HOLD", 0.0, f"Platte markt (Lokaal gefilterd, ATR {atr_pct:.2f}%)"
 
     recent_signals = get_latest_signals(market, limit=5)
 

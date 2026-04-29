@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
+import random
+import time
 
 from src.env_utils import env_float
 from src.database import (
@@ -37,58 +39,75 @@ def _check_daily_loss(market: str) -> bool:
     return False
 
 
-def _buy_iceberg(market: str, price: float, reason: str, used_fraction: float,
-                 n_chunks: int, cash: float) -> dict | None:
-    """Splits een koop op in n_chunks gelijke deelorders (iceberg)."""
-    total_spend = cash * used_fraction
-    chunk_eur   = total_spend / n_chunks
+def _buy_iceberg(market: str, price: float, reason: str, total_spend: float) -> dict | None:
+    """Smart iceberg koop — variabele chunks op basis van MIN_ICEBERG_CHUNK en ICEBERG_VARIANCE."""
+    min_chunk = env_float("MIN_ICEBERG_CHUNK", 100.0)
+    variance  = env_float("ICEBERG_VARIANCE", 0.15)
+    interval  = env_float("ICEBERG_INTERVAL_SECONDS", 2)
+
+    n          = max(2, int(total_spend // min_chunk))
+    base_chunk = total_spend / n
+    remaining  = total_spend
 
     total_amount = 0.0
     total_cost   = 0.0
 
-    for i in range(n_chunks):
-        fee     = chunk_eur * FEE_RATE
-        net_eur = chunk_eur - fee
-        amount  = net_eur / price
+    for i in range(n):
+        is_last = (i == n - 1)
+
+        if is_last:
+            chunk_eur = remaining
+        else:
+            factor    = 1.0 + random.uniform(-variance, variance)
+            chunk_eur = round(base_chunk * factor, 2)
+            max_this  = remaining - (n - i - 1) * 5.0
+            chunk_eur = max(5.0, min(chunk_eur, max_this))
+
+        if chunk_eur < 5.0 or remaining < 5.0:
+            break
 
         current_cash = get_cash()
         if current_cash < chunk_eur:
-            logger.info("[%s] Iceberg chunk %d/%d overgeslagen — te weinig cash", market, i + 1, n_chunks)
+            logger.info("[%s] Iceberg chunk %d/%d gestopt — te weinig cash", market, i + 1, n)
             break
 
+        fee    = chunk_eur * FEE_RATE
+        amount = (chunk_eur - fee) / price
+
         set_cash(current_cash - chunk_eur)
+        cur = get_position(market)
+        if cur["amount"] > 0:
+            new_total = cur["amount"] + amount
+            new_avg   = (cur["amount"] * cur["avg_price"] + amount * price) / new_total
+        else:
+            new_total, new_avg = amount, price
+        set_position(market, new_total, new_avg)
 
         total_amount += amount
         total_cost   += chunk_eur
-
-        current_pos = get_position(market)
-        if current_pos["amount"] > 0:
-            new_total  = current_pos["amount"] + amount
-            new_avg    = (current_pos["amount"] * current_pos["avg_price"] + amount * price) / new_total
-        else:
-            new_total  = amount
-            new_avg    = price
-        set_position(market, new_total, new_avg)
+        remaining    -= chunk_eur
 
         logger.info(
             "[%s] Iceberg chunk %d/%d — €%.2f | %.6f @ €%.4f",
-            market, i + 1, n_chunks, chunk_eur, amount, price,
+            market, i + 1, n, chunk_eur, amount, price,
         )
+
+        if not is_last and interval > 0:
+            time.sleep(interval)
 
     if total_amount <= 0:
         return None
 
-    iceberg_reason = f"[Iceberg {n_chunks}×] {reason}"
-    save_paper_trade(market, "BUY", price, total_amount, iceberg_reason, planned_price=price)
+    save_paper_trade(market, "BUY", price, total_amount,
+                     f"[Iceberg ×{n}] {reason}", planned_price=price)
     logger.info(
-        "[%s] PAPER ICEBERG BUY — prijs: €%.4f | totaal: %.6f | kosten: €%.2f | %d chunks",
-        market, price, total_amount, total_cost, n_chunks,
+        "[%s] PAPER ICEBERG BUY — €%.2f | %d chunks | totaal: %.6f @ €%.4f",
+        market, total_cost, n, total_amount, price,
     )
     return {"side": "BUY", "price": price, "amount": total_amount, "eur": total_cost}
 
 
-def buy(market: str, price: float, reason: str = "", fraction: float | None = None,
-        iceberg_chunks: int = 1) -> dict | None:
+def buy(market: str, price: float, reason: str = "", fraction: float | None = None) -> dict | None:
     """
     Simuleer een marktorder koop.
     Gebruikt fraction (of PAPER_TRADE_FRACTION als None) van beschikbaar cash.
@@ -109,11 +128,13 @@ def buy(market: str, price: float, reason: str = "", fraction: float | None = No
 
     trade_fraction = env_float("PAPER_TRADE_FRACTION", 0.15)
     used_fraction  = fraction if fraction is not None else trade_fraction
+    spend_eur      = cash * used_fraction
 
-    if iceberg_chunks > 1:
-        return _buy_iceberg(market, price, reason, used_fraction, iceberg_chunks, cash)
-
-    spend_eur = cash * used_fraction
+    # Smart iceberg: alleen activeren boven de drempel
+    iceberg_enabled   = os.getenv("ICEBERG_ENABLED", "false").lower() == "true"
+    iceberg_threshold = env_float("ICEBERG_THRESHOLD", 500.0)
+    if iceberg_enabled and spend_eur >= iceberg_threshold:
+        return _buy_iceberg(market, price, reason, spend_eur)
     min_order = env_float("MIN_ORDER_EUR", 5.0)
     if spend_eur < min_order:
         if cash >= min_order:
