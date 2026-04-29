@@ -54,23 +54,26 @@ def _is_stablecoin(market: str) -> bool:
     return base in _STABLECOINS
 
 
-def _build_market_table(market_stats: list[dict], limit: int = 80) -> str:
-    top = market_stats[:limit]
+def _build_market_table(market_stats: list[dict], limit: int = 40, min_volume_eur: float = 20_000) -> str:
+    # Filter stablecoins en extreem lage volumes vóór verzending naar AI
+    filtered = [
+        m for m in market_stats
+        if not _is_stablecoin(m["market"]) and (m.get("volume_eur") or 0) >= min_volume_eur
+    ]
+    top = filtered[:limit]
     lines = [
-        f"Top {len(top)} EUR markets on Bitvavo by 24h volume:",
+        f"Top {len(top)} EUR markets on Bitvavo by 24h volume (stablecoins and <€{min_volume_eur:,.0f}/day excluded):",
         "",
-        f"{'Market':<14} {'Price':>12} {'24h %':>8} {'Volume EUR':>16} {'Note':<12}",
-        "-" * 64,
+        f"{'Market':<14} {'Price':>12} {'24h %':>8} {'Volume EUR':>16}",
+        "-" * 54,
     ]
     for m in top:
         change = m.get("change_24h", 0) or 0
-        note = "STABLECOIN" if _is_stablecoin(m["market"]) else ""
         lines.append(
             f"{m['market']:<14} "
             f"€{m['price']:>11.4f} "
             f"{change:>+7.2f}% "
-            f"€{m['volume_eur']:>15,.0f} "
-            f"{note:<12}"
+            f"€{m['volume_eur']:>15,.0f}"
         )
     return "\n".join(lines)
 
@@ -134,7 +137,7 @@ def advise_markets(market_stats: list[dict], *, provider: str | None = None, mod
         _SYSTEM_PROMPT,
         "Analyze these markets and recommend which ones to include "
         "in an automated EUR trading portfolio:\n\n" + table,
-        max_tokens=4096,
+        max_tokens=1024,
     )
     logger.debug("AI marktadvies raw: %.500s", text)
 
