@@ -176,6 +176,10 @@ def latest_signals(df: pd.DataFrame) -> dict:
     macd_hist  = float(last["macd_hist"]) if pd.notna(last.get("macd_hist")) else None
     macd_hist_prev = float(df.iloc[-2]["macd_hist"]) if len(df) > 1 and pd.notna(df.iloc[-2].get("macd_hist")) else None
 
+    # 24-candle ATR average for Route B dynamic threshold
+    _atr_series = df["atr_14"].tail(24).dropna() if "atr_14" in df.columns else pd.Series([], dtype=float)
+    avg_atr_24h = float(_atr_series.mean()) if len(_atr_series) >= 12 else None
+
     return {
         "ts": ts_str,
         "close": last["close"],
@@ -192,4 +196,5 @@ def latest_signals(df: pd.DataFrame) -> dict:
         "volume": volume,
         "volume_avg_20": vol_avg_20,
         "atr_14": atr_14,
+        "avg_atr_24h": avg_atr_24h,
     }
