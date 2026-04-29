@@ -27,18 +27,10 @@ Exclusion (never include):
 
 Target 15–35% of the submitted markets.
 
-Respond ONLY with this JSON — no other text. IMPORTANT: only list INCLUDED markets in "markets".
-Do NOT add excluded markets to "markets" (this keeps the response compact):
-```json
-{
-  "recommended": ["BTC-EUR", "ETH-EUR", "SOL-EUR"],
-  "summary": "One sentence describing the overall selection rationale.",
-  "markets": {
-    "BTC-EUR": {"confidence": 0.95, "reasoning": "Highest liquidity, solid trend."},
-    "ETH-EUR": {"confidence": 0.90, "reasoning": "Strong ecosystem, consistent volume."}
-  }
-}
-```
+Respond ONLY with raw JSON — no markdown, no code blocks, no text before or after.
+Start your response with { and end with }.
+Output format (fill in values):
+{"recommended": ["BTC-EUR", "ETH-EUR", "SOL-EUR"], "summary": "One sentence rationale.", "markets": {"BTC-EUR": {"confidence": 0.95, "reasoning": "brief reason"}, "ETH-EUR": {"confidence": 0.90, "reasoning": "brief reason"}}}
 Keep each "reasoning" under 10 words. List only recommended markets in "markets".\
 """
 
@@ -79,37 +71,49 @@ def _build_market_table(market_stats: list[dict], limit: int = 40, min_volume_eu
 
 
 def _parse_advice(text: str) -> dict | None:
-    """
-    Parseer het AI-antwoord. Probeert eerst volledige JSON; valt terug op
-    gedeeltelijke extractie zodat een afgekapt antwoord toch bruikbaar is.
-    """
-    # Poging 1: volledige JSON-blok
-    m = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(1))
-        except (json.JSONDecodeError, ValueError):
-            pass
+    """Parseer AI-antwoord; valt stapsgewijs terug bij truncatie of code-fences."""
+    if not text:
+        return None
 
-    # Poging 2: JSON zonder code-fences
-    m = re.search(r'\{\s*"recommended"\s*:.*\}', text, re.DOTALL)
+    # Strip code-fences (Gemini kopieert ze als het prompt ze toont)
+    cleaned = re.sub(r"```(?:json)?\s*|```", "", text).strip()
+
+    # Poging 1: volledige JSON via greedy-match op het buitenste object
+    m = re.search(r'\{\s*"recommended"\s*:.*\}', cleaned, re.DOTALL)
     if m:
         try:
             return json.loads(m.group(0))
         except (json.JSONDecodeError, ValueError):
             pass
 
-    # Poging 3: extraheer alleen "recommended" array uit afgekapt antwoord
-    rec_m = re.search(r'"recommended"\s*:\s*(\[.*?\])', text, re.DOTALL)
-    sum_m = re.search(r'"summary"\s*:\s*"([^"]*)"', text)
+    # Poging 2: brace-depth scan — robuuster bij geneste objecten
+    for i, ch in enumerate(cleaned):
+        if ch != '{':
+            continue
+        depth = 0
+        for j in range(i, len(cleaned)):
+            if cleaned[j] == '{':
+                depth += 1
+            elif cleaned[j] == '}':
+                depth -= 1
+                if depth == 0:
+                    candidate = cleaned[i:j + 1]
+                    if '"recommended"' in candidate:
+                        try:
+                            return json.loads(candidate)
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                    break
+
+    # Poging 3: afgekapte array — geen sluitende ] nodig; extraheer marktnamen via regex
+    rec_m = re.search(r'"recommended"\s*:\s*\[([^\]]*)', cleaned, re.DOTALL)
+    sum_m = re.search(r'"summary"\s*:\s*"([^"]*)"', cleaned)
     if rec_m:
-        try:
-            recommended = json.loads(rec_m.group(1))
-            summary = sum_m.group(1) if sum_m else "Advies gedeeltelijk ontvangen — response was afgekapt."
-            logger.warning("AI marktadvies afgekapt — alleen 'recommended' geëxtraheerd (%d markten)", len(recommended))
-            return {"recommended": recommended, "summary": summary, "markets": {}}
-        except (json.JSONDecodeError, ValueError):
-            pass
+        markets_found = re.findall(r'"([A-Z0-9]+-EUR)"', rec_m.group(1))
+        if markets_found:
+            summary = sum_m.group(1) if sum_m else "Advies gedeeltelijk ontvangen — response afgekapt."
+            logger.warning("AI marktadvies afgekapt — %d markten via regex geëxtraheerd", len(markets_found))
+            return {"recommended": markets_found, "summary": summary, "markets": {}}
 
     return None
 
