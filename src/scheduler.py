@@ -101,6 +101,18 @@ def run_cycle() -> None:
             sig = latest_signals(df)
             current_price = sig["close"]
 
+            # Lage-volume filter: sla markten over met te weinig 24h-liquiditeit
+            min_vol_eur = env_float("MIN_VOLUME_EUR", 0.0)
+            if min_vol_eur > 0:
+                vol_avg = sig.get("volume_avg_20") or 0
+                vol_eur_per_candle = vol_avg * current_price
+                if vol_eur_per_candle < min_vol_eur:
+                    logger.info(
+                        "[%s] Volume te laag (€%.0f/candle < €%.0f) — overgeslagen",
+                        market, vol_eur_per_candle, min_vol_eur,
+                    )
+                    continue
+
             # OCO leg-check (LIVE modus): annuleer tegengestelde leg als één gevuld is
             sl_tp_triggered = False
             if (not paused

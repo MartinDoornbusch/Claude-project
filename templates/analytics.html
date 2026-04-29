@@ -22,6 +22,8 @@
     .form-select:focus { background: #ffffff; border-color: #3b82f6; color: #1e293b; box-shadow: none; }
     option { background: #ffffff; }
     .empty-state { color: #64748b; font-size: .9rem; }
+    .tbl-scroll { max-height: 420px; overflow-y: auto; }
+    .tbl-scroll thead th { position: sticky; top: 0; z-index: 2; background: #f8fafc; }
     @media (max-width:576px) { .hide-sm { display:none; } }
   </style>
 <script>const BASE_URL = '{{ url_for("index") }}'.replace(/\/$/, '');</script>
@@ -54,7 +56,7 @@
       <span style="font-size:.75rem; color:#64748b;" id="per-coin-subtitle"></span>
     </div>
     <div class="card-body p-0">
-      <div class="table-responsive">
+      <div class="table-responsive tbl-scroll">
         <table class="table table-hover mb-0" id="per-coin-table" style="font-size:.85rem;">
           <thead>
             <tr>
@@ -142,7 +144,7 @@
   <div class="card mb-4">
     <div class="card-header" id="pairs-header">Afgesloten trades</div>
     <div class="card-body p-0">
-      <div class="table-responsive">
+      <div class="table-responsive tbl-scroll">
         <table class="table table-hover mb-0">
           <thead>
             <tr>

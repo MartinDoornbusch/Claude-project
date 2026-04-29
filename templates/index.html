@@ -30,6 +30,8 @@
     .confidence-fill { height: 100%; border-radius: 3px; transition: width .4s; }
     .ai-badge { font-size: 0.7rem; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
     @media (max-width: 576px) { .hide-sm { display: none !important; } }
+    .tbl-scroll { max-height: 420px; overflow-y: auto; }
+    .tbl-scroll thead th { position: sticky; top: 0; z-index: 2; }
     .ai-badge-BUY  { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
     .ai-badge-SELL { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
     .ai-badge-HOLD { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
@@ -259,7 +261,7 @@
     </div>
     <div class="card-body p-0">
       {% if ai_decisions %}
-      <div class="table-responsive">
+      <div class="table-responsive tbl-scroll">
         <table class="table table-hover mb-0">
           <thead>
             <tr>
@@ -306,7 +308,7 @@
   <div class="card mb-4" style="border-color:#fca5a5;">
     <div class="card-header" style="background:#fff1f2; color:#dc2626;">Uitgevoerde Live Orders</div>
     <div class="card-body p-0">
-      <div class="table-responsive">
+      <div class="table-responsive tbl-scroll">
         <table class="table table-hover mb-0">
           <thead>
             <tr>
@@ -346,7 +348,7 @@
   <div class="card mb-4">
     <div class="card-header">Laatste paper trades</div>
     <div class="card-body p-0">
-      <div class="table-responsive">
+      <div class="table-responsive tbl-scroll">
         <table class="table table-hover mb-0">
           <thead>
             <tr>
