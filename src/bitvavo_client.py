@@ -6,13 +6,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Bescherming tegen negatieve sleep-waarden als de Pi-klok fractie afwijkt van
-# de Bitvavo-serverklok. De library berekent resetAt - now, wat negatief kan zijn.
-_orig_wait = Bitvavo.waitForReset
-def _safe_wait(self, wait_time):
-    _orig_wait(self, max(0.0, float(wait_time)))
-Bitvavo.waitForReset = _safe_wait
-
 
 def get_client() -> Bitvavo:
     api_key = os.getenv("BITVAVO_API_KEY", "")
