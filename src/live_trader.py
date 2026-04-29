@@ -149,6 +149,13 @@ def buy(client: Bitvavo, market: str, current_price: float, reason: str = "",
     Gebruikt MAX_TRADE_EUR als orderbedrag.
     """
     spend_eur = env_float("MAX_TRADE_EUR", 25)
+    min_order = env_float("MIN_ORDER_EUR", 5.0)
+    if spend_eur < min_order:
+        logger.warning(
+            "[%s] LIVE BUY overgeslagen — MAX_TRADE_EUR €%.2f < MIN_ORDER_EUR €%.2f",
+            market, spend_eur, min_order,
+        )
+        return None
 
     block = _guard_checks(client, market, spend_eur)
     if block:

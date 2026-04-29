@@ -608,6 +608,26 @@ def get_last_trade_pnl(market: str) -> float | None:
     return (float(sell["price"]) - float(buy["price"])) * float(sell["amount"])
 
 
+def get_last_sell_ts(market: str) -> str | None:
+    """Geeft de timestamp van het meest recente paper SELL, of None."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT ts FROM paper_trades WHERE market=? AND side='SELL' ORDER BY ts DESC LIMIT 1",
+            (market,)
+        ).fetchone()
+        return row["ts"] if row else None
+
+
+def get_last_live_sell_ts(market: str) -> str | None:
+    """Geeft de timestamp van het meest recente live SELL (filled), of None."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT ts FROM live_trades WHERE market=? AND side='SELL' AND status='filled' ORDER BY ts DESC LIMIT 1",
+            (market,)
+        ).fetchone()
+        return row["ts"] if row else None
+
+
 def save_portfolio_snapshot(cash_eur: float, pos_eur: float, total_eur: float) -> None:
     with get_conn() as conn:
         conn.execute(

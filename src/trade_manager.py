@@ -155,18 +155,46 @@ def execute_buy(
 
     # Winst-exclusiviteit: blokkeer nieuwe kopen als laatste trade verlies maakte
     if os.getenv("HOUSE_MONEY_ONLY_PROFIT", "false").lower() == "true":
-        if os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true":
-            from src.database import get_last_live_trade_pnl
+        from src.env_utils import env_float as _ef
+        live_mode = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
+        if live_mode:
+            from src.database import get_last_live_trade_pnl, get_last_live_sell_ts
             last_pnl = get_last_live_trade_pnl(market)
+            last_ts  = get_last_live_sell_ts(market)
         else:
-            from src.database import get_last_trade_pnl
+            from src.database import get_last_trade_pnl, get_last_sell_ts
             last_pnl = get_last_trade_pnl(market)
+            last_ts  = get_last_sell_ts(market)
         if last_pnl is not None and last_pnl <= 0:
-            logger.info(
-                "[%s] BUY overgeslagen — winst-exclusiviteit: vorige trade verliesgevend (€%.2f)",
-                market, last_pnl,
-            )
-            return None
+            cooldown_h = _ef("WIN_EXCL_COOLDOWN_HOURS", 6.0)
+            blocked = True
+            if cooldown_h > 0 and last_ts:
+                from datetime import datetime
+                from zoneinfo import ZoneInfo
+                _AMS = ZoneInfo("Europe/Amsterdam")
+                sell_dt = datetime.fromisoformat(last_ts)
+                if sell_dt.tzinfo is None:
+                    sell_dt = sell_dt.replace(tzinfo=_AMS)
+                elapsed_h = (datetime.now(_AMS) - sell_dt).total_seconds() / 3600
+                if elapsed_h >= cooldown_h:
+                    blocked = False
+                    logger.info(
+                        "[%s] Winst-exclusiviteit cooldown verstreken (%.1fh ≥ %.1fh) — BUY toegestaan",
+                        market, elapsed_h, cooldown_h,
+                    )
+                else:
+                    remaining = cooldown_h - elapsed_h
+                    logger.info(
+                        "[%s] BUY overgeslagen — winst-exclusiviteit: verlies €%.2f, nog %.1fh cooldown",
+                        market, last_pnl, remaining,
+                    )
+            else:
+                logger.info(
+                    "[%s] BUY overgeslagen — winst-exclusiviteit: vorige trade verliesgevend (€%.2f)",
+                    market, last_pnl,
+                )
+            if blocked:
+                return None
 
     if os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true":
         logger.info("[%s] Mode: LIVE — BUY uitvoeren", market)
