@@ -51,8 +51,13 @@
       <div class="row g-3">
         <div class="col-6 col-md-3">
           <label class="form-label">Markt</label>
-          <input type="text" class="form-control" id="cfg-market"
-                 value="{{ markets[0] if markets else 'BTC-EUR' }}" placeholder="BTC-EUR">
+          <select class="form-select" id="cfg-market">
+            {% for m in markets %}
+            <option value="{{ m }}" {{ 'selected' if loop.first }}>{{ m }}</option>
+            {% else %}
+            <option value="BTC-EUR" selected>BTC-EUR</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label">Interval</label>
