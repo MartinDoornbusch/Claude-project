@@ -303,6 +303,32 @@
     el.textContent = text;
     el.className = 'stat-value ' + (cls || '');
   }
+
+  async function loadMarkets() {
+    const sel = document.getElementById('cfg-market');
+    const current = sel.value;
+    try {
+      const r = await fetch(BASE_URL + '/api/markets/available');
+      const d = await r.json();
+      if (!d.markets || !d.markets.length) return;
+      // Bewaar geconfigureerde markten bovenaan, voeg rest toe
+      const configured = Array.from(sel.options).map(o => o.value);
+      const extra = d.markets.filter(m => !configured.includes(m));
+      if (extra.length) {
+        const sep = document.createElement('option');
+        sep.disabled = true; sep.textContent = '── Alle markten ──';
+        sel.appendChild(sep);
+      }
+      extra.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = m;
+        sel.appendChild(opt);
+      });
+      sel.value = current || sel.options[0].value;
+    } catch (e) { /* stil falen */ }
+  }
+
+  document.addEventListener('DOMContentLoaded', loadMarkets);
 </script>
 </body>
 </html>
