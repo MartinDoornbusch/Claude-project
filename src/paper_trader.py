@@ -13,6 +13,7 @@ from src.database import (
     get_position, set_position,
     save_paper_trade,
     add_daily_pnl,
+    get_all_positions,
 )
 
 logger = logging.getLogger(__name__)
@@ -231,14 +232,22 @@ def portfolio_value(market_prices: dict[str, float]) -> dict:
     """
     Bereken de totale waarde van het paper portfolio.
     market_prices: {"BTC-EUR": 60000.0, ...}
+    Posities in uitgeschakelde of overgeslagen markten worden altijd meegeteld
+    (met inkoopprijs als fallback als er geen live prijs beschikbaar is).
     """
     cash = get_cash()
     positions = {}
     total = cash
 
-    for market, price in market_prices.items():
+    # Alle markten: actieve prijzen + markten met open posities (ook uitgeschakeld)
+    all_markets = set(market_prices.keys())
+    for row in get_all_positions():
+        all_markets.add(row["market"])
+
+    for market in all_markets:
         pos = get_position(market)
         if pos["amount"] > 0:
+            price = market_prices.get(market, pos["avg_price"])
             eur_value = pos["amount"] * price
             total += eur_value
             positions[market] = {
