@@ -60,24 +60,17 @@ decision: BUY | SELL | HOLD  —  confidence: 0.0–1.0\
 """
 
 _SENTIMENT_PROMPT = """\
-You are a crypto market sentiment analyst for the Bitvavo exchange.
-Assess the current market mood from the price action, volume, and macro context provided.
+You are a crypto sentiment analyst. Your response must be ONLY a JSON object — nothing before, nothing after.
+Start your response with { and end with }. No analysis, no bullets, no markdown.
 
-The data you receive comes from the candle timeframe shown in the context header.
-Use that timeframe to calibrate your interpretation:
-- Short timeframes (1m–15m): react to recent momentum bursts and micro-sentiment
-- Medium timeframes (1h–4h): focus on intra-day trend and volume patterns
-- Daily/weekly: evaluate macro trend health and fear/greed context
+Assess sentiment from the provided price action and indicators:
+- POSITIVE: clear uptrend, healthy volume, momentum building
+- NEGATIVE: downtrend, deteriorating momentum, risk-off signals
+- NEUTRAL: mixed or unclear signals
 
-Guidelines:
-- POSITIVE → clear uptrend for this timeframe, healthy volume, fear/greed in neutral-to-greed zone
-- NEGATIVE → downtrend, extreme greed (correction risk), panic-sell patterns, or deteriorating momentum
-- NEUTRAL  → mixed or insufficient signals
-
-IMPORTANT: respond with ONLY raw JSON — no markdown, no code blocks, no explanation before or after.
-Output format (copy exactly, fill in values):
-{"sentiment": "POSITIVE", "confidence": 0.75, "reasoning": "one concise English sentence"}
-sentiment: POSITIVE | NEGATIVE | NEUTRAL  —  confidence: 0.0–1.0\
+Output exactly this structure (fill in values):
+{"sentiment": "POSITIVE", "confidence": 0.75, "reasoning": "max 10 words"}
+sentiment: POSITIVE | NEGATIVE | NEUTRAL — confidence: 0.0–1.0\
 """
 
 _RISK_PROMPT = """\
@@ -332,23 +325,34 @@ def _parse_sentiment(text: str) -> dict | None:
         except (json.JSONDecodeError, ValueError, TypeError) as exc:
             logger.debug("_parse_sentiment JSON-parse fout (%s) — valt terug op regex", exc)
 
-    # ── Pad B: regex-fallback voor afgebroken JSON ───────────────────────────
-    # Gemini geeft altijd "sentiment" en "confidence" eerst, dan "reasoning" — die
-    # wordt afgekapt. We kunnen de bruikbare data altijd redden.
     cleaned = re.sub(r"```(?:json)?\s*|```", "", text).strip()
-    sent_m = re.search(r'"sentiment"\s*:\s*"([^"]*)"', cleaned, re.IGNORECASE)
+
+    # ── Pad B: regex op (afgebroken) JSON — sluitende " niet vereist ─────────
+    sent_m = re.search(r'"sentiment"\s*:\s*"([A-Za-z]+)', cleaned, re.IGNORECASE)
     conf_m = re.search(r'"confidence"\s*:\s*([0-9.]+)', cleaned)
     if sent_m:
         s = sent_m.group(1).upper().strip()
         sentiment  = "POSITIVE" if "POS" in s else ("NEGATIVE" if "NEG" in s else "NEUTRAL")
         confidence = max(0.0, min(1.0, float(conf_m.group(1)))) if conf_m else 0.5
-        reason_m   = re.search(r'"(?:reasoning|reason)"\s*:\s*"([^"]*)"', cleaned)
+        reason_m   = re.search(r'"(?:reasoning|reason)"\s*:\s*"([^"]*)', cleaned)
         reasoning  = reason_m.group(1) if reason_m else "(afgebroken)"
-        logger.debug("_parse_sentiment: regex-fallback gebruikt voor '%s'", cleaned[:80])
+        logger.debug("_parse_sentiment: Pad B (regex) voor '%.80s'", cleaned[:80])
         return {"sentiment": sentiment, "confidence": confidence, "reasoning": reasoning}
 
-    logger.warning("_parse_sentiment: kon niets parsen — raw: %.400s", text)
-    return None
+    # ── Pad C: keyword-scan voor vrije tekst (JSON-instructie genegeerd) ─────
+    upper = cleaned.upper()
+    if any(w in upper for w in ("BULLISH", "POSITIVE", "UPTREND", "UPWARD")):
+        kw_sent = "POSITIVE"
+    elif any(w in upper for w in ("BEARISH", "NEGATIVE", "DOWNTREND", "BEAR")):
+        kw_sent = "NEGATIVE"
+    elif any(w in upper for w in ("NEUTRAL", "SIDEWAYS", "MIXED", "FLAT")):
+        kw_sent = "NEUTRAL"
+    else:
+        logger.warning("_parse_sentiment: kon niets parsen — raw: %.400s", text)
+        return None
+    logger.debug("_parse_sentiment: Pad C (keyword) voor '%.80s'", cleaned[:80])
+    return {"sentiment": kw_sent, "confidence": 0.40,
+            "reasoning": f"(keyword: {cleaned[:60]})"}
 
 
 def _parse_risk(text: str) -> dict | None:
@@ -514,7 +518,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         if sentiment_prov:
             try:
                 text = complete_for(sentiment_prov, pdict[sentiment_prov],
-                                    _SENTIMENT_PROMPT, prompt, max_tokens=150)
+                                    _SENTIMENT_PROMPT, prompt, max_tokens=400)
                 logger.debug("[%s] %s raw: %.200s", market, sentiment_prov, text)
                 parsed = _parse_sentiment(text)
                 if parsed:
