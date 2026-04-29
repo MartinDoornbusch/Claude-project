@@ -179,9 +179,25 @@
             </div>
             <div class="mb-3">
               <label class="form-label">Blacklist / Uitsluitingslijst</label>
-              <input type="text" class="form-control" name="TRADING_BLACKLIST"
-                     value="{{ config.TRADING_BLACKLIST }}" placeholder="DOGE-EUR,SHIB-EUR,PEPE-EUR">
-              <div class="form-text">Komma-gescheiden markten — bot negeert deze volledig (geen koop, verkoop of risicoberekening). Handig voor meme-coins die je zelf al bezit.</div>
+              <input type="hidden" name="TRADING_BLACKLIST" id="blacklist_input"
+                     value="{{ config.TRADING_BLACKLIST }}">
+              <div class="mb-1" style="font-size:.85rem; color:#475569;">
+                Geselecteerd: <span id="blacklist_count">{{ config.TRADING_BLACKLIST.split(',')|selectattr('__len__')|list|length if config.TRADING_BLACKLIST else 0 }}</span>
+                markt(en) —
+                <code id="blacklist_preview" style="font-size:.8rem;">{{ config.TRADING_BLACKLIST or '(leeg)' }}</code>
+              </div>
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        id="load_blacklist_btn" onclick="loadBlacklistPicker()">
+                  Laad beschikbare markten
+                </button>
+                <span id="blacklist_status" style="font-size:.78rem; color:#64748b;"></span>
+              </div>
+              <div id="blacklist_picker" style="display:none; border:1px solid #e2e8f0; border-radius:.4rem; background:#f8fafc; padding:.5rem;">
+                <input type="text" id="blacklist_search" class="form-control form-control-sm mb-2" placeholder="Zoek markt...">
+                <div id="blacklist_list" style="max-height:200px; overflow-y:auto;"></div>
+              </div>
+              <div class="form-text">Bot negeert deze markten volledig. Handig voor meme-coins die je zelf al bezit.</div>
             </div>
             <div class="mb-3">
               <label class="form-label">Minimum volume per candle (EUR)</label>
@@ -335,6 +351,18 @@
               <div class="form-text">
                 Bot stopt met kopen als het dagverlies dit % van het startkapitaal overschrijdt.
                 Nu: €{{ (config.PAPER_STARTING_CAPITAL|float * config.DAILY_LOSS_LIMIT_PCT|float / 100)|round(2) }} bij €{{ config.PAPER_STARTING_CAPITAL|float|int }} kapitaal
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Circuit Breaker — automatische pauze</label>
+              <div class="input-group" style="max-width:200px;">
+                <input type="number" class="form-control" name="CIRCUIT_BREAKER_PCT"
+                       value="{{ config.CIRCUIT_BREAKER_PCT }}" step="1" min="0" max="50">
+                <span class="input-group-text">% drawdown</span>
+              </div>
+              <div class="form-text">
+                Trading wordt automatisch gepauzeerd als het portfolio meer dan dit % daalt ten opzichte van het historische hoogtepunt.
+                <strong>0 = uitgeschakeld.</strong> Aanbevolen: 15–25%.
               </div>
             </div>
             <div class="mb-3">
@@ -724,6 +752,15 @@
                 </div>
                 <div class="form-text">Pauze tussen elke markt-analyse — verhoog bij 429-fouten (aanbevolen: 1.0–2.0)</div>
               </div>
+              <div class="mb-3">
+                <label class="form-label">Sentiment accuracy horizon</label>
+                <div class="input-group" style="max-width:180px;">
+                  <input type="number" class="form-control" name="AI_ACCURACY_HORIZON_HOURS"
+                         value="{{ config.AI_ACCURACY_HORIZON_HOURS }}" min="1" max="168" step="1">
+                  <span class="input-group-text">uur</span>
+                </div>
+                <div class="form-text">Na hoeveel uur wordt gecontroleerd of een AI-beslissing correct was (aanbevolen: 8–24)</div>
+              </div>
               <div>
                 <label class="form-label">ATR Dynamische gevoeligheid (Route B)</label>
                 <div class="input-group" style="max-width:200px;">
@@ -1071,6 +1108,57 @@
   function syncMarketsInput() {
     const checked = [...document.querySelectorAll('.market-cb:checked')].map(cb => cb.value);
     document.getElementById('trading_markets_input').value = checked.join(',');
+  }
+
+  // ── Blacklist picker (hergebruikt _allMarkets cache) ──────────────────────
+  async function loadBlacklistPicker() {
+    const btn    = document.getElementById('load_blacklist_btn');
+    const status = document.getElementById('blacklist_status');
+    btn.disabled = true;
+    status.textContent = 'Laden...';
+    status.style.color = '#64748b';
+    try {
+      if (!_allMarkets.length) {
+        const r = await fetch(BASE_URL + '/api/markets/available');
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        _allMarkets = d.markets;
+      }
+      status.textContent = `${_allMarkets.length} markten`;
+      document.getElementById('blacklist_picker').style.display = '';
+      renderBlacklist('');
+      document.getElementById('blacklist_search').addEventListener('input', function() {
+        renderBlacklist(this.value);
+      });
+    } catch(e) {
+      status.textContent = 'Fout: ' + e.message;
+      status.style.color = '#dc2626';
+    }
+    btn.disabled = false;
+  }
+
+  function renderBlacklist(filter) {
+    const current = document.getElementById('blacklist_input').value
+      .split(',').map(m => m.trim().toUpperCase()).filter(Boolean);
+    const list = document.getElementById('blacklist_list');
+    const visible = filter
+      ? _allMarkets.filter(m => m.toLowerCase().includes(filter.toLowerCase()))
+      : _allMarkets;
+    list.innerHTML = visible.map(m => {
+      const chk = current.includes(m.toUpperCase()) ? 'checked' : '';
+      return `<div class="form-check py-0">
+        <input class="form-check-input bl-cb" type="checkbox" value="${m}" id="blcb_${m}" ${chk}>
+        <label class="form-check-label" for="blcb_${m}" style="font-size:.85rem; cursor:pointer;">${m}</label>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.bl-cb').forEach(cb => cb.addEventListener('change', syncBlacklistInput));
+  }
+
+  function syncBlacklistInput() {
+    const checked = [...document.querySelectorAll('.bl-cb:checked')].map(cb => cb.value);
+    document.getElementById('blacklist_input').value = checked.join(',');
+    document.getElementById('blacklist_count').textContent = checked.length;
+    document.getElementById('blacklist_preview').textContent = checked.join(',') || '(leeg)';
   }
 
   async function detectGoogleModels() {

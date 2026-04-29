@@ -15,8 +15,9 @@ from src.bitvavo_client import get_client
 from src.candles import get_candles, latest_signals, add_indicators, get_atr_fraction, get_risk_fraction
 from src.database import (
     init_db, save_ai_decision, save_signal, get_enabled_markets,
-    save_portfolio_snapshot, get_trading_paused,
+    save_portfolio_snapshot, get_trading_paused, set_trading_paused,
     get_latest_portfolio_total, get_cash, mark_ai_decision_executed,
+    get_portfolio_peak, get_pending_accuracy_decisions, save_ai_accuracy,
 )
 from src.paper_trader import portfolio_value
 from src.strategy import evaluate
@@ -84,6 +85,27 @@ def run_cycle() -> None:
                 logger.info("Scheduler herplanned: elke %d minuten", check_minutes)
 
     paused  = get_trading_paused()
+
+    # Circuit breaker: automatische pauze bij te groot portfolio drawdown
+    from src.env_utils import env_float_opt
+    cb_pct = env_float_opt("CIRCUIT_BREAKER_PCT")
+    if cb_pct and cb_pct > 0 and not paused:
+        peak = get_portfolio_peak()
+        if peak > 0:
+            dd_pct = (peak - portfolio_total) / peak * 100
+            if dd_pct >= cb_pct:
+                set_trading_paused(True)
+                paused = True
+                logger.warning(
+                    "CIRCUIT BREAKER geactiveerd: drawdown %.1f%% ≥ %.1f%% — trading automatisch gepauzeerd",
+                    dd_pct, cb_pct,
+                )
+                try:
+                    from src.notifier import notify_error
+                    notify_error("PORTFOLIO", f"Circuit breaker: drawdown {dd_pct:.1f}% ≥ {cb_pct:.1f}%")
+                except Exception:
+                    pass
+
     markets = _active_markets()
     logger.info(
         "=== Cyclus gestart [%s] (%s)%s ===",
@@ -134,7 +156,10 @@ def run_cycle() -> None:
             if ai_enabled():
                 decision, confidence, reasoning = ai_evaluate(market, sig)
                 # Sla op als nog-niet-uitgevoerd; wordt bijgewerkt ná echte fill
-                ai_decision_id = save_ai_decision(market, decision, confidence, reasoning, executed=False)
+                ai_decision_id = save_ai_decision(
+                    market, decision, confidence, reasoning,
+                    executed=False, entry_price=current_price,
+                )
                 signal = decision
                 reason = f"AI ({confidence:.0%}): {reasoning}"
             else:
@@ -213,6 +238,34 @@ def run_cycle() -> None:
         publish_all(pf, market_signals)
     except Exception as exc:
         logger.warning("MQTT publish mislukt: %s", exc)
+
+    # Sentiment accuracy evaluatie: beoordeel AI-beslissingen die oud genoeg zijn
+    if ai_enabled() and market_prices:
+        try:
+            horizon_h = env_float("AI_ACCURACY_HORIZON_HOURS", 8.0)
+            for dec in get_pending_accuracy_decisions(horizon_h):
+                mkt = dec["market"]
+                if mkt not in market_prices:
+                    continue
+                entry  = dec["entry_price"] or 0.0
+                if entry <= 0:
+                    continue
+                ev_price = market_prices[mkt]
+                pnl_pct  = (ev_price - entry) / entry * 100
+                if dec["decision"] == "BUY":
+                    outcome = "WIN" if pnl_pct > 0.5 else ("LOSS" if pnl_pct < -0.5 else "NEUTRAL")
+                else:  # SELL
+                    outcome = "WIN" if pnl_pct < -0.5 else ("LOSS" if pnl_pct > 0.5 else "NEUTRAL")
+                save_ai_accuracy(
+                    dec["id"], mkt, dec["decision"], dec["confidence"],
+                    entry, ev_price, pnl_pct, outcome, horizon_h,
+                )
+                logger.info(
+                    "[%s] AI accuracy: %s @ €%.4f → €%.4f (%.1f%%) = %s",
+                    mkt, dec["decision"], entry, ev_price, pnl_pct, outcome,
+                )
+        except Exception as exc:
+            logger.warning("Accuracy evaluatie mislukt: %s", exc)
 
 
 class _AmsFormatter(logging.Formatter):

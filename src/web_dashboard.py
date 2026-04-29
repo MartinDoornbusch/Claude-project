@@ -251,6 +251,12 @@ def api_ai_decisions():
     return jsonify(decisions)
 
 
+@app.route("/api/ai/accuracy")
+def api_ai_accuracy():
+    from src.database import get_ai_accuracy_stats
+    return jsonify(get_ai_accuracy_stats())
+
+
 @app.route("/api/portfolio")
 def api_portfolio():
     try:

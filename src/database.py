@@ -37,6 +37,8 @@ def get_conn():
 def init_db() -> None:
     with get_conn() as conn:
         conn.executescript("""
+            PRAGMA journal_mode=WAL;
+
             CREATE TABLE IF NOT EXISTS signals (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 ts          TEXT NOT NULL,
@@ -173,6 +175,20 @@ def init_db() -> None:
                 date        TEXT NOT NULL,
                 tokens_used INTEGER NOT NULL DEFAULT 0
             );
+
+            CREATE TABLE IF NOT EXISTS ai_accuracy (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                decision_id INTEGER NOT NULL UNIQUE,
+                market      TEXT NOT NULL,
+                decision    TEXT NOT NULL,
+                confidence  REAL NOT NULL,
+                entry_price REAL NOT NULL,
+                eval_price  REAL,
+                pnl_pct     REAL,
+                outcome     TEXT,
+                horizon_h   REAL NOT NULL,
+                eval_ts     TEXT
+            );
         """)
     # Migration: add columns to existing tables if missing
     with get_conn() as conn:
@@ -187,6 +203,9 @@ def init_db() -> None:
         sig_cols = {r["name"] for r in conn.execute("PRAGMA table_info(signals)").fetchall()}
         if "atr_14" not in sig_cols:
             conn.execute("ALTER TABLE signals ADD COLUMN atr_14 REAL")
+        ai_cols = {r["name"] for r in conn.execute("PRAGMA table_info(ai_decisions)").fetchall()}
+        if "entry_price" not in ai_cols:
+            conn.execute("ALTER TABLE ai_decisions ADD COLUMN entry_price REAL")
 
 
 # --- Signals ---
@@ -363,15 +382,16 @@ def add_daily_pnl(market: str, pnl_eur: float) -> None:
 # --- AI decisions ---
 
 def save_ai_decision(
-    market: str, decision: str, confidence: float, reasoning: str, executed: bool = False
+    market: str, decision: str, confidence: float, reasoning: str,
+    executed: bool = False, entry_price: float = 0.0,
 ) -> int:
     with get_conn() as conn:
         cur = conn.execute("""
-            INSERT INTO ai_decisions (ts, market, decision, confidence, reasoning, executed)
-            VALUES (?,?,?,?,?,?)
+            INSERT INTO ai_decisions (ts, market, decision, confidence, reasoning, executed, entry_price)
+            VALUES (?,?,?,?,?,?,?)
         """, (
             _now(),
-            market, decision, confidence, reasoning, 1 if executed else 0,
+            market, decision, confidence, reasoning, 1 if executed else 0, entry_price,
         ))
         return cur.lastrowid
 
@@ -678,6 +698,75 @@ def set_trading_paused(paused: bool) -> None:
             INSERT INTO bot_settings (key, value) VALUES ('trading_paused', ?)
             ON CONFLICT(key) DO UPDATE SET value=excluded.value
         """, ("1" if paused else "0",))
+
+
+def get_portfolio_peak() -> float:
+    """Hoogste portfolio-totaal ooit geregistreerd in snapshots."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT MAX(total_eur) AS peak FROM portfolio_snapshots"
+        ).fetchone()
+    return row["peak"] if row and row["peak"] is not None else 0.0
+
+
+# --- AI Accuracy ---
+
+def get_pending_accuracy_decisions(horizon_h: float = 8.0) -> list[dict]:
+    """Geeft AI-beslissingen terug die ouder zijn dan horizon_h uur en nog niet zijn geëvalueerd."""
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT d.id, d.market, d.decision, d.confidence, d.entry_price, d.ts
+            FROM ai_decisions d
+            LEFT JOIN ai_accuracy a ON a.decision_id = d.id
+            WHERE a.id IS NULL
+              AND d.decision IN ('BUY', 'SELL')
+              AND d.entry_price > 0
+              AND datetime(d.ts) <= datetime('now', ? || ' hours')
+        """, (f"-{horizon_h}",)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def save_ai_accuracy(
+    decision_id: int, market: str, decision: str, confidence: float,
+    entry_price: float, eval_price: float, pnl_pct: float, outcome: str, horizon_h: float,
+) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT OR IGNORE INTO ai_accuracy
+                (decision_id, market, decision, confidence, entry_price,
+                 eval_price, pnl_pct, outcome, horizon_h, eval_ts)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+        """, (
+            decision_id, market, decision, confidence, entry_price,
+            eval_price, pnl_pct, outcome, horizon_h, _now(),
+        ))
+
+
+def get_ai_accuracy_stats() -> dict:
+    """Accuracy-statistieken per markt en overall."""
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT market, decision,
+                   COUNT(*)                                          AS total,
+                   SUM(CASE WHEN outcome='WIN' THEN 1 ELSE 0 END)   AS wins,
+                   SUM(CASE WHEN outcome='LOSS' THEN 1 ELSE 0 END)  AS losses,
+                   AVG(pnl_pct)                                      AS avg_pnl_pct,
+                   AVG(confidence)                                   AS avg_confidence
+            FROM ai_accuracy
+            GROUP BY market, decision
+            ORDER BY market, decision
+        """).fetchall()
+        overall = conn.execute("""
+            SELECT COUNT(*)                                          AS total,
+                   SUM(CASE WHEN outcome='WIN' THEN 1 ELSE 0 END)   AS wins,
+                   SUM(CASE WHEN outcome='LOSS' THEN 1 ELSE 0 END)  AS losses,
+                   AVG(pnl_pct)                                      AS avg_pnl_pct
+            FROM ai_accuracy
+        """).fetchone()
+    return {
+        "per_market": [dict(r) for r in rows],
+        "overall":    dict(overall) if overall else {},
+    }
 
 
 def save_market_advice(market: str, recommended: bool, confidence: float | None, reasoning: str) -> None:
