@@ -6,6 +6,7 @@ import logging
 import os
 import signal
 import sys
+import time
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -139,6 +140,11 @@ def run_cycle() -> None:
             else:
                 signal = evaluate(market, interval, df, client=client)
                 reason = "MA crossover / RSI"
+
+            # Throttle: voorkom Groq/Gemini 429-fouten bij veel markten
+            ai_delay = env_float("AI_CALL_DELAY_SECONDS", 1.0)
+            if ai_delay > 0:
+                time.sleep(ai_delay)
 
             # Sla indicatoren altijd op — ook bij AI-strategie (nodig voor grafieken)
             save_signal(market, interval, sig, signal)
