@@ -51,8 +51,13 @@
       <div class="row g-3">
         <div class="col-6 col-md-3">
           <label class="form-label">Markt</label>
-          <input type="text" class="form-control" id="cfg-market"
-                 value="{{ markets[0] if markets else 'BTC-EUR' }}" placeholder="BTC-EUR">
+          <select class="form-select" id="cfg-market">
+            {% for m in markets %}
+            <option value="{{ m }}" {{ 'selected' if loop.first }}>{{ m }}</option>
+            {% else %}
+            <option value="BTC-EUR" selected>BTC-EUR</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label">Interval</label>
@@ -211,6 +216,31 @@
 
     document.getElementById('results').style.display = 'block';
   }
+
+  async function loadMarkets() {
+    const sel = document.getElementById('cfg-market');
+    const current = sel.value;
+    try {
+      const r = await fetch(BASE_URL + '/api/markets/available');
+      const d = await r.json();
+      if (!d.markets || !d.markets.length) return;
+      const configured = Array.from(sel.options).map(o => o.value);
+      const extra = d.markets.filter(m => !configured.includes(m));
+      if (extra.length) {
+        const sep = document.createElement('option');
+        sep.disabled = true; sep.textContent = '── Alle markten ──';
+        sel.appendChild(sep);
+      }
+      extra.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = m;
+        sel.appendChild(opt);
+      });
+      sel.value = current || sel.options[0].value;
+    } catch (e) { /* stil falen */ }
+  }
+
+  document.addEventListener('DOMContentLoaded', loadMarkets);
 </script>
 </body>
 </html>
