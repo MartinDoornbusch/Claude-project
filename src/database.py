@@ -171,6 +171,9 @@ def init_db() -> None:
         trade_cols = {r["name"] for r in conn.execute("PRAGMA table_info(paper_trades)").fetchall()}
         if "planned_price" not in trade_cols:
             conn.execute("ALTER TABLE paper_trades ADD COLUMN planned_price REAL")
+        sig_cols = {r["name"] for r in conn.execute("PRAGMA table_info(signals)").fetchall()}
+        if "atr_14" not in sig_cols:
+            conn.execute("ALTER TABLE signals ADD COLUMN atr_14 REAL")
 
 
 # --- Signals ---
@@ -179,8 +182,8 @@ def save_signal(market: str, interval: str, indicators: dict, signal: str | None
     with get_conn() as conn:
         conn.execute("""
             INSERT INTO signals (ts, market, interval, close, sma_20, sma_50,
-                                 rsi_14, macd, macd_signal, bb_lower, bb_upper, signal)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                                 rsi_14, macd, macd_signal, bb_lower, bb_upper, signal, atr_14)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             datetime.utcnow().isoformat(),
             market, interval,
@@ -193,6 +196,7 @@ def save_signal(market: str, interval: str, indicators: dict, signal: str | None
             indicators.get("bb_lower"),
             indicators.get("bb_upper"),
             signal,
+            indicators.get("atr_14"),
         ))
 
 

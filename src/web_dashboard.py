@@ -13,6 +13,7 @@ from src.database import (
     get_all_paper_trades_asc, get_daily_pnl_series, get_trading_paused, set_trading_paused,
     get_live_trades, reset_paper_trading, get_portfolio_snapshots,
     get_all_positions, get_total_daily_loss, get_latest_portfolio_total, get_position_meta,
+    get_last_buy_ts,
 )
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
@@ -192,6 +193,10 @@ def index():
                 t_sl     = peak * (1 - trailing_pct / 100) if trailing_enabled and peak > 0 else None
                 candidates   = [x for x in [sl_price, t_sl] if x is not None]
                 effective_sl = max(candidates) if candidates else None
+                try:
+                    buy_ts = get_last_buy_ts(market)
+                except Exception:
+                    buy_ts = None
                 positions_data[market] = {
                     "amount":          pos["amount"],
                     "avg_price":       avg,
@@ -199,6 +204,7 @@ def index():
                     "tp_price":        tp_price,
                     "trailing_active": trailing_enabled and peak > 0,
                     "house_money":     bool(meta.get("house_money_activated")),
+                    "buy_ts":          buy_ts,
                 }
     except Exception:
         pass

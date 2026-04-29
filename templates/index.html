@@ -235,6 +235,10 @@
             Wachten op eerste scheduler-cyclus…
           </div>
           <canvas id="chart-{{ loop.index }}" height="80" class="mt-3"></canvas>
+          <div id="atr-wrap-{{ loop.index }}" style="display:none; margin-top:4px;">
+            <div style="font-size:.63rem; color:#94a3b8; letter-spacing:.04em; text-transform:uppercase;">ATR 14</div>
+            <canvas id="atr-chart-{{ loop.index }}" height="36"></canvas>
+          </div>
         </div>
         <div class="card-footer text-end refresh-note">{{ m.ts[:16] if m.ts != '—' else '—' }}</div>
       </div>
@@ -520,9 +524,11 @@
   const positionsData = {{ positions_data | tojson }};
 
   markets.forEach((market, i) => {
-    const canvas = document.getElementById('chart-' + (i + 1));
+    const idx    = i + 1;
+    const canvas = document.getElementById('chart-' + idx);
     if (!canvas) return;
     const placeholder = canvas.parentElement.querySelector('.chart-placeholder');
+
     fetch(BASE_URL + '/api/signals/' + market)
       .then(r => r.json())
       .then(data => {
@@ -534,11 +540,14 @@
         if (placeholder) placeholder.style.display = 'none';
         canvas.style.display = '';
 
-        const reversed = data.slice().reverse();
-        const labels = reversed.map(d => d.ts ? d.ts.slice(11, 16) : '');
-        const prices = reversed.map(d => d.close ?? null);
-        const sma20  = reversed.map(d => d.sma_20 ?? null);
-        const sma50  = reversed.map(d => d.sma_50 ?? null);
+        const reversed  = data.slice().reverse();
+        const allTs     = reversed.map(d => d.ts ? d.ts.slice(0, 16) : '');
+        const labels    = reversed.map(d => d.ts ? d.ts.slice(11, 16) : '');
+        const prices    = reversed.map(d => d.close  ?? null);
+        const sma20     = reversed.map(d => d.sma_20 ?? null);
+        const sma50     = reversed.map(d => d.sma_50 ?? null);
+        const atrData   = reversed.map(d => d.atr_14 ?? null);
+        const n         = labels.length;
 
         const datasets = [
           { label: 'Prijs',  data: prices, borderColor: '#2563eb', borderWidth: 1.5, pointRadius: 0, tension: 0.3, spanGaps: true },
@@ -548,13 +557,45 @@
 
         const pos = positionsData[market];
         if (pos) {
+          // ── TP / SL / TSL horizontale lijnen ────────────────────────────
           if (pos.tp_price) {
-            datasets.push({ label: 'TP', data: Array(labels.length).fill(pos.tp_price),
+            datasets.push({ label: 'TP', data: Array(n).fill(pos.tp_price),
               borderColor: '#16a34a', borderWidth: 1.5, borderDash: [5,3], pointRadius: 0, spanGaps: true });
           }
           if (pos.sl_price) {
-            datasets.push({ label: pos.trailing_active ? 'TSL' : 'SL', data: Array(labels.length).fill(pos.sl_price),
+            datasets.push({ label: pos.trailing_active ? 'TSL' : 'SL', data: Array(n).fill(pos.sl_price),
               borderColor: '#dc2626', borderWidth: 1.5, borderDash: [5,3], pointRadius: 0, spanGaps: true });
+          }
+
+          // ── Breakeven lijn (geel, alleen als house money actief) ─────────
+          if (pos.house_money && pos.avg_price) {
+            datasets.push({ label: 'Breakeven', data: Array(n).fill(pos.avg_price),
+              borderColor: '#f59e0b', borderWidth: 1.5, borderDash: [3,3], pointRadius: 0, spanGaps: true });
+          }
+
+          // ── Entry marker (groene driehoek op koop-candle) ────────────────
+          if (pos.buy_ts) {
+            const buyTsShort = pos.buy_ts.slice(0, 16);
+            let buyIdx = allTs.indexOf(buyTsShort);
+            if (buyIdx === -1) {
+              // Zoek dichtstbijzijnde candle op of na koop
+              buyIdx = allTs.findIndex(ts => ts >= buyTsShort);
+            }
+            if (buyIdx >= 0) {
+              const entryPts = Array(n).fill(null);
+              entryPts[buyIdx] = prices[buyIdx] ?? pos.avg_price;
+              datasets.push({
+                label: 'Entry',
+                data: entryPts,
+                backgroundColor: '#16a34a',
+                borderColor: '#16a34a',
+                pointStyle: 'triangle',
+                pointRadius: 9,
+                pointHoverRadius: 11,
+                showLine: false,
+                spanGaps: false,
+              });
+            }
           }
         }
 
@@ -564,10 +605,7 @@
           options: {
             responsive: true,
             plugins: {
-              legend: {
-                display: true,
-                labels: { color: '#64748b', boxWidth: 12, font: { size: 11 } }
-              }
+              legend: { display: true, labels: { color: '#64748b', boxWidth: 12, font: { size: 11 } } }
             },
             scales: {
               x: { ticks: { color: '#64748b', maxTicksLimit: 8, font: { size: 10 } }, grid: { color: '#e2e8f0' } },
@@ -575,6 +613,42 @@
             }
           }
         });
+
+        // ── ATR subgrafiek ───────────────────────────────────────────────────
+        const hasAtr = atrData.some(v => v !== null);
+        if (hasAtr) {
+          const atrWrap   = document.getElementById('atr-wrap-' + idx);
+          const atrCanvas = document.getElementById('atr-chart-' + idx);
+          if (atrWrap)   atrWrap.style.display = '';
+          if (atrCanvas) {
+            new Chart(atrCanvas, {
+              type: 'line',
+              data: {
+                labels,
+                datasets: [{
+                  label: 'ATR 14',
+                  data: atrData,
+                  borderColor: '#94a3b8',
+                  backgroundColor: 'rgba(148,163,184,.08)',
+                  borderWidth: 1.2,
+                  pointRadius: 0,
+                  fill: true,
+                  tension: 0.3,
+                  spanGaps: true,
+                }]
+              },
+              options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                  x: { ticks: { color: '#94a3b8', maxTicksLimit: 8, font: { size: 9 } }, grid: { color: '#f1f5f9' } },
+                  y: { ticks: { color: '#94a3b8', font: { size: 9 }, maxTicksLimit: 3,
+                                callback: v => v.toFixed(2) }, grid: { color: '#f1f5f9' } }
+                }
+              }
+            });
+          }
+        }
       })
       .catch(() => {
         if (placeholder) placeholder.style.display = '';
