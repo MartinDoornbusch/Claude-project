@@ -15,7 +15,7 @@ from src.candles import get_candles, latest_signals, add_indicators, get_atr_fra
 from src.database import (
     init_db, save_ai_decision, save_signal, get_enabled_markets,
     save_portfolio_snapshot, get_trading_paused,
-    get_latest_portfolio_total, get_cash,
+    get_latest_portfolio_total, get_cash, mark_ai_decision_executed,
 )
 from src.paper_trader import portfolio_value
 from src.strategy import evaluate
@@ -101,6 +101,18 @@ def run_cycle() -> None:
             sig = latest_signals(df)
             current_price = sig["close"]
 
+            # Lage-volume filter: sla markten over met te weinig 24h-liquiditeit
+            min_vol_eur = env_float("MIN_VOLUME_EUR", 0.0)
+            if min_vol_eur > 0:
+                vol_avg = sig.get("volume_avg_20") or 0
+                vol_eur_per_candle = vol_avg * current_price
+                if vol_eur_per_candle < min_vol_eur:
+                    logger.info(
+                        "[%s] Volume te laag (€%.0f/candle < €%.0f) — overgeslagen",
+                        market, vol_eur_per_candle, min_vol_eur,
+                    )
+                    continue
+
             # OCO leg-check (LIVE modus): annuleer tegengestelde leg als één gevuld is
             sl_tp_triggered = False
             if (not paused
@@ -119,10 +131,11 @@ def run_cycle() -> None:
             if not sl_tp_triggered and not paused:
                 check_house_money(client, market, current_price)
 
+            ai_decision_id: int | None = None
             if ai_enabled():
                 decision, confidence, reasoning = ai_evaluate(market, sig)
-                executed = (not paused) and decision in ("BUY", "SELL")
-                save_ai_decision(market, decision, confidence, reasoning, executed=executed)
+                # Sla op als nog-niet-uitgevoerd; wordt bijgewerkt ná echte fill
+                ai_decision_id = save_ai_decision(market, decision, confidence, reasoning, executed=False)
                 signal = decision
                 reason = f"AI ({confidence:.0%}): {reasoning}"
             else:
@@ -163,10 +176,14 @@ def run_cycle() -> None:
                             fraction = get_atr_fraction(df, base_frac)
                         else:
                             fraction = None
-                        execute_buy(client, market, current_price, reason=reason,
-                                    fraction=fraction, iceberg_chunks=iceberg_chunks)
+                        result = execute_buy(client, market, current_price, reason=reason,
+                                             fraction=fraction, iceberg_chunks=iceberg_chunks)
+                        if result and ai_decision_id:
+                            mark_ai_decision_executed(ai_decision_id)
                 elif signal == "SELL":
-                    execute_sell(client, market, current_price, reason=reason)
+                    result = execute_sell(client, market, current_price, reason=reason)
+                    if result and ai_decision_id:
+                        mark_ai_decision_executed(ai_decision_id)
 
         except Exception as exc:
             logger.error("[%s] Fout tijdens cyclus: %s", market, exc, exc_info=True)
@@ -194,12 +211,24 @@ def run_cycle() -> None:
         logger.warning("MQTT publish mislukt: %s", exc)
 
 
+class _AmsFormatter(logging.Formatter):
+    """Log-formatter die Amsterdam-lokale tijd toont in plaats van UTC."""
+    from zoneinfo import ZoneInfo as _ZI
+    _tz = _ZI("Europe/Amsterdam")
+
+    def formatTime(self, record, datefmt=None):
+        import datetime as _dt
+        ct = _dt.datetime.fromtimestamp(record.created, tz=self._tz)
+        return ct.strftime(datefmt or "%Y-%m-%d %H:%M:%S")
+
+
 def start() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+    handler = logging.StreamHandler()
+    handler.setFormatter(_AmsFormatter(
+        fmt="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    ))
+    logging.basicConfig(level=logging.INFO, handlers=[handler])
 
     logger.info(
         "Bot gestart | modus: %s | markten: %s | interval: %s | check: elke %s min",

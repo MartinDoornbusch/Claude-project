@@ -6,8 +6,21 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 DB_PATH = Path(__file__).parent.parent / "trading.db"
+
+_AMS = ZoneInfo("Europe/Amsterdam")
+
+
+def _now() -> str:
+    """Huidige Amsterdam-tijd als ISO-string (inclusief offset)."""
+    return datetime.now(_AMS).isoformat(timespec="seconds")
+
+
+def _today() -> str:
+    """Huidige datum in de Amsterdam-tijdzone."""
+    return datetime.now(_AMS).date().isoformat()
 
 
 @contextmanager
@@ -185,7 +198,7 @@ def save_signal(market: str, interval: str, indicators: dict, signal: str | None
                                  rsi_14, macd, macd_signal, bb_lower, bb_upper, signal, atr_14)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
-            datetime.utcnow().isoformat(),
+            _now(),
             market, interval,
             indicators.get("close"),
             indicators.get("sma_20"),
@@ -250,7 +263,7 @@ def save_paper_trade(
             INSERT INTO paper_trades (ts, market, side, price, amount, eur_total, reason, planned_price)
             VALUES (?,?,?,?,?,?,?,?)
         """, (
-            datetime.utcnow().isoformat(),
+            _now(),
             market, side, price, amount, price * amount, reason, planned_price,
         ))
 
@@ -281,7 +294,7 @@ def save_live_trade(
             INSERT INTO live_trades (ts, market, side, order_id, price, amount, eur_total, status, reason)
             VALUES (?,?,?,?,?,?,?,?,?)
         """, (
-            datetime.utcnow().isoformat(),
+            _now(),
             market, side, order_id, price, amount, eur_total, status, reason,
         ))
         return cur.lastrowid
@@ -309,7 +322,7 @@ def get_live_trades(market: str | None = None, limit: int = 50) -> list[dict]:
 
 
 def get_daily_loss(market: str) -> float:
-    today = datetime.utcnow().date().isoformat()
+    today = _today()
     with get_conn() as conn:
         row = conn.execute(
             "SELECT realized_eur FROM daily_pnl WHERE date=? AND market=?",
@@ -320,7 +333,7 @@ def get_daily_loss(market: str) -> float:
 
 def get_total_daily_loss() -> float:
     """Retourneert het gerealiseerde PnL van vandaag over alle markten (negatief = verlies)."""
-    today = datetime.utcnow().date().isoformat()
+    today = _today()
     with get_conn() as conn:
         row = conn.execute(
             "SELECT COALESCE(SUM(realized_eur), 0) AS total FROM daily_pnl WHERE date=?",
@@ -339,7 +352,7 @@ def get_latest_portfolio_total() -> float:
 
 
 def add_daily_pnl(market: str, pnl_eur: float) -> None:
-    today = datetime.utcnow().date().isoformat()
+    today = _today()
     with get_conn() as conn:
         conn.execute("""
             INSERT INTO daily_pnl (date, market, realized_eur) VALUES (?,?,?)
@@ -357,7 +370,7 @@ def save_ai_decision(
             INSERT INTO ai_decisions (ts, market, decision, confidence, reasoning, executed)
             VALUES (?,?,?,?,?,?)
         """, (
-            datetime.utcnow().isoformat(),
+            _now(),
             market, decision, confidence, reasoning, 1 if executed else 0,
         ))
         return cur.lastrowid
@@ -378,7 +391,7 @@ def get_ai_decisions(market: str | None = None, limit: int = 20) -> list[dict]:
 
 
 def get_ai_decisions_today(market: str) -> int:
-    today = datetime.utcnow().date().isoformat()
+    today = _today()
     with get_conn() as conn:
         row = conn.execute(
             "SELECT COUNT(*) AS cnt FROM ai_decisions "
@@ -386,6 +399,12 @@ def get_ai_decisions_today(market: str) -> int:
             (market, today)
         ).fetchone()
     return row["cnt"] if row else 0
+
+
+def mark_ai_decision_executed(decision_id: int) -> None:
+    """Markeer een AI-beslissing als daadwerkelijk uitgevoerd (na echte fill)."""
+    with get_conn() as conn:
+        conn.execute("UPDATE ai_decisions SET executed=1 WHERE id=?", (decision_id,))
 
 
 # --- Market watchlist ---
@@ -418,7 +437,7 @@ def set_market_enabled(market: str, enabled: bool) -> None:
 
 
 def upsert_market_stats(market: str, price: float, change_24h: float, volume_eur: float) -> None:
-    now = datetime.utcnow().isoformat()
+    now = _now()
     with get_conn() as conn:
         conn.execute("""
             INSERT INTO market_watchlist (market, last_price, change_24h, volume_eur, last_scanned)
@@ -593,7 +612,7 @@ def save_portfolio_snapshot(cash_eur: float, pos_eur: float, total_eur: float) -
     with get_conn() as conn:
         conn.execute(
             "INSERT INTO portfolio_snapshots (ts, cash_eur, pos_eur, total_eur) VALUES (?,?,?,?)",
-            (datetime.utcnow().isoformat(), cash_eur, pos_eur, total_eur)
+            (_now(), cash_eur, pos_eur, total_eur)
         )
 
 
@@ -618,7 +637,7 @@ def save_backtest_run(
                capital, return_pct, sharpe, max_dd, win_rate, num_trades)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
-            datetime.utcnow().isoformat(),
+            _now(),
             market, interval, sma_short, sma_long, rsi_buy, rsi_sell,
             capital, return_pct, sharpe, max_dd, win_rate, num_trades,
         ))
@@ -642,7 +661,7 @@ def set_trading_paused(paused: bool) -> None:
 
 
 def save_market_advice(market: str, recommended: bool, confidence: float | None, reasoning: str) -> None:
-    now = datetime.utcnow().isoformat()
+    now = _now()
     with get_conn() as conn:
         conn.execute("""
             INSERT INTO market_watchlist (market, ai_recommended, ai_confidence, ai_reasoning, last_advised)
@@ -666,7 +685,7 @@ def save_oco_order(
         cur = conn.execute("""
             INSERT INTO oco_orders (ts, market, amount, tp_order_id, sl_order_id, tp_price, sl_price)
             VALUES (?,?,?,?,?,?,?)
-        """, (datetime.utcnow().isoformat(), market, amount,
+        """, (_now(), market, amount,
               tp_order_id, sl_order_id, tp_price, sl_price))
         return cur.lastrowid
 
@@ -698,17 +717,17 @@ def cancel_all_oco_orders(market: str) -> None:
 
 def save_groq_tokens(tokens: int) -> None:
     """Sla het aantal gebruikte Groq tokens op voor vandaag."""
-    today = datetime.utcnow().date().isoformat()
+    today = _today()
     with get_conn() as conn:
         conn.execute(
             "INSERT INTO groq_token_log (ts, date, tokens_used) VALUES (?,?,?)",
-            (datetime.utcnow().isoformat(), today, tokens),
+            (_now(), today, tokens),
         )
 
 
 def get_groq_daily_tokens() -> int:
     """Geeft het totaal aantal Groq tokens gebruikt vandaag."""
-    today = datetime.utcnow().date().isoformat()
+    today = _today()
     with get_conn() as conn:
         row = conn.execute(
             "SELECT COALESCE(SUM(tokens_used), 0) AS total FROM groq_token_log WHERE date=?",

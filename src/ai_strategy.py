@@ -276,11 +276,31 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
 # ── Parsers ───────────────────────────────────────────────────────────────────
 
 def _extract_json(text: str, key: str) -> str | None:
-    m = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-    if m:
+    # 1. ```json ... ``` or ``` ... ``` code block
+    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if m and f'"{key}"' in m.group(1):
         return m.group(1)
-    m = re.search(rf'\{{[^{{}}]*"{key}"[^{{}}]*\}}', text, re.DOTALL)
-    return m.group(0) if m else None
+
+    # 2. Brace-depth scan — handles nested objects, multi-line JSON, and
+    #    responses where reasoning text contains curly braces.
+    i = 0
+    while i < len(text):
+        if text[i] != '{':
+            i += 1
+            continue
+        depth = 0
+        for j in range(i, len(text)):
+            if text[j] == '{':
+                depth += 1
+            elif text[j] == '}':
+                depth -= 1
+                if depth == 0:
+                    candidate = text[i:j + 1]
+                    if f'"{key}"' in candidate:
+                        return candidate
+                    break
+        i += 1
+    return None
 
 
 def _parse_decision(text: str) -> dict | None:

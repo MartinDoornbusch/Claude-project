@@ -30,6 +30,8 @@
     .confidence-fill { height: 100%; border-radius: 3px; transition: width .4s; }
     .ai-badge { font-size: 0.7rem; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
     @media (max-width: 576px) { .hide-sm { display: none !important; } }
+    .tbl-scroll { max-height: 420px; overflow-y: auto; }
+    .tbl-scroll thead th { position: sticky; top: 0; z-index: 2; }
     .ai-badge-BUY  { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
     .ai-badge-SELL { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
     .ai-badge-HOLD { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
@@ -259,7 +261,7 @@
     </div>
     <div class="card-body p-0">
       {% if ai_decisions %}
-      <div class="table-responsive">
+      <div class="table-responsive tbl-scroll">
         <table class="table table-hover mb-0">
           <thead>
             <tr>
@@ -306,7 +308,7 @@
   <div class="card mb-4" style="border-color:#fca5a5;">
     <div class="card-header" style="background:#fff1f2; color:#dc2626;">Uitgevoerde Live Orders</div>
     <div class="card-body p-0">
-      <div class="table-responsive">
+      <div class="table-responsive tbl-scroll">
         <table class="table table-hover mb-0">
           <thead>
             <tr>
@@ -329,7 +331,9 @@
                 {% elif t.status == 'error' %}<span class="text-danger">✗ Fout</span>
                 {% else %}<span class="text-muted">{{ t.status }}</span>{% endif %}
               </td>
-              <td class="reasoning-text">{{ t.reason or '—' }}</td>
+              <td class="reasoning-text" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ t.reason or '' }}">
+                {{ t.reason[:60] if t.reason else '—' }}{% if t.reason and t.reason|length > 60 %}…{% endif %}
+              </td>
             </tr>
             {% else %}
             <tr><td colspan="7" class="text-center text-muted py-3">Nog geen live orders uitgevoerd</td></tr>
@@ -344,12 +348,13 @@
   <div class="card mb-4">
     <div class="card-header">Laatste paper trades</div>
     <div class="card-body p-0">
-      <div class="table-responsive">
+      <div class="table-responsive tbl-scroll">
         <table class="table table-hover mb-0">
           <thead>
             <tr>
               <th>Tijd</th><th>Markt</th><th>Side</th>
-              <th class="text-end">Prijs</th><th class="text-end">Bedrag</th><th class="text-end">EUR</th>
+              <th class="text-end">Prijs</th><th class="text-end hide-sm">Bedrag</th>
+              <th class="text-end">EUR</th><th class="hide-sm">Reden</th>
             </tr>
           </thead>
           <tbody>
@@ -359,11 +364,14 @@
               <td>{{ t.market }}</td>
               <td class="signal-{{ t.side }}">{{ t.side }}</td>
               <td class="text-end">€{{ "%.4f"|format(t.price) }}</td>
-              <td class="text-end">{{ "%.6f"|format(t.amount) }}</td>
+              <td class="text-end hide-sm">{{ "%.6f"|format(t.amount) }}</td>
               <td class="text-end">€{{ "%.2f"|format(t.eur_total) }}</td>
+              <td class="hide-sm reasoning-text" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ t.reason or '' }}">
+                {{ t.reason[:60] if t.reason else '—' }}{% if t.reason and t.reason|length > 60 %}…{% endif %}
+              </td>
             </tr>
             {% else %}
-            <tr><td colspan="6" class="text-center text-muted py-3">Nog geen trades</td></tr>
+            <tr><td colspan="7" class="text-center text-muted py-3">Nog geen trades</td></tr>
             {% endfor %}
           </tbody>
         </table>
