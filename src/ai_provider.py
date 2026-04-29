@@ -177,6 +177,15 @@ def _groq(system: str, user: str, model: str, max_tokens: int) -> str:
     if not key:
         raise EnvironmentError("GROQ_API_KEY niet ingesteld")
 
+    # Groq free-tier: 6000 TPM (input + output samen). Schat ~4 chars/token.
+    _TPM_SAFE = 5800
+    sys_tokens  = len(system) // 4
+    user_budget = max(200, _TPM_SAFE - sys_tokens - max_tokens)
+    max_user_chars = user_budget * 4
+    if len(user) > max_user_chars:
+        user = user[:max_user_chars] + "\n[context afgekapt — tokenslimiet]"
+        logger.debug("Groq prompt afgekapt tot %d tekens", max_user_chars)
+
     client = Groq(api_key=key)
     resp = client.chat.completions.create(
         model=model,
