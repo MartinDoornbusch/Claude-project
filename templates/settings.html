@@ -293,6 +293,15 @@
                   {{ config.STOP_LOSS_PCT or '5' }}% SL →
                   <strong>€{{ ((config.PAPER_STARTING_CAPITAL|float) * (config.RISK_PER_TRADE_PCT|float) / 100 / ((config.STOP_LOSS_PCT|float or 5) / 100))|round(0)|int }}</strong>
                 </div>
+                <div class="mt-2 d-flex align-items-center gap-2" style="max-width:220px;">
+                  <label class="form-label mb-0 text-nowrap" style="font-size:.82rem;">Minimum order</label>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">€</span>
+                    <input type="number" class="form-control" name="MIN_ORDER_EUR"
+                           value="{{ config.MIN_ORDER_EUR }}" step="1" min="1" max="50">
+                  </div>
+                </div>
+                <div class="form-text">Als de berekende ordergrootte hieronder valt, wordt het verhoogd naar dit minimum (Bitvavo minimum = €5).</div>
               </div>
             </div>
 
@@ -467,6 +476,15 @@
                     Alleen nieuwe kopen als vorige trade winstgevend was
                   </label>
                 </div>
+                <div class="mt-2 d-flex align-items-center gap-2" style="max-width:280px;">
+                  <label class="form-label mb-0 text-nowrap" style="font-size:.82rem;">Cooldown na verlies</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" class="form-control" name="WIN_EXCL_COOLDOWN_HOURS"
+                           value="{{ config.WIN_EXCL_COOLDOWN_HOURS }}" step="1" min="0" max="168">
+                    <span class="input-group-text">uur</span>
+                  </div>
+                </div>
+                <div class="form-text">0 = permanent blokkeren tot volgende winstgevende trade. Aanbevolen: 4–8 uur.</div>
               </div>
             </div>
 

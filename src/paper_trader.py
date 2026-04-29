@@ -114,6 +114,20 @@ def buy(market: str, price: float, reason: str = "", fraction: float | None = No
         return _buy_iceberg(market, price, reason, used_fraction, iceberg_chunks, cash)
 
     spend_eur = cash * used_fraction
+    min_order = env_float("MIN_ORDER_EUR", 5.0)
+    if spend_eur < min_order:
+        if cash >= min_order:
+            logger.info(
+                "[%s] Ordergrootte verhoogd van €%.2f naar minimum €%.2f",
+                market, spend_eur, min_order,
+            )
+            spend_eur = min_order
+        else:
+            logger.info(
+                "[%s] BUY overgeslagen — cash €%.2f onder minimum order €%.2f",
+                market, cash, min_order,
+            )
+            return None
     fee = spend_eur * FEE_RATE
     net_eur = spend_eur - fee
     amount = net_eur / price
