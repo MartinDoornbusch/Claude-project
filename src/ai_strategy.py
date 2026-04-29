@@ -492,11 +492,11 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                 f"{tactical_result['reasoning']}"
             )
 
-        # ── Stap 2: Sentiment Analist (Gemini, alleen bij potentieel signaal) ─
+        # ── Stap 2: Sentiment Analist (Gemini, altijd als geconfigureerd) ────────
         sentiment_result: dict | None = None
         sentiment_score = 0.0
 
-        if sentiment_prov and abs(tactical_score) >= 0.3:
+        if sentiment_prov:
             try:
                 text = complete_for(sentiment_prov, pdict[sentiment_prov],
                                     _SENTIMENT_PROMPT, prompt, max_tokens=512)
@@ -512,8 +512,6 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                     logger.warning("[%s] %s: kon sentiment niet parsen", market, sentiment_prov)
             except Exception as exc:
                 logger.warning("[%s] %s (sentiment) fout: %s", market, sentiment_prov, exc)
-        elif sentiment_prov:
-            logger.debug("[%s] Gemini overgeslagen — tactische score te laag (%+.2f)", market, tactical_score)
 
         # ── Stap 3: Gewogen gecombineerde score ──────────────────────────────
         if sentiment_result is not None:
