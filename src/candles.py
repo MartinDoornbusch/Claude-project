@@ -38,6 +38,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
     df["sma_20"] = ta_trend.sma_indicator(close, window=20)
     df["sma_50"] = ta_trend.sma_indicator(close, window=50)
+    df["sma_200"] = ta_trend.sma_indicator(close, window=200)
     df["rsi_14"] = ta_momentum.rsi(close, window=14)
 
     macd = ta_trend.MACD(close)
@@ -197,4 +198,5 @@ def latest_signals(df: pd.DataFrame) -> dict:
         "volume_avg_20": vol_avg_20,
         "atr_14": atr_14,
         "avg_atr_24h": avg_atr_24h,
+        "sma_200": float(last["sma_200"]) if pd.notna(last.get("sma_200")) else None,
     }
