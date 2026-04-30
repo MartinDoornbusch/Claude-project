@@ -468,6 +468,13 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                 )
                 return "HOLD", 0.0, f"Platte markt (Lokaal gefilterd, ATR {atr_pct:.2f}%)"
 
+    # ── Trendfilter: prijs vs SMA200 op huidig timeframe ─────────────────────
+    sma_200     = signals.get("sma_200")
+    trend_bearish = (
+        sma_200 is not None and price > 0 and float(price) < float(sma_200)
+        and os.getenv("TREND_FILTER_ENABLED", "1") not in ("0", "false", "False")
+    )
+
     recent_signals = get_latest_signals(market, limit=5)
 
     from src.sentiment import get_fear_greed, fmt_fear_greed
@@ -539,6 +546,20 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                     logger.warning("[%s] %s: kon sentiment niet parsen", market, sentiment_prov)
             except Exception as exc:
                 logger.warning("[%s] %s (sentiment) fout: %s", market, sentiment_prov, exc)
+                # Fallback: gebruik tactische provider voor sentiment als primaire faalt
+                if tactical_prov and tactical_prov != sentiment_prov:
+                    try:
+                        fb_text = complete_for(tactical_prov, pdict[tactical_prov],
+                                               _SENTIMENT_PROMPT, prompt, max_tokens=400)
+                        fb_parsed = _parse_sentiment(fb_text)
+                        if fb_parsed:
+                            sentiment_result = fb_parsed
+                            sentiment_score  = _SENTIMENT_SCORE[fb_parsed["sentiment"]] * fb_parsed["confidence"]
+                            logger.info("[%s] %s (sentiment fallback): %s %.0f%% score=%+.2f",
+                                        market, tactical_prov, fb_parsed["sentiment"],
+                                        fb_parsed["confidence"] * 100, sentiment_score)
+                    except Exception as fb_exc:
+                        logger.debug("[%s] Sentiment fallback ook mislukt: %s", market, fb_exc)
 
         # ── Stap 3: Gewogen gecombineerde score ──────────────────────────────
         if sentiment_result is not None:
@@ -559,6 +580,28 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
             )
 
         potential_action = "BUY" if combined_score > 0 else "SELL"
+
+        # ── Trendfilter veto ─────────────────────────────────────────────────
+        if potential_action == "BUY" and trend_bearish:
+            logger.info("[%s] BUY geblokkeerd: prijs €%.4f onder SMA200 €%.4f (bearish trend)",
+                        market, price, sma_200)
+            return "HOLD", abs(combined_score), (
+                f"Trendfilter: prijs onder SMA200 (bearish) | "
+                + f"[{tactical_prov}] {tactical_result['reasoning']}"
+            )
+
+        # ── Sentiment hard veto: NEGATIVE blokkeert BUY ──────────────────────
+        veto_conf = env_float("SENTIMENT_VETO_CONF", 0.6)
+        if (potential_action == "BUY"
+                and sentiment_result is not None
+                and sentiment_result["sentiment"] == "NEGATIVE"
+                and sentiment_result["confidence"] >= veto_conf):
+            logger.info("[%s] BUY geblokkeerd: sentiment NEGATIVE %.0f%% (veto)",
+                        market, sentiment_result["confidence"] * 100)
+            return "HOLD", abs(combined_score), (
+                f"Sentiment veto: NEGATIVE {sentiment_result['confidence']:.0%} | "
+                + f"[{tactical_prov}] {tactical_result['reasoning']}"
+            )
 
         # ── Stap 4: Risicomanager (Claude, alleen bij concrete trade) ─────────
         risk_prov = next((p for p, r in roles.items() if r == "risk"), None)

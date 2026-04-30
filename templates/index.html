@@ -25,6 +25,14 @@
     tbody td { border-color: #e2e8f0; }
     tbody tr:hover td { background: #f8fafc; }
     .navbar { background: #1e40af !important; border-bottom: none; }
+    .nav-btn {
+      font-size: .78rem; font-weight: 600; color: #bfdbfe; text-decoration: none;
+      padding: 5px 12px; border: 1px solid rgba(191,219,254,.35);
+      border-radius: 20px; background: rgba(255,255,255,.08);
+      transition: background .15s, color .15s, border-color .15s;
+      white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;
+    }
+    .nav-btn:hover { background: rgba(255,255,255,.2); color: #fff; border-color: rgba(255,255,255,.5); }
     .refresh-note { font-size: 0.75rem; color: #93c5fd; }
     .confidence-bar { height: 6px; border-radius: 3px; background: #e2e8f0; }
     .confidence-fill { height: 100%; border-radius: 3px; transition: width .4s; }
@@ -45,12 +53,12 @@
 
 <nav class="navbar navbar-dark px-3 mb-4">
   <span class="navbar-brand fw-bold">Bitvavo Trading Bot</span>
-  <div class="d-flex align-items-center gap-3">
-    <a href="{{ url_for('markets_page') }}" class="text-decoration-none" style="font-size:.85rem; color:#93c5fd;">📈 Markten</a>
-    <a href="{{ url_for('analytics_page') }}" class="text-decoration-none" style="font-size:.85rem; color:#93c5fd;">📊 Analytics</a>
-    <a href="{{ url_for('backtest_page') }}" class="text-decoration-none" style="font-size:.85rem; color:#93c5fd;">🔬 Backtest</a>
-    <a href="{{ url_for('optimize_page') }}" class="text-decoration-none" style="font-size:.85rem; color:#93c5fd;">⚡ Optimaliseer</a>
-    <a href="{{ url_for('settings_page') }}" class="text-decoration-none" style="font-size:.85rem; color:#93c5fd;">⚙ Instellingen</a>
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <a href="{{ url_for('markets_page') }}" class="nav-btn">📈 Markten</a>
+    <a href="{{ url_for('analytics_page') }}" class="nav-btn">📊 Analytics</a>
+    <a href="{{ url_for('backtest_page') }}" class="nav-btn">🔬 Backtest</a>
+    <a href="{{ url_for('optimize_page') }}" class="nav-btn">⚡ Optimaliseer</a>
+    <a href="{{ url_for('settings_page') }}" class="nav-btn">⚙ Instellingen</a>
     <span class="refresh-note">Ververst elke 60s &nbsp;<span id="clock"></span></span>
   </div>
 </nav>
