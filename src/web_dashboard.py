@@ -314,6 +314,40 @@ def api_portfolio_cleanup():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/portfolio/manual_sell", methods=["POST"])
+def api_portfolio_manual_sell():
+    try:
+        data   = request.get_json(force=True, silent=True) or {}
+        market = (data.get("market") or "").strip().upper()
+        if not market:
+            return jsonify({"error": "market verplicht"}), 400
+
+        if os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true":
+            live_client = get_client()
+            price_data = live_client.tickerPrice({"market": market})
+            price = float(price_data.get("price", 0)) if isinstance(price_data, dict) else 0
+            if not price:
+                return jsonify({"error": "Kon prijs niet ophalen"}), 500
+            pos = get_position(market)
+            if pos["amount"] <= 0:
+                return jsonify({"error": "Geen open positie"}), 400
+            r = live_client.placeOrder(market, "sell", "market", {"amount": str(pos["amount"])})
+            if not isinstance(r, dict) or "error" in r:
+                return jsonify({"error": str(r)}), 500
+            return jsonify({"ok": True, "market": market, "eur": pos["amount"] * price, "pnl": 0})
+        else:
+            from src.paper_trader import sell as paper_sell
+            price = get_ticker_price(get_client(), market)
+            if not price:
+                return jsonify({"error": "Kon prijs niet ophalen"}), 500
+            result = paper_sell(market, price, "Handmatige verkoop")
+            if not result:
+                return jsonify({"error": "Geen open positie voor " + market}), 400
+            return jsonify({"ok": True, "market": market, "eur": result["eur"], "pnl": result["pnl"]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/paper/reset", methods=["POST"])
 def api_paper_reset():
     capital = env_float("PAPER_STARTING_CAPITAL", 1000)
