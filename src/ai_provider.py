@@ -4,8 +4,23 @@ from __future__ import annotations
 
 import logging
 import os
+import time
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+
+# ── Maand-grens backoff ───────────────────────────────────────────────────────
+# Google reset hun spending cap op 1e van de maand in UTC. De bot draait op
+# CEST (UTC+2), dus tot 02:00 CEST op de 1e kan de reset nog niet klaar zijn.
+# Na een 429 op dag 1 wachten we tot de UTC-middernacht gepasseerd is.
+
+_google_monthly_backoff_until: float = 0.0  # epoch-seconden
+
+
+def _google_is_month_boundary_429() -> bool:
+    """True als het UTC dag 1 is én we de eerste 2 uur zitten — klassieke timing."""
+    now_utc = datetime.now(timezone.utc)
+    return now_utc.day == 1 and now_utc.hour < 2
 
 # Beschikbare modellen per provider
 PROVIDER_MODELS: dict[str, list[dict]] = {
@@ -149,6 +164,7 @@ def _anthropic(system: str, user: str, model: str, max_tokens: int) -> str:
 # ── Google Gemini ─────────────────────────────────────────────────────────────
 
 def _google(system: str, user: str, model: str, max_tokens: int) -> str:
+    global _google_monthly_backoff_until
     from google import genai
     from google.genai import types  # type: ignore
 
@@ -156,16 +172,42 @@ def _google(system: str, user: str, model: str, max_tokens: int) -> str:
     if not key:
         raise EnvironmentError("GOOGLE_API_KEY niet ingesteld")
 
+    # Actieve maand-grens backoff: gooi direct een herkenbare fout zodat
+    # de aanroeper (ai_strategy) naar de Groq-fallback kan schakelen.
+    if time.time() < _google_monthly_backoff_until:
+        remaining = int(_google_monthly_backoff_until - time.time())
+        raise RuntimeError(f"Google spending cap reset nog niet klaar — wacht nog {remaining}s")
+
     client = genai.Client(api_key=key)
-    response = client.models.generate_content(
-        model=model,
-        config=types.GenerateContentConfig(
-            system_instruction=system,
-            max_output_tokens=max_tokens,
-        ),
-        contents=user,
-    )
-    return response.text
+    try:
+        response = client.models.generate_content(
+            model=model,
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                max_output_tokens=max_tokens,
+            ),
+            contents=user,
+        )
+        return response.text
+    except Exception as exc:
+        exc_str = str(exc)
+        if "429" in exc_str or "RESOURCE_EXHAUSTED" in exc_str or "spending cap" in exc_str.lower():
+            if _google_is_month_boundary_429():
+                # Wacht tot 02:05 UTC dag 1 zodat de reset zeker klaar is
+                now_utc = datetime.now(timezone.utc)
+                seconds_to_wait = max(0, (2 * 3600 + 5 * 60) - (now_utc.hour * 3600 + now_utc.minute * 60 + now_utc.second))
+                _google_monthly_backoff_until = time.time() + seconds_to_wait
+                logger.warning(
+                    "Google 429 op maandgrens (UTC dag 1, %02d:%02d UTC) — "
+                    "maand-reset nog niet klaar; backoff %ds",
+                    now_utc.hour, now_utc.minute, seconds_to_wait,
+                )
+            else:
+                logger.warning("Google 429 RESOURCE_EXHAUSTED: %s", exc_str[:120])
+            raise RuntimeError(f"Google rate limit (429): {exc_str[:80]}")
+        if "401" in exc_str or "API_KEY_INVALID" in exc_str or "UNAUTHENTICATED" in exc_str:
+            raise EnvironmentError(f"Google API key ongeldig: {exc_str[:80]}")
+        raise
 
 
 # ── Groq (Llama / Mixtral) ───────────────────────────────────────────────────
