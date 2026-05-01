@@ -59,7 +59,7 @@
     <a href="{{ url_for('backtest_page') }}" class="nav-btn">🔬 Backtest</a>
     <a href="{{ url_for('optimize_page') }}" class="nav-btn">⚡ Optimaliseer</a>
     <a href="{{ url_for('settings_page') }}" class="nav-btn">⚙ Instellingen</a>
-    <span class="refresh-note">Ververst elke 60s &nbsp;<span id="clock"></span></span>
+    <span class="refresh-note">Ververst elke 60s &nbsp;<span id="clock-cest"></span><span style="color:#64748b; font-size:.75em; margin-left:4px;" id="clock-utc"></span></span>
   </div>
 </nav>
 
@@ -527,9 +527,14 @@
       document.getElementById('guardrail-btn').disabled = false;
     });
 
-  // Klok
+  // Klok — CET/CEST (lokaal) + UTC
   function updateClock() {
-    document.getElementById('clock').textContent = new Date().toLocaleTimeString('nl-NL');
+    const now = new Date();
+    const cest = now.toLocaleTimeString('nl-NL', {timeZone: 'Europe/Amsterdam', hour: '2-digit', minute: '2-digit', second: '2-digit'});
+    const utc  = now.toLocaleTimeString('nl-NL', {timeZone: 'UTC',              hour: '2-digit', minute: '2-digit'});
+    const tz   = now.toLocaleDateString('nl-NL', {timeZone: 'Europe/Amsterdam', timeZoneName: 'short'}).split(' ').pop();
+    document.getElementById('clock-cest').textContent = cest + ' ' + tz;
+    document.getElementById('clock-utc').textContent  = '· ' + utc + ' UTC';
   }
   updateClock();
   setInterval(updateClock, 1000);
