@@ -835,12 +835,18 @@ def save_groq_tokens(tokens: int) -> None:
 
 
 def get_groq_daily_tokens() -> int:
-    """Geeft het totaal aantal Groq tokens gebruikt vandaag."""
-    today = _today()
+    """Geeft het totaal aantal Groq tokens in het rollende 24-uurs venster.
+
+    Groq hanteert een rolling window (geen vaste daggrens op midnight).
+    We tellen alles met ts >= 24 uur geleden op basis van de opgeslagen
+    Amsterdam-tijdstempel.
+    """
+    from datetime import timedelta
+    cutoff = (datetime.now(_AMS) - timedelta(hours=24)).isoformat(timespec="seconds")
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT COALESCE(SUM(tokens_used), 0) AS total FROM groq_token_log WHERE date=?",
-            (today,),
+            "SELECT COALESCE(SUM(tokens_used), 0) AS total FROM groq_token_log WHERE ts >= ?",
+            (cutoff,),
         ).fetchone()
     return int(row["total"]) if row else 0
 
