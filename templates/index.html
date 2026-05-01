@@ -146,7 +146,7 @@
     {% if ai_enabled and 'groq' in active_providers %}
     <div class="col-6 col-md-3">
       <div class="card p-3">
-        <div class="stat-label text-center">Groq Tokens/dag</div>
+        <div class="stat-label text-center">Groq Tokens (24h)</div>
         <div class="fw-bold text-center {% if groq_tokens.pct_used >= 80 %}pnl-neg{% elif groq_tokens.pct_used >= 50 %}text-warning{% else %}text-muted{% endif %}"
              style="font-size:1.05rem; margin-top:4px;">
           {{ "{:,}".format(groq_tokens.used) }}
