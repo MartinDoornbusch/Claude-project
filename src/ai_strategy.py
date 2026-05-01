@@ -203,7 +203,7 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
             except Exception:
                 pass
 
-    past_pairs = get_recent_trade_pairs(market, limit=5)
+    past_pairs = get_recent_trade_pairs(market, limit=3)
     if past_pairs:
         wins    = sum(1 for p in past_pairs if p["pnl_eur"] > 0)
         total   = len(past_pairs)
@@ -232,7 +232,7 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
 
     if past_pairs:
         loss_streak = 0
-        for p in reversed(past_pairs[-5:]):
+        for p in reversed(past_pairs):
             if p["pnl_eur"] < 0:
                 loss_streak += 1
             else:
@@ -475,7 +475,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         and os.getenv("TREND_FILTER_ENABLED", "1") not in ("0", "false", "False")
     )
 
-    recent_signals = get_latest_signals(market, limit=5)
+    recent_signals = get_latest_signals(market, limit=3)
 
     from src.sentiment import get_fear_greed, fmt_fear_greed
     fg_str  = fmt_fear_greed(get_fear_greed())
@@ -501,7 +501,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         if tactical_prov:
             try:
                 text = complete_for(tactical_prov, pdict[tactical_prov],
-                                    _TACTICAL_PROMPT, prompt, max_tokens=512)
+                                    _TACTICAL_PROMPT, prompt, max_tokens=160)
                 logger.debug("[%s] %s raw: %.200s", market, tactical_prov, text)
                 parsed = _parse_decision(text)
                 if parsed:
@@ -533,7 +533,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         if sentiment_prov:
             try:
                 text = complete_for(sentiment_prov, pdict[sentiment_prov],
-                                    _SENTIMENT_PROMPT, prompt, max_tokens=400)
+                                    _SENTIMENT_PROMPT, prompt, max_tokens=160)
                 logger.debug("[%s] %s raw: %.200s", market, sentiment_prov, text)
                 parsed = _parse_sentiment(text)
                 if parsed:
@@ -550,7 +550,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                 if tactical_prov and tactical_prov != sentiment_prov:
                     try:
                         fb_text = complete_for(tactical_prov, pdict[tactical_prov],
-                                               _SENTIMENT_PROMPT, prompt, max_tokens=400)
+                                               _SENTIMENT_PROMPT, prompt, max_tokens=160)
                         fb_parsed = _parse_sentiment(fb_text)
                         if fb_parsed:
                             sentiment_result = fb_parsed
@@ -622,7 +622,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
 
             try:
                 text = complete_for(risk_prov, pdict[risk_prov],
-                                    _RISK_PROMPT, risk_prompt, max_tokens=512)
+                                    _RISK_PROMPT, risk_prompt, max_tokens=180)
                 logger.debug("[%s] %s raw: %.200s", market, risk_prov, text)
                 risk = _parse_risk(text)
                 if risk:
