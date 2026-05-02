@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import re
+import time
 from datetime import datetime, timezone
 
 from src.database import (
@@ -34,6 +35,9 @@ def ai_enabled() -> bool:
 # Numerieke score per uitkomst voor gewogen combinatie
 _DECISION_SCORE:  dict[str, float] = {"BUY": 1.0, "HOLD": 0.0, "SELL": -1.0}
 _SENTIMENT_SCORE: dict[str, float] = {"POSITIVE": 1.0, "NEUTRAL": 0.0, "NEGATIVE": -1.0}
+
+# Cache: {market: (parsed_result, monotonic_timestamp)}
+_sentiment_cache: dict[str, tuple[dict, float]] = {}
 
 # ── System prompts ────────────────────────────────────────────────────────────
 
@@ -468,12 +472,26 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                 )
                 return "HOLD", 0.0, f"Platte markt (Lokaal gefilterd, ATR {atr_pct:.2f}%)"
 
-    # ── Trendfilter: prijs vs SMA200 op huidig timeframe ─────────────────────
-    sma_200     = signals.get("sma_200")
+    # ── Trendfilter als vroege gatekeeper (vóór alle API-calls) ─────────────
+    sma_200 = signals.get("sma_200")
     trend_bearish = (
         sma_200 is not None and price > 0 and float(price) < float(sma_200)
         and os.getenv("TREND_FILTER_ENABLED", "1") not in ("0", "false", "False")
     )
+    if trend_bearish:
+        _early_pos = get_position(market)
+        if _early_pos["amount"] <= 0:
+            logger.info(
+                "[%s] Trendfilter (vroeg): prijs €%.4f onder SMA200 €%.4f — geen positie, HOLD (0 API-calls)",
+                market, price, float(sma_200),
+            )
+            return "HOLD", 0.0, (
+                f"Trendfilter: prijs €{price:.4f} onder SMA200 €{float(sma_200):.4f}"
+            )
+        logger.info(
+            "[%s] Trendfilter actief (bearish, positie open): sentiment overgeslagen",
+            market,
+        )
 
     recent_signals = get_latest_signals(market, limit=3)
 
@@ -526,40 +544,55 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                 f"{tactical_result['reasoning']}"
             )
 
-        # ── Stap 2: Sentiment Analist (Gemini, altijd als geconfigureerd) ────────
+        # ── Stap 2: Sentiment Analist (Gemini) — met cache, overgeslagen bij bearish trend ──
         sentiment_result: dict | None = None
         sentiment_score = 0.0
 
-        if sentiment_prov:
-            try:
-                text = complete_for(sentiment_prov, pdict[sentiment_prov],
-                                    _SENTIMENT_PROMPT, prompt, max_tokens=160)
-                logger.debug("[%s] %s raw: %.200s", market, sentiment_prov, text)
-                parsed = _parse_sentiment(text)
-                if parsed:
-                    sentiment_result = parsed
-                    sentiment_score  = _SENTIMENT_SCORE[parsed["sentiment"]] * parsed["confidence"]
-                    logger.info("[%s] %s (sentiment): %s %.0f%% score=%+.2f",
-                                market, sentiment_prov, parsed["sentiment"],
-                                parsed["confidence"] * 100, sentiment_score)
-                else:
-                    logger.warning("[%s] %s: kon sentiment niet parsen", market, sentiment_prov)
-            except Exception as exc:
-                logger.warning("[%s] %s (sentiment) fout: %s", market, sentiment_prov, exc)
-                # Fallback: gebruik tactische provider voor sentiment als primaire faalt
-                if tactical_prov and tactical_prov != sentiment_prov:
-                    try:
-                        fb_text = complete_for(tactical_prov, pdict[tactical_prov],
-                                               _SENTIMENT_PROMPT, prompt, max_tokens=160)
-                        fb_parsed = _parse_sentiment(fb_text)
-                        if fb_parsed:
-                            sentiment_result = fb_parsed
-                            sentiment_score  = _SENTIMENT_SCORE[fb_parsed["sentiment"]] * fb_parsed["confidence"]
-                            logger.info("[%s] %s (sentiment fallback): %s %.0f%% score=%+.2f",
-                                        market, tactical_prov, fb_parsed["sentiment"],
-                                        fb_parsed["confidence"] * 100, sentiment_score)
-                    except Exception as fb_exc:
-                        logger.debug("[%s] Sentiment fallback ook mislukt: %s", market, fb_exc)
+        if sentiment_prov and not trend_bearish:
+            cache_ttl    = env_float("SENTIMENT_CACHE_MINUTES", 20.0) * 60
+            now_mono     = time.monotonic()
+            cached_entry = _sentiment_cache.get(market)
+
+            if cached_entry and (now_mono - cached_entry[1]) < cache_ttl:
+                sentiment_result = cached_entry[0]
+                sentiment_score  = _SENTIMENT_SCORE[sentiment_result["sentiment"]] * sentiment_result["confidence"]
+                logger.info(
+                    "[%s] %s (sentiment, cache %ds oud): %s %.0f%% score=%+.2f",
+                    market, sentiment_prov, int(now_mono - cached_entry[1]),
+                    sentiment_result["sentiment"], sentiment_result["confidence"] * 100, sentiment_score,
+                )
+            else:
+                try:
+                    text = complete_for(sentiment_prov, pdict[sentiment_prov],
+                                        _SENTIMENT_PROMPT, prompt, max_tokens=160)
+                    logger.debug("[%s] %s raw: %.200s", market, sentiment_prov, text)
+                    parsed = _parse_sentiment(text)
+                    if parsed:
+                        sentiment_result = parsed
+                        sentiment_score  = _SENTIMENT_SCORE[parsed["sentiment"]] * parsed["confidence"]
+                        _sentiment_cache[market] = (parsed, now_mono)
+                        logger.info("[%s] %s (sentiment): %s %.0f%% score=%+.2f",
+                                    market, sentiment_prov, parsed["sentiment"],
+                                    parsed["confidence"] * 100, sentiment_score)
+                    else:
+                        logger.warning("[%s] %s: kon sentiment niet parsen", market, sentiment_prov)
+                except Exception as exc:
+                    logger.warning("[%s] %s (sentiment) fout: %s", market, sentiment_prov, exc)
+                    # Fallback: gebruik tactische provider voor sentiment als primaire faalt
+                    if tactical_prov and tactical_prov != sentiment_prov:
+                        try:
+                            fb_text = complete_for(tactical_prov, pdict[tactical_prov],
+                                                   _SENTIMENT_PROMPT, prompt, max_tokens=160)
+                            fb_parsed = _parse_sentiment(fb_text)
+                            if fb_parsed:
+                                sentiment_result = fb_parsed
+                                sentiment_score  = _SENTIMENT_SCORE[fb_parsed["sentiment"]] * fb_parsed["confidence"]
+                                _sentiment_cache[market] = (fb_parsed, now_mono)
+                                logger.info("[%s] %s (sentiment fallback): %s %.0f%% score=%+.2f",
+                                            market, tactical_prov, fb_parsed["sentiment"],
+                                            fb_parsed["confidence"] * 100, sentiment_score)
+                        except Exception as fb_exc:
+                            logger.debug("[%s] Sentiment fallback ook mislukt: %s", market, fb_exc)
 
         # ── Stap 3: Gewogen gecombineerde score ──────────────────────────────
         if sentiment_result is not None:
