@@ -383,6 +383,55 @@ def _parse_risk(text: str) -> dict | None:
         return None
 
 
+def _tech_confluence(signals: dict, price: float) -> tuple[int, str]:
+    """
+    Lokale technische confluentiesscore (0–5) zonder API-call.
+
+    Telt het aantal gealignde indicatoren en bepaalt de dominante richting.
+    Returns: (score, direction) — direction is "bullish" | "bearish" | "mixed".
+    """
+    bullish = 0
+    bearish = 0
+
+    rsi = signals.get("rsi_14")
+    if rsi is not None:
+        if float(rsi) < 35:
+            bullish += 1
+        elif float(rsi) > 65:
+            bearish += 1
+
+    if signals.get("ma_cross") == "golden_cross":
+        bullish += 1
+    elif signals.get("ma_cross") == "death_cross":
+        bearish += 1
+
+    sma_20 = signals.get("sma_20")
+    sma_50 = signals.get("sma_50")
+    if sma_20 and sma_50 and float(sma_50) > 0:
+        if float(sma_20) > float(sma_50):
+            bullish += 1
+        else:
+            bearish += 1
+
+    vol     = signals.get("volume")
+    vol_avg = signals.get("volume_avg_20")
+    if vol and vol_avg and float(vol_avg) > 0 and float(vol) / float(vol_avg) > 1.2:
+        if bullish >= bearish:
+            bullish += 1
+        else:
+            bearish += 1
+
+    hist      = float(signals.get("macd_hist") or 0)
+    hist_prev = float(signals.get("macd_hist_prev") or 0)
+    if hist > 0 and hist > hist_prev:
+        bullish += 1
+    elif hist < 0 and hist < hist_prev:
+        bearish += 1
+
+    direction = "bullish" if bullish > bearish else ("bearish" if bearish > bullish else "mixed")
+    return max(bullish, bearish), direction
+
+
 # ── Orchestrator ──────────────────────────────────────────────────────────────
 
 def _assign_roles(providers: list[tuple[str, str]]) -> dict[str, str]:
@@ -493,6 +542,31 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
             market,
         )
 
+    # ── Technische confluentiesscore — vroege exit + modelkeuze ──────────────
+    confluence, conf_dir = _tech_confluence(signals, price)
+    min_conf_score  = env_int("MIN_CONFLUENCE_SCORE", 2)
+    high_conf_score = env_int("HIGH_CONFLUENCE_SCORE", 4)
+    _eff_min = min_conf_score
+
+    # Open positie met verlies en bearish signaal → drempel naar 1 (SELL mogelijk nodig)
+    if confluence >= 1 and conf_dir == "bearish":
+        _pos_conf = _early_pos if trend_bearish else get_position(market)
+        if _pos_conf["amount"] > 0 and float(_pos_conf.get("avg_price", 0)) > 0:
+            _pnl_conf = (price - float(_pos_conf["avg_price"])) / float(_pos_conf["avg_price"]) * 100
+            if _pnl_conf < -3:
+                _eff_min = 1
+
+    if confluence < _eff_min:
+        logger.info(
+            "[%s] Confluence %d/%d (%s) — te laag voor AI (geen API-calls)",
+            market, confluence, _eff_min, conf_dir,
+        )
+        return "HOLD", 0.0, f"Technische confluence {confluence} ({conf_dir}) te laag"
+
+    is_strong_signal = confluence >= high_conf_score
+    logger.info("[%s] Confluence: %d (%s) → %s modellen",
+                market, confluence, conf_dir, "zwaar" if is_strong_signal else "licht")
+
     recent_signals = get_latest_signals(market, limit=3)
 
     from src.sentiment import get_fear_greed, fmt_fear_greed
@@ -518,15 +592,20 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
 
         if tactical_prov:
             try:
-                text = complete_for(tactical_prov, pdict[tactical_prov],
+                _tact_model = pdict[tactical_prov]
+                if not is_strong_signal and tactical_prov == "groq":
+                    _tact_model = os.getenv("GROQ_LIGHT_MODEL", "llama-3.1-8b-instant")
+                elif not is_strong_signal and tactical_prov == "anthropic":
+                    _tact_model = os.getenv("ANTHROPIC_LIGHT_MODEL", "claude-haiku-4-5")
+                text = complete_for(tactical_prov, _tact_model,
                                     _TACTICAL_PROMPT, prompt, max_tokens=160)
-                logger.debug("[%s] %s raw: %.200s", market, tactical_prov, text)
+                logger.debug("[%s] %s/%s raw: %.200s", market, tactical_prov, _tact_model, text)
                 parsed = _parse_decision(text)
                 if parsed:
                     tactical_result = parsed
                     tactical_score  = _DECISION_SCORE[parsed["decision"]] * parsed["confidence"]
-                    logger.info("[%s] %s (tactisch): %s %.0f%% score=%+.2f",
-                                market, tactical_prov, parsed["decision"],
+                    logger.info("[%s] %s/%s (tactisch): %s %.0f%% score=%+.2f",
+                                market, tactical_prov, _tact_model, parsed["decision"],
                                 parsed["confidence"] * 100, tactical_score)
                 else:
                     logger.warning("[%s] %s: kon tactisch besluit niet parsen", market, tactical_prov)
@@ -563,16 +642,19 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                 )
             else:
                 try:
-                    text = complete_for(sentiment_prov, pdict[sentiment_prov],
+                    _sent_model = pdict[sentiment_prov]
+                    if not is_strong_signal and sentiment_prov == "google":
+                        _sent_model = os.getenv("GOOGLE_LIGHT_MODEL", "gemini-1.5-flash")
+                    text = complete_for(sentiment_prov, _sent_model,
                                         _SENTIMENT_PROMPT, prompt, max_tokens=160)
-                    logger.debug("[%s] %s raw: %.200s", market, sentiment_prov, text)
+                    logger.debug("[%s] %s/%s raw: %.200s", market, sentiment_prov, _sent_model, text)
                     parsed = _parse_sentiment(text)
                     if parsed:
                         sentiment_result = parsed
                         sentiment_score  = _SENTIMENT_SCORE[parsed["sentiment"]] * parsed["confidence"]
                         _sentiment_cache[market] = (parsed, now_mono)
-                        logger.info("[%s] %s (sentiment): %s %.0f%% score=%+.2f",
-                                    market, sentiment_prov, parsed["sentiment"],
+                        logger.info("[%s] %s/%s (sentiment): %s %.0f%% score=%+.2f",
+                                    market, sentiment_prov, _sent_model, parsed["sentiment"],
                                     parsed["confidence"] * 100, sentiment_score)
                     else:
                         logger.warning("[%s] %s: kon sentiment niet parsen", market, sentiment_prov)
@@ -654,13 +736,16 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
             risk_prompt += f"\nFull market context:\n{context}"
 
             try:
-                text = complete_for(risk_prov, pdict[risk_prov],
+                _risk_model = pdict[risk_prov]
+                if not is_strong_signal and risk_prov == "anthropic":
+                    _risk_model = os.getenv("ANTHROPIC_LIGHT_MODEL", "claude-haiku-4-5")
+                text = complete_for(risk_prov, _risk_model,
                                     _RISK_PROMPT, risk_prompt, max_tokens=180)
-                logger.debug("[%s] %s raw: %.200s", market, risk_prov, text)
+                logger.debug("[%s] %s/%s raw: %.200s", market, risk_prov, _risk_model, text)
                 risk = _parse_risk(text)
                 if risk:
-                    logger.info("[%s] %s (risico): %s %.0f%% — %s",
-                                market, risk_prov,
+                    logger.info("[%s] %s/%s (risico): %s %.0f%% — %s",
+                                market, risk_prov, _risk_model,
                                 "GOEDGEKEURD" if risk["approved"] else "AFGEWEZEN",
                                 risk["confidence"] * 100, risk["reasoning"])
                     if not risk["approved"]:
