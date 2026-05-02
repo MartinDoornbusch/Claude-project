@@ -46,7 +46,7 @@ def _is_stablecoin(market: str) -> bool:
     return base in _STABLECOINS
 
 
-def _build_market_table(market_stats: list[dict], limit: int = 40, min_volume_eur: float = 20_000) -> str:
+def _build_market_table(market_stats: list[dict], limit: int = 20, min_volume_eur: float = 20_000) -> str:
     # Filter stablecoins en extreem lage volumes vóór verzending naar AI
     filtered = [
         m for m in market_stats
@@ -141,7 +141,7 @@ def advise_markets(market_stats: list[dict], *, provider: str | None = None, mod
         _SYSTEM_PROMPT,
         "Analyze these markets and recommend which ones to include "
         "in an automated EUR trading portfolio:\n\n" + table,
-        max_tokens=1024,
+        max_tokens=400,
     )
     logger.debug("AI marktadvies raw: %.500s", text)
 
