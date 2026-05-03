@@ -1,5 +1,12 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.10
+- fix: Gemini modelnaam niet meer hardcoded — gebruikt altijd het geselecteerde model (geen deprecated fallback)
+- fix: CHANGELOG.md wordt gekopieerd door update.sh zodat HA wijzigingslogboek werkt
+- feat: Model-dropdown breder voor betere leesbaarheid van lange modelnamen
+- feat: Update-knop verplaatst naar prominente gele sectie bovenaan Instellingen
+- fix: hardcoded versienummer verwijderd uit addon description
+
 ## v1.18.9
 - Logboek-pagina in web-UI met filter op INFO / WARNING / ERROR / DEBUG
 - Update-knop in Instellingen die `update.sh` op de achtergrond uitvoert
