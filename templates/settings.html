@@ -47,24 +47,9 @@
 <nav class="navbar navbar-dark px-3 mb-4">
   <a class="btn btn-sm btn-outline-light fw-semibold px-3" href="{{ url_for('index') }}">‹ Dashboard</a>
   <span style="font-size:.85rem; color:#93c5fd;">Instellingen</span>
-  <a href="{{ url_for('logs_page') }}" class="btn btn-sm btn-outline-light">📋 Logboek</a>
 </nav>
 
 <div class="container-fluid px-3 pb-5" style="max-width:960px;">
-
-  <!-- ── Update ── -->
-  <div class="card mb-4" style="border-color:#fde68a; background:#fffbeb;">
-    <div class="card-body py-3 d-flex align-items-center justify-content-between gap-3 flex-wrap">
-      <div>
-        <strong>⬆ Bot updaten</strong>
-        <span class="text-muted ms-2" style="font-size:.85rem;">Haalt de laatste versie op van GitHub en herstart de bot.</span>
-      </div>
-      <button type="button" class="btn btn-warning fw-semibold px-4" onclick="runUpdate()" id="update-btn">⬆ Nu updaten</button>
-    </div>
-    <div id="update-banner" class="d-none px-3 pb-3">
-      <div class="alert mb-0" id="update-alert" role="alert"></div>
-    </div>
-  </div>
 
   {% if saved %}
   <div class="alert alert-success alert-dismissible fade show mb-4" role="alert" style="background:#f0fdf4; border-color:#86efac; color:#166534;">
@@ -1226,36 +1211,6 @@
     } catch(e) {
       status.textContent = 'Netwerk fout: ' + e.message;
       status.style.color = '#dc2626';
-    }
-  }
-
-  async function runUpdate() {
-    const btn    = document.getElementById('update-btn');
-    const wrap   = document.getElementById('update-banner');
-    const alert  = document.getElementById('update-alert');
-    btn.disabled = true;
-    btn.textContent = '⏳ Bezig…';
-    wrap.classList.remove('d-none');
-    alert.className = 'alert alert-info mb-0';
-    alert.textContent = 'Update gestart — code ophalen van GitHub…';
-    try {
-      const r = await fetch(BASE_URL + '/api/update', {method: 'POST'});
-      const d = await r.json();
-      if (d.ok) {
-        alert.className = 'alert alert-success mb-0';
-        alert.textContent = '✓ ' + d.message;
-        btn.textContent = '✓ Gestart';
-      } else {
-        alert.className = 'alert alert-danger mb-0';
-        alert.textContent = 'Fout: ' + (d.error || 'onbekend');
-        btn.disabled = false;
-        btn.textContent = '⬆ Nu updaten';
-      }
-    } catch(e) {
-      alert.className = 'alert alert-danger mb-0';
-      alert.textContent = 'Netwerk fout: ' + e.message;
-      btn.disabled = false;
-      btn.textContent = '⬆ Nu updaten';
     }
   }
 

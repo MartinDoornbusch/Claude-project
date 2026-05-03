@@ -1,5 +1,9 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.11
+- fix: Update-knop en Logboek-link verwijderd uit web-app (behoorden er niet in thuis)
+- fix: Gemini model gebruikt nu altijd het geselecteerde model als fallback (geen deprecated hardcoded naam)
+
 ## v1.18.10
 - fix: Gemini modelnaam niet meer hardcoded — gebruikt altijd het geselecteerde model (geen deprecated fallback)
 - fix: CHANGELOG.md wordt gekopieerd door update.sh zodat HA wijzigingslogboek werkt
