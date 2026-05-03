@@ -1,5 +1,9 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.10
+- fix: CHANGELOG.md wordt nu ook gekopieerd door update.sh (HA wijzigingslogboek werkt nu correct)
+- fix: hardcoded versienummer verwijderd uit addon description
+
 ## v1.18.9
 - Logboek-pagina in web-UI met filter op INFO / WARNING / ERROR / DEBUG
 - Update-knop in Instellingen die `update.sh` op de achtergrond uitvoert
