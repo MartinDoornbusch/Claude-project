@@ -703,11 +703,18 @@
                   <div class="row g-2 mt-1">
                     <div class="col-md-5">
                       {% set rm = config.AI_MODEL_GROQ %}
-                      <select class="form-select form-select-sm" name="AI_MODEL_GROQ">
-                        <option value="llama-3.3-70b-versatile" {{ 'selected' if rm == 'llama-3.3-70b-versatile' or not rm }}>Llama 3.3 70B — beste kwaliteit</option>
-                        <option value="llama-3.1-8b-instant"    {{ 'selected' if rm == 'llama-3.1-8b-instant' }}>Llama 3.1 8B — snelst</option>
-                        <option value="mixtral-8x7b-32768"      {{ 'selected' if rm == 'mixtral-8x7b-32768' }}>Mixtral 8x7B</option>
-                      </select>
+                      <div class="input-group input-group-sm">
+                        <select class="form-select form-select-sm" name="AI_MODEL_GROQ" id="groq-model-select">
+                          <option value="llama-3.3-70b-versatile" {{ 'selected' if rm == 'llama-3.3-70b-versatile' or not rm }}>Llama 3.3 70B (aanbevolen)</option>
+                          <option value="llama-3.1-8b-instant"    {{ 'selected' if rm == 'llama-3.1-8b-instant' }}>Llama 3.1 8B — snelst</option>
+                          <option value="mixtral-8x7b-32768"      {{ 'selected' if rm == 'mixtral-8x7b-32768' }}>Mixtral 8x7B</option>
+                          {% if rm and rm not in ('llama-3.3-70b-versatile','llama-3.1-8b-instant','mixtral-8x7b-32768') %}
+                          <option value="{{ rm }}" selected>{{ rm }}</option>
+                          {% endif %}
+                        </select>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="detectGroqModels()" title="Haal live modellen op via je API key">↻</button>
+                      </div>
+                      <div class="form-text" id="groq-model-status"></div>
                     </div>
                     <div class="col-md-7">
                       <div class="input-group input-group-sm">
@@ -1161,8 +1168,31 @@
     document.getElementById('blacklist_preview').textContent = checked.join(',') || '(leeg)';
   }
 
+  // Modellen die als "aanbevolen" worden gemarkeerd in dropdowns
+  const _RECOMMENDED = {
+    google: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-preview'],
+    groq:   ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'llama4-scout-17b-16e-instruct', 'llama4-maverick-17b-128e-instruct'],
+  };
+
+  function _buildOptions(sel, models, recommended) {
+    const current = sel.value;
+    sel.innerHTML = '';
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.value;
+      const isRec = recommended.some(r => m.value.startsWith(r) || m.value === r);
+      opt.textContent = (isRec ? '★ ' : '') + (m.label || m.value);
+      if (m.value === current || (!sel.value && isRec)) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (!sel.value && models.length) sel.value = models[0].value;
+  }
+
   {% if config.GOOGLE_API_KEY %}
   document.addEventListener('DOMContentLoaded', () => detectGoogleModels());
+  {% endif %}
+  {% if config.GROQ_API_KEY %}
+  document.addEventListener('DOMContentLoaded', () => detectGroqModels());
   {% endif %}
 
   async function detectGoogleModels() {
@@ -1175,17 +1205,27 @@
       const d = await r.json();
       if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#dc2626'; return; }
       if (!d.models || !d.models.length) { status.textContent = 'Geen modellen gevonden (API key ingesteld?)'; status.style.color = '#f59e0b'; return; }
-      const current = sel.value;
-      sel.innerHTML = '';
-      d.models.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m.value;
-        opt.textContent = m.label || m.value;
-        if (m.value === current) opt.selected = true;
-        sel.appendChild(opt);
-      });
-      if (!sel.value && d.models.length) sel.value = d.models[0].value;
-      status.textContent = `✓ ${d.models.length} modellen geladen`;
+      _buildOptions(sel, d.models, _RECOMMENDED.google);
+      status.textContent = `✓ ${d.models.length} modellen geladen — ★ = aanbevolen`;
+      status.style.color = '#16a34a';
+    } catch(e) {
+      status.textContent = 'Netwerk fout: ' + e.message;
+      status.style.color = '#dc2626';
+    }
+  }
+
+  async function detectGroqModels() {
+    const status = document.getElementById('groq-model-status');
+    const sel    = document.getElementById('groq-model-select');
+    status.textContent = 'Modellen ophalen…';
+    status.style.color = '#64748b';
+    try {
+      const r = await fetch(BASE_URL + '/api/ai/groq/models');
+      const d = await r.json();
+      if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#dc2626'; return; }
+      if (!d.models || !d.models.length) { status.textContent = 'Geen modellen gevonden (API key ingesteld?)'; status.style.color = '#f59e0b'; return; }
+      _buildOptions(sel, d.models, _RECOMMENDED.groq);
+      status.textContent = `✓ ${d.models.length} modellen geladen — ★ = aanbevolen`;
       status.style.color = '#16a34a';
     } catch(e) {
       status.textContent = 'Netwerk fout: ' + e.message;

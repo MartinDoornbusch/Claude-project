@@ -562,6 +562,15 @@ def api_google_models():
         return jsonify({"error": str(e), "models": []}), 500
 
 
+@app.route("/api/ai/groq/models")
+def api_groq_models():
+    try:
+        from src.ai_provider import list_groq_models
+        return jsonify({"models": list_groq_models()})
+    except Exception as e:
+        return jsonify({"error": str(e), "models": []}), 500
+
+
 @app.route("/api/markets/available")
 def api_markets_available():
     try:
