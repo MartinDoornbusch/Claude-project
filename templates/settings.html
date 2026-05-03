@@ -47,7 +47,12 @@
 <nav class="navbar navbar-dark px-3 mb-4">
   <a class="btn btn-sm btn-outline-light fw-semibold px-3" href="{{ url_for('index') }}">‹ Dashboard</a>
   <span style="font-size:.85rem; color:#93c5fd;">Instellingen</span>
+  <div class="d-flex gap-2 align-items-center">
+    <a href="{{ url_for('logs_page') }}" class="btn btn-sm btn-outline-light">📋 Logboek</a>
+    <button type="button" class="btn btn-sm btn-warning fw-semibold" onclick="runUpdate()" id="update-btn">⬆ Update</button>
+  </div>
 </nav>
+<div id="update-banner" class="alert alert-info mx-3 mt-2 d-none" role="alert"></div>
 
 <div class="container-fluid px-3 pb-5" style="max-width:960px;">
 
@@ -1211,6 +1216,34 @@
     } catch(e) {
       status.textContent = 'Netwerk fout: ' + e.message;
       status.style.color = '#dc2626';
+    }
+  }
+
+  async function runUpdate() {
+    const btn    = document.getElementById('update-btn');
+    const banner = document.getElementById('update-banner');
+    btn.disabled = true;
+    btn.textContent = '⏳ Bezig…';
+    banner.className = 'alert alert-info mx-3 mt-2';
+    banner.textContent = 'Update gestart — code ophalen van GitHub…';
+    try {
+      const r = await fetch(BASE_URL + '/api/update', {method: 'POST'});
+      const d = await r.json();
+      if (d.ok) {
+        banner.className = 'alert alert-success mx-3 mt-2';
+        banner.textContent = '✓ ' + d.message;
+        btn.textContent = '✓ Gestart';
+      } else {
+        banner.className = 'alert alert-danger mx-3 mt-2';
+        banner.textContent = 'Fout: ' + (d.error || 'onbekend');
+        btn.disabled = false;
+        btn.textContent = '⬆ Update';
+      }
+    } catch(e) {
+      banner.className = 'alert alert-danger mx-3 mt-2';
+      banner.textContent = 'Netwerk fout: ' + e.message;
+      btn.disabled = false;
+      btn.textContent = '⬆ Update';
     }
   }
 
