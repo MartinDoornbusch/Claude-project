@@ -47,14 +47,24 @@
 <nav class="navbar navbar-dark px-3 mb-4">
   <a class="btn btn-sm btn-outline-light fw-semibold px-3" href="{{ url_for('index') }}">‹ Dashboard</a>
   <span style="font-size:.85rem; color:#93c5fd;">Instellingen</span>
-  <div class="d-flex gap-2 align-items-center">
-    <a href="{{ url_for('logs_page') }}" class="btn btn-sm btn-outline-light">📋 Logboek</a>
-    <button type="button" class="btn btn-sm btn-warning fw-semibold" onclick="runUpdate()" id="update-btn">⬆ Update</button>
-  </div>
+  <a href="{{ url_for('logs_page') }}" class="btn btn-sm btn-outline-light">📋 Logboek</a>
 </nav>
-<div id="update-banner" class="alert alert-info mx-3 mt-2 d-none" role="alert"></div>
 
 <div class="container-fluid px-3 pb-5" style="max-width:960px;">
+
+  <!-- ── Update ── -->
+  <div class="card mb-4" style="border-color:#fde68a; background:#fffbeb;">
+    <div class="card-body py-3 d-flex align-items-center justify-content-between gap-3 flex-wrap">
+      <div>
+        <strong>⬆ Bot updaten</strong>
+        <span class="text-muted ms-2" style="font-size:.85rem;">Haalt de laatste versie op van GitHub en herstart de bot.</span>
+      </div>
+      <button type="button" class="btn btn-warning fw-semibold px-4" onclick="runUpdate()" id="update-btn">⬆ Nu updaten</button>
+    </div>
+    <div id="update-banner" class="d-none px-3 pb-3">
+      <div class="alert mb-0" id="update-alert" role="alert"></div>
+    </div>
+  </div>
 
   {% if saved %}
   <div class="alert alert-success alert-dismissible fade show mb-4" role="alert" style="background:#f0fdf4; border-color:#86efac; color:#166534;">
@@ -658,7 +668,7 @@
                 </div>
                 <div id="prov-row-google" {% if config.AI_GOOGLE_ENABLED == 'false' %}style="display:none"{% endif %}>
                   <div class="row g-2 mt-1">
-                    <div class="col-md-5">
+                    <div class="col-md-8">
                       {% set gm = config.AI_MODEL_GOOGLE %}
                       <div class="input-group input-group-sm">
                         <select class="form-select form-select-sm" name="AI_MODEL_GOOGLE" id="google-model-select">
@@ -673,7 +683,7 @@
                       </div>
                       <div class="form-text" id="google-model-status"></div>
                     </div>
-                    <div class="col-md-7">
+                    <div class="col-md-4">
                       <div class="input-group input-group-sm">
                         <input type="password" class="form-control font-monospace" name="GOOGLE_API_KEY" id="google-api-key-input"
                                placeholder="{{ '●●●●●●●● (ingesteld)' if config.GOOGLE_API_KEY else 'AIza...' }}">
@@ -706,7 +716,7 @@
                 </div>
                 <div id="prov-row-groq" {% if config.AI_GROQ_ENABLED == 'false' %}style="display:none"{% endif %}>
                   <div class="row g-2 mt-1">
-                    <div class="col-md-5">
+                    <div class="col-md-8">
                       {% set rm = config.AI_MODEL_GROQ %}
                       <div class="input-group input-group-sm">
                         <select class="form-select form-select-sm" name="AI_MODEL_GROQ" id="groq-model-select">
@@ -721,7 +731,7 @@
                       </div>
                       <div class="form-text" id="groq-model-status"></div>
                     </div>
-                    <div class="col-md-7">
+                    <div class="col-md-4">
                       <div class="input-group input-group-sm">
                         <input type="password" class="form-control font-monospace" name="GROQ_API_KEY"
                                placeholder="{{ '●●●●●●●● (ingesteld)' if config.GROQ_API_KEY else 'gsk_...' }}">
@@ -1221,29 +1231,31 @@
 
   async function runUpdate() {
     const btn    = document.getElementById('update-btn');
-    const banner = document.getElementById('update-banner');
+    const wrap   = document.getElementById('update-banner');
+    const alert  = document.getElementById('update-alert');
     btn.disabled = true;
     btn.textContent = '⏳ Bezig…';
-    banner.className = 'alert alert-info mx-3 mt-2';
-    banner.textContent = 'Update gestart — code ophalen van GitHub…';
+    wrap.classList.remove('d-none');
+    alert.className = 'alert alert-info mb-0';
+    alert.textContent = 'Update gestart — code ophalen van GitHub…';
     try {
       const r = await fetch(BASE_URL + '/api/update', {method: 'POST'});
       const d = await r.json();
       if (d.ok) {
-        banner.className = 'alert alert-success mx-3 mt-2';
-        banner.textContent = '✓ ' + d.message;
+        alert.className = 'alert alert-success mb-0';
+        alert.textContent = '✓ ' + d.message;
         btn.textContent = '✓ Gestart';
       } else {
-        banner.className = 'alert alert-danger mx-3 mt-2';
-        banner.textContent = 'Fout: ' + (d.error || 'onbekend');
+        alert.className = 'alert alert-danger mb-0';
+        alert.textContent = 'Fout: ' + (d.error || 'onbekend');
         btn.disabled = false;
-        btn.textContent = '⬆ Update';
+        btn.textContent = '⬆ Nu updaten';
       }
     } catch(e) {
-      banner.className = 'alert alert-danger mx-3 mt-2';
-      banner.textContent = 'Netwerk fout: ' + e.message;
+      alert.className = 'alert alert-danger mb-0';
+      alert.textContent = 'Netwerk fout: ' + e.message;
       btn.disabled = false;
-      btn.textContent = '⬆ Update';
+      btn.textContent = '⬆ Nu updaten';
     }
   }
 

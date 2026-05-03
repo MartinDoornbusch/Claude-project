@@ -656,7 +656,9 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                 try:
                     _sent_model = pdict[sentiment_prov]
                     if not is_strong_signal and sentiment_prov == "google":
-                        _sent_model = os.getenv("GOOGLE_LIGHT_MODEL", "gemini-2.0-flash")
+                        # Gebruik expliciet ingesteld licht model, anders het geconfigureerde model
+                        # (nooit hardcoded fallback — voorkomt 404 bij deprecated modelnamen)
+                        _sent_model = os.getenv("GOOGLE_LIGHT_MODEL", "").strip() or _sent_model
                     text = complete_for(sentiment_prov, _sent_model,
                                         _SENTIMENT_PROMPT, prompt, max_tokens=50)
                     logger.debug("[%s] %s/%s raw: %.200s", market, sentiment_prov, _sent_model, text)
