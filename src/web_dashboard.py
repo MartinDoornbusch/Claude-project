@@ -571,6 +571,45 @@ def api_groq_models():
         return jsonify({"error": str(e), "models": []}), 500
 
 
+@app.route("/logs")
+def logs_page():
+    return render_template("logs.html")
+
+
+@app.route("/api/logs")
+def api_logs():
+    try:
+        from src.scheduler import get_log_buffer
+        level = request.args.get("level", "").upper()
+        entries = get_log_buffer()
+        if level and level != "ALL":
+            entries = [e for e in entries if e["level"] == level]
+        return jsonify({"logs": list(reversed(entries))})
+    except Exception as e:
+        return jsonify({"logs": [], "error": str(e)})
+
+
+@app.route("/api/update", methods=["POST"])
+def api_update():
+    import subprocess, shutil
+    script = "/config/bitvavo-bot/update.sh"
+    if not shutil.which("sh"):
+        return jsonify({"error": "sh niet gevonden"}), 500
+    import os as _os
+    if not _os.path.isfile(script):
+        return jsonify({"error": f"Update script niet gevonden: {script}"}), 404
+    try:
+        subprocess.Popen(
+            ["sh", script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        return jsonify({"ok": True, "message": "Update gestart — bot herstart over enkele seconden."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/markets/available")
 def api_markets_available():
     try:

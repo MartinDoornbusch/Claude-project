@@ -279,13 +279,38 @@ class _AmsFormatter(logging.Formatter):
         return ct.strftime(datefmt or "%Y-%m-%d %H:%M:%S")
 
 
+from collections import deque
+
+_log_buffer: deque = deque(maxlen=500)
+
+
+class _BufferHandler(logging.Handler):
+    """Slaat de laatste 500 logregels op in geheugen voor de web-UI."""
+    def emit(self, record: logging.LogRecord) -> None:
+        _log_buffer.append({
+            "ts":      self.formatter.formatTime(record) if self.formatter else "",
+            "level":   record.levelname,
+            "name":    record.name,
+            "message": record.getMessage(),
+        })
+
+
+def get_log_buffer() -> list[dict]:
+    return list(_log_buffer)
+
+
 def start() -> None:
-    handler = logging.StreamHandler()
-    handler.setFormatter(_AmsFormatter(
+    fmt = _AmsFormatter(
         fmt="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-    ))
-    logging.basicConfig(level=logging.INFO, handlers=[handler])
+    )
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(fmt)
+
+    buf_handler = _BufferHandler()
+    buf_handler.setFormatter(fmt)
+
+    logging.basicConfig(level=logging.INFO, handlers=[stream_handler, buf_handler])
 
     logger.info(
         "Bot gestart | modus: %s | markten: %s | interval: %s | check: elke %s min",
