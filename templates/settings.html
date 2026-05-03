@@ -1161,6 +1161,10 @@
     document.getElementById('blacklist_preview').textContent = checked.join(',') || '(leeg)';
   }
 
+  {% if config.GOOGLE_API_KEY %}
+  document.addEventListener('DOMContentLoaded', () => detectGoogleModels());
+  {% endif %}
+
   async function detectGoogleModels() {
     const status = document.getElementById('google-model-status');
     const sel    = document.getElementById('google-model-select');
