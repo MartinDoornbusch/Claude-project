@@ -112,6 +112,30 @@ def list_google_models() -> list[dict]:
         return []
 
 
+def list_groq_models() -> list[dict]:
+    """Geeft beschikbare Groq-modellen terug via de live Groq API."""
+    from groq import Groq  # type: ignore
+    key = os.getenv("GROQ_API_KEY", "")
+    if not key:
+        return []
+    try:
+        client = Groq(api_key=key)
+        models = client.models.list()
+        # Groq geeft ook embedding/whisper modellen terug — filter op chat-capable
+        _SKIP = {"whisper", "distil-whisper", "playai", "allam"}
+        result = []
+        for m in models.data:
+            mid = getattr(m, "id", "") or ""
+            if any(s in mid.lower() for s in _SKIP):
+                continue
+            result.append({"value": mid, "label": mid})
+        result.sort(key=lambda x: x["value"])
+        return result
+    except Exception as exc:
+        logger.warning("Kon Groq modellen niet ophalen: %s", exc)
+        return []
+
+
 def complete(system: str, user: str, max_tokens: int = 2048) -> str:
     """
     Stuurt een verzoek naar de geconfigureerde AI provider.
