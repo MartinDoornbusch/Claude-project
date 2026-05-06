@@ -221,6 +221,42 @@ def index():
         except Exception:
             pass
 
+    # ── Google Request Gauge ──────────────────────────────────────────────────
+    google_requests_data: dict = {"used": 0, "limit": 1_500, "pct_used": 0.0}
+    if "google" in active_providers:
+        try:
+            from src.database import get_google_daily_requests
+            limit    = int(os.getenv("GOOGLE_DAILY_LIMIT", "1500"))
+            used     = get_google_daily_requests()
+            pct_used = min(100.0, used / limit * 100) if limit > 0 else 0.0
+            google_requests_data = {"used": used, "limit": limit, "pct_used": round(pct_used, 1)}
+        except Exception:
+            pass
+
+    # ── Mistral Token Gauge ───────────────────────────────────────────────────
+    mistral_tokens_data: dict = {"used": 0, "limit": 500_000, "pct_used": 0.0}
+    if "mistral" in active_providers:
+        try:
+            from src.database import get_mistral_daily_tokens
+            used     = get_mistral_daily_tokens()
+            limit    = int(os.getenv("MISTRAL_DAILY_LIMIT", "500000"))
+            pct_used = min(100.0, used / limit * 100) if limit > 0 else 0.0
+            mistral_tokens_data = {"used": used, "limit": limit, "pct_used": round(pct_used, 1)}
+        except Exception:
+            pass
+
+    # ── Cerebras Token Gauge ──────────────────────────────────────────────────
+    cerebras_tokens_data: dict = {"used": 0, "limit": 1_000_000, "pct_used": 0.0}
+    if "cerebras" in active_providers:
+        try:
+            from src.database import get_cerebras_daily_tokens
+            used     = get_cerebras_daily_tokens()
+            limit    = int(os.getenv("CEREBRAS_DAILY_LIMIT", "1000000"))
+            pct_used = min(100.0, used / limit * 100) if limit > 0 else 0.0
+            cerebras_tokens_data = {"used": used, "limit": limit, "pct_used": round(pct_used, 1)}
+        except Exception:
+            pass
+
     return render_template(
         "index.html",
         live_mode=live_mode,
@@ -235,6 +271,9 @@ def index():
         ai_votes_by_market=ai_votes_by_market,
         positions_data=positions_data,
         groq_tokens=groq_tokens_data,
+        google_requests=google_requests_data,
+        mistral_tokens=mistral_tokens_data,
+        cerebras_tokens=cerebras_tokens_data,
     )
 
 
@@ -558,6 +597,15 @@ def api_google_models():
     try:
         from src.ai_provider import list_google_models
         return jsonify({"models": list_google_models()})
+    except Exception as e:
+        return jsonify({"error": str(e), "models": []}), 500
+
+
+@app.route("/api/ai/groq/models")
+def api_groq_models():
+    try:
+        from src.ai_provider import list_groq_models
+        return jsonify({"models": list_groq_models()})
     except Exception as e:
         return jsonify({"error": str(e), "models": []}), 500
 

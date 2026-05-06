@@ -1,4 +1,4 @@
-"""Unified AI provider abstraction: Anthropic, Google Gemini, Groq."""
+"""Unified AI provider abstraction: Anthropic, Google Gemini, Groq, Mistral, Cerebras."""
 
 from __future__ import annotations
 
@@ -8,6 +8,12 @@ import time
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+
+# ── OpenAI-compatibele providers (Mistral, Cerebras, …) ──────────────────────
+_OPENAI_COMPAT: dict[str, dict[str, str]] = {
+    "mistral":  {"url": "https://api.mistral.ai/v1",  "env": "MISTRAL_API_KEY"},
+    "cerebras": {"url": "https://api.cerebras.ai/v1", "env": "CEREBRAS_API_KEY"},
+}
 
 # ── Maand-grens backoff ───────────────────────────────────────────────────────
 # Google reset hun spending cap op 1e van de maand in UTC. De bot draait op
@@ -30,14 +36,24 @@ PROVIDER_MODELS: dict[str, list[dict]] = {
         {"value": "claude-haiku-4-5",  "label": "Claude Haiku 4.5 — snel & goedkoop (betaald)"},
     ],
     "google": [
-        {"value": "gemini-2.0-flash",  "label": "Gemini 2.0 Flash — snel & actueel (aanbevolen)"},
+        {"value": "gemini-2.0-flash",  "label": "Gemini 2.0 Flash — snel & actueel (aanbevolen) ★"},
         {"value": "gemini-1.5-flash",  "label": "Gemini 1.5 Flash — stabiel (gratis tier)"},
         {"value": "gemini-1.5-pro",    "label": "Gemini 1.5 Pro — meest capabel (beperkt gratis)"},
     ],
     "groq": [
-        {"value": "llama-3.3-70b-versatile", "label": "Llama 3.3 70B — beste kwaliteit (gratis)"},
+        {"value": "llama-3.3-70b-versatile", "label": "Llama 3.3 70B — beste kwaliteit (gratis) ★"},
         {"value": "llama-3.1-8b-instant",    "label": "Llama 3.1 8B — snelst (gratis)"},
         {"value": "mixtral-8x7b-32768",      "label": "Mixtral 8x7B (gratis)"},
+    ],
+    "mistral": [
+        {"value": "mistral-small-latest",  "label": "Mistral Small — snel & gratis tier ★"},
+        {"value": "mistral-medium-latest", "label": "Mistral Medium — goede balans"},
+        {"value": "open-mistral-7b",       "label": "Mistral 7B Open — volledig gratis"},
+    ],
+    "cerebras": [
+        {"value": "llama-3.3-70b",  "label": "Llama 3.3 70B — beste kwaliteit ★"},
+        {"value": "llama3.1-70b",   "label": "Llama 3.1 70B — snel"},
+        {"value": "llama3.1-8b",    "label": "Llama 3.1 8B — snelst"},
     ],
 }
 
@@ -45,12 +61,16 @@ _DEFAULT_MODEL: dict[str, str] = {
     "anthropic": "claude-opus-4-7",
     "google":    "gemini-2.0-flash",
     "groq":      "llama-3.3-70b-versatile",
+    "mistral":   "mistral-small-latest",
+    "cerebras":  "llama-3.3-70b",
 }
 
 _KEY_ENV: dict[str, str] = {
     "anthropic": "ANTHROPIC_API_KEY",
     "google":    "GOOGLE_API_KEY",
     "groq":      "GROQ_API_KEY",
+    "mistral":   "MISTRAL_API_KEY",
+    "cerebras":  "CEREBRAS_API_KEY",
 }
 
 
@@ -64,7 +84,7 @@ def get_active() -> tuple[str, str]:
 def get_configured_providers() -> list[tuple[str, str]]:
     """Geeft [(provider, model)] voor alle providers met API key EN ingeschakeld via AI_<PROVIDER>_ENABLED."""
     result = []
-    for provider in ("anthropic", "google", "groq"):
+    for provider in ("anthropic", "google", "groq", "mistral", "cerebras"):
         if not os.getenv(_KEY_ENV[provider], "").strip():
             continue
         enabled = os.getenv(f"AI_{provider.upper()}_ENABLED", "true").lower()
@@ -84,6 +104,8 @@ def complete_for(provider: str, model: str, system: str, user: str, max_tokens: 
         return _google(system, user, model, max_tokens)
     if provider == "groq":
         return _groq(system, user, model, max_tokens)
+    if provider in _OPENAI_COMPAT:
+        return _openai_compatible(provider, system, user, model, max_tokens)
     raise ValueError(f"Onbekende AI provider: {provider!r}")
 
 
@@ -126,6 +148,8 @@ def complete(system: str, user: str, max_tokens: int = 2048) -> str:
         return _google(system, user, model, max_tokens)
     if provider == "groq":
         return _groq(system, user, model, max_tokens)
+    if provider in _OPENAI_COMPAT:
+        return _openai_compatible(provider, system, user, model, max_tokens)
     raise ValueError(f"Onbekende AI provider: {provider!r}")
 
 
@@ -244,3 +268,57 @@ def _groq(system: str, user: str, model: str, max_tokens: int) -> str:
     except Exception:
         pass
     return resp.choices[0].message.content
+
+
+# ── OpenAI-compatibele providers (Mistral, Cerebras) ─────────────────────────
+
+def _openai_compatible(provider: str, system: str, user: str, model: str, max_tokens: int) -> str:
+    """Generieke adapter voor providers met een OpenAI-compatibele REST API."""
+    import httpx
+
+    cfg = _OPENAI_COMPAT[provider]
+    key = os.getenv(cfg["env"], "")
+    if not key:
+        raise EnvironmentError(f"{cfg['env']} niet ingesteld")
+
+    # Groq free-tier-achtige truncatie: schat ~4 chars/token, laat 600 tokens over voor output
+    _CHAR_BUDGET = 20_000
+    if len(user) > _CHAR_BUDGET:
+        user = user[:_CHAR_BUDGET] + "\n[context afgekapt]"
+
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+    payload: dict = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user",   "content": user},
+        ],
+        "max_tokens": max_tokens,
+    }
+
+    with httpx.Client(timeout=30.0) as client:
+        resp = client.post(f"{cfg['url']}/chat/completions", json=payload, headers=headers)
+        if resp.status_code == 401:
+            raise EnvironmentError(f"{provider} API key ongeldig (401)")
+        if resp.status_code == 429:
+            raise RuntimeError(f"{provider} rate limit bereikt (429)")
+        resp.raise_for_status()
+        data = resp.json()
+
+    # Token-tracking (provider-specifiek)
+    try:
+        total_tokens = (data.get("usage") or {}).get("total_tokens", 0)
+        if total_tokens:
+            if provider == "mistral":
+                from src.database import save_mistral_tokens
+                save_mistral_tokens(total_tokens)
+            elif provider == "cerebras":
+                from src.database import save_cerebras_tokens
+                save_cerebras_tokens(total_tokens)
+    except Exception:
+        pass
+
+    return data["choices"][0]["message"]["content"]

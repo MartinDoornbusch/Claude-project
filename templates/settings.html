@@ -590,8 +590,8 @@
 
             <div class="form-text mb-3">
               <strong>Orchestrator-modus</strong> — providers werken in volgorde:
-              <span class="badge bg-primary" style="font-size:.7rem;">Tactisch</span> <strong>Groq</strong> scoort razendsnel de indicatoren.
-              <span class="badge bg-warning text-dark" style="font-size:.7rem;">Sentiment</span> <strong>Gemini</strong> controleert de marktsfeer (alleen bij een potentieel signaal).
+              <span class="badge bg-primary" style="font-size:.7rem;">Tactisch</span> <strong>Groq → Cerebras</strong> scoort razendsnel de indicatoren.
+              <span class="badge bg-warning text-dark" style="font-size:.7rem;">Sentiment</span> <strong>Gemini + Mistral</strong> stemmen (majority-vote; fallback Groq/Cerebras).
               <span class="badge bg-danger" style="font-size:.7rem;">Risico</span> <strong>Claude</strong> keurt de trade goed of af (alleen bij concrete actie — bespaart API-kosten).
             </div>
 
@@ -685,7 +685,7 @@
             </div>
 
             <!-- ── Groq ── -->
-            <div class="card mb-3" style="border-color:#e0e7ff;">
+            <div class="card mb-2" style="border-color:#e0e7ff;">
               <div class="card-body py-2 px-3">
                 <div class="d-flex align-items-center justify-content-between">
                   <div>
@@ -703,11 +703,18 @@
                   <div class="row g-2 mt-1">
                     <div class="col-md-5">
                       {% set rm = config.AI_MODEL_GROQ %}
-                      <select class="form-select form-select-sm" name="AI_MODEL_GROQ">
-                        <option value="llama-3.3-70b-versatile" {{ 'selected' if rm == 'llama-3.3-70b-versatile' or not rm }}>Llama 3.3 70B — beste kwaliteit</option>
-                        <option value="llama-3.1-8b-instant"    {{ 'selected' if rm == 'llama-3.1-8b-instant' }}>Llama 3.1 8B — snelst</option>
-                        <option value="mixtral-8x7b-32768"      {{ 'selected' if rm == 'mixtral-8x7b-32768' }}>Mixtral 8x7B</option>
-                      </select>
+                      <div class="input-group input-group-sm">
+                        <select class="form-select form-select-sm" name="AI_MODEL_GROQ" id="groq-model-select">
+                          <option value="llama-3.3-70b-versatile" {{ 'selected' if rm == 'llama-3.3-70b-versatile' or not rm }}>★ Llama 3.3 70B — beste kwaliteit</option>
+                          <option value="llama-3.1-8b-instant"    {{ 'selected' if rm == 'llama-3.1-8b-instant' }}>Llama 3.1 8B — snelst</option>
+                          <option value="mixtral-8x7b-32768"      {{ 'selected' if rm == 'mixtral-8x7b-32768' }}>Mixtral 8x7B</option>
+                          {% if rm and rm not in ('llama-3.3-70b-versatile','llama-3.1-8b-instant','mixtral-8x7b-32768') %}
+                          <option value="{{ rm }}" selected>{{ rm }}</option>
+                          {% endif %}
+                        </select>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="detectGroqModels()" title="Haal live modellen op via je API key">↻</button>
+                      </div>
+                      <div class="form-text" id="groq-model-status"></div>
                     </div>
                     <div class="col-md-7">
                       <div class="input-group input-group-sm">
@@ -718,6 +725,94 @@
                       <div class="form-text">
                         {% if config.GROQ_API_KEY %}<span style="color:#16a34a;">✓ Ingesteld</span> · {% endif %}
                         <a href="https://console.groq.com/keys" target="_blank" style="color:#2563eb;">console.groq.com</a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Mistral ── -->
+            <div class="card mb-2" style="border-color:#e0e7ff;">
+              <div class="card-body py-2 px-3">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div>
+                    <span class="fw-semibold">Mistral AI</span>
+                    <span class="badge bg-warning text-dark ms-2" style="font-size:.7rem;">Sentiment</span>
+                    <span class="text-muted ms-1" style="font-size:.8rem;">gratis tier</span>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="AI_MISTRAL_ENABLED" id="ai_mistral_chk"
+                           {{ 'checked' if config.AI_MISTRAL_ENABLED != 'false' }}
+                           onchange="toggleProviderRow('mistral', this.checked)">
+                  </div>
+                </div>
+                <div id="prov-row-mistral" {% if config.AI_MISTRAL_ENABLED == 'false' %}style="display:none"{% endif %}>
+                  <div class="row g-2 mt-1">
+                    <div class="col-md-5">
+                      {% set mm = config.AI_MODEL_MISTRAL %}
+                      <select class="form-select form-select-sm" name="AI_MODEL_MISTRAL">
+                        <option value="mistral-small-latest"  {{ 'selected' if mm == 'mistral-small-latest'  or not mm }}>★ Mistral Small — snel & gratis tier</option>
+                        <option value="mistral-medium-latest" {{ 'selected' if mm == 'mistral-medium-latest' }}>Mistral Medium — goede balans</option>
+                        <option value="open-mistral-7b"       {{ 'selected' if mm == 'open-mistral-7b' }}>Mistral 7B Open — volledig gratis</option>
+                        {% if mm and mm not in ('mistral-small-latest','mistral-medium-latest','open-mistral-7b') %}
+                        <option value="{{ mm }}" selected>{{ mm }}</option>
+                        {% endif %}
+                      </select>
+                    </div>
+                    <div class="col-md-7">
+                      <div class="input-group input-group-sm">
+                        <input type="password" class="form-control font-monospace" name="MISTRAL_API_KEY"
+                               placeholder="{{ '●●●●●●●● (ingesteld)' if config.MISTRAL_API_KEY else 'API key...' }}">
+                        <span class="input-group-text toggle-pw">Toon</span>
+                      </div>
+                      <div class="form-text">
+                        {% if config.MISTRAL_API_KEY %}<span style="color:#16a34a;">✓ Ingesteld</span> · {% endif %}
+                        <a href="https://console.mistral.ai/api-keys" target="_blank" style="color:#2563eb;">console.mistral.ai</a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Cerebras ── -->
+            <div class="card mb-3" style="border-color:#e0e7ff;">
+              <div class="card-body py-2 px-3">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div>
+                    <span class="fw-semibold">Cerebras</span>
+                    <span class="badge bg-secondary ms-2" style="font-size:.7rem;">Backup</span>
+                    <span class="text-muted ms-1" style="font-size:.8rem;">sub-seconde, gratis</span>
+                  </div>
+                  <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" name="AI_CEREBRAS_ENABLED" id="ai_cerebras_chk"
+                           {{ 'checked' if config.AI_CEREBRAS_ENABLED != 'false' }}
+                           onchange="toggleProviderRow('cerebras', this.checked)">
+                  </div>
+                </div>
+                <div id="prov-row-cerebras" {% if config.AI_CEREBRAS_ENABLED == 'false' %}style="display:none"{% endif %}>
+                  <div class="row g-2 mt-1">
+                    <div class="col-md-5">
+                      {% set cm = config.AI_MODEL_CEREBRAS %}
+                      <select class="form-select form-select-sm" name="AI_MODEL_CEREBRAS">
+                        <option value="llama-3.3-70b" {{ 'selected' if cm == 'llama-3.3-70b' or not cm }}>★ Llama 3.3 70B — beste kwaliteit</option>
+                        <option value="llama3.1-70b"  {{ 'selected' if cm == 'llama3.1-70b' }}>Llama 3.1 70B — snel</option>
+                        <option value="llama3.1-8b"   {{ 'selected' if cm == 'llama3.1-8b' }}>Llama 3.1 8B — snelst</option>
+                        {% if cm and cm not in ('llama-3.3-70b','llama3.1-70b','llama3.1-8b') %}
+                        <option value="{{ cm }}" selected>{{ cm }}</option>
+                        {% endif %}
+                      </select>
+                    </div>
+                    <div class="col-md-7">
+                      <div class="input-group input-group-sm">
+                        <input type="password" class="form-control font-monospace" name="CEREBRAS_API_KEY"
+                               placeholder="{{ '●●●●●●●● (ingesteld)' if config.CEREBRAS_API_KEY else 'API key...' }}">
+                        <span class="input-group-text toggle-pw">Toon</span>
+                      </div>
+                      <div class="form-text">
+                        {% if config.CEREBRAS_API_KEY %}<span style="color:#16a34a;">✓ Ingesteld</span> · {% endif %}
+                        <a href="https://cloud.cerebras.ai" target="_blank" style="color:#2563eb;">cloud.cerebras.ai</a>
                       </div>
                     </div>
                   </div>
@@ -1161,6 +1256,18 @@
     document.getElementById('blacklist_preview').textContent = checked.join(',') || '(leeg)';
   }
 
+  function _buildOptions(sel, models, current) {
+    sel.innerHTML = '';
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.value;
+      opt.textContent = m.label || m.value;
+      if (m.value === current) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (!sel.value && models.length) sel.value = models[0].value;
+  }
+
   async function detectGoogleModels() {
     const status = document.getElementById('google-model-status');
     const sel    = document.getElementById('google-model-select');
@@ -1171,16 +1278,26 @@
       const d = await r.json();
       if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#dc2626'; return; }
       if (!d.models || !d.models.length) { status.textContent = 'Geen modellen gevonden (API key ingesteld?)'; status.style.color = '#f59e0b'; return; }
-      const current = sel.value;
-      sel.innerHTML = '';
-      d.models.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m.value;
-        opt.textContent = m.label || m.value;
-        if (m.value === current) opt.selected = true;
-        sel.appendChild(opt);
-      });
-      if (!sel.value && d.models.length) sel.value = d.models[0].value;
+      _buildOptions(sel, d.models, sel.value);
+      status.textContent = `✓ ${d.models.length} modellen geladen`;
+      status.style.color = '#16a34a';
+    } catch(e) {
+      status.textContent = 'Netwerk fout: ' + e.message;
+      status.style.color = '#dc2626';
+    }
+  }
+
+  async function detectGroqModels() {
+    const status = document.getElementById('groq-model-status');
+    const sel    = document.getElementById('groq-model-select');
+    status.textContent = 'Modellen ophalen…';
+    status.style.color = '#64748b';
+    try {
+      const r = await fetch(BASE_URL + '/api/ai/groq/models');
+      const d = await r.json();
+      if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#dc2626'; return; }
+      if (!d.models || !d.models.length) { status.textContent = 'Geen modellen gevonden (API key ingesteld?)'; status.style.color = '#f59e0b'; return; }
+      _buildOptions(sel, d.models, sel.value);
       status.textContent = `✓ ${d.models.length} modellen geladen`;
       status.style.color = '#16a34a';
     } catch(e) {
