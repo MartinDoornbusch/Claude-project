@@ -233,6 +233,30 @@ def index():
         except Exception:
             pass
 
+    # ── Mistral Token Gauge ───────────────────────────────────────────────────
+    mistral_tokens_data: dict = {"used": 0, "limit": 500_000, "pct_used": 0.0}
+    if "mistral" in active_providers:
+        try:
+            from src.database import get_mistral_daily_tokens
+            used     = get_mistral_daily_tokens()
+            limit    = int(os.getenv("MISTRAL_DAILY_LIMIT", "500000"))
+            pct_used = min(100.0, used / limit * 100) if limit > 0 else 0.0
+            mistral_tokens_data = {"used": used, "limit": limit, "pct_used": round(pct_used, 1)}
+        except Exception:
+            pass
+
+    # ── Cerebras Token Gauge ──────────────────────────────────────────────────
+    cerebras_tokens_data: dict = {"used": 0, "limit": 1_000_000, "pct_used": 0.0}
+    if "cerebras" in active_providers:
+        try:
+            from src.database import get_cerebras_daily_tokens
+            used     = get_cerebras_daily_tokens()
+            limit    = int(os.getenv("CEREBRAS_DAILY_LIMIT", "1000000"))
+            pct_used = min(100.0, used / limit * 100) if limit > 0 else 0.0
+            cerebras_tokens_data = {"used": used, "limit": limit, "pct_used": round(pct_used, 1)}
+        except Exception:
+            pass
+
     return render_template(
         "index.html",
         live_mode=live_mode,
@@ -248,6 +272,8 @@ def index():
         positions_data=positions_data,
         groq_tokens=groq_tokens_data,
         google_requests=google_requests_data,
+        mistral_tokens=mistral_tokens_data,
+        cerebras_tokens=cerebras_tokens_data,
     )
 
 
@@ -582,45 +608,6 @@ def api_groq_models():
         return jsonify({"models": list_groq_models()})
     except Exception as e:
         return jsonify({"error": str(e), "models": []}), 500
-
-
-@app.route("/logs")
-def logs_page():
-    return render_template("logs.html")
-
-
-@app.route("/api/logs")
-def api_logs():
-    try:
-        from src.scheduler import get_log_buffer
-        level = request.args.get("level", "").upper()
-        entries = get_log_buffer()
-        if level and level != "ALL":
-            entries = [e for e in entries if e["level"] == level]
-        return jsonify({"logs": list(reversed(entries))})
-    except Exception as e:
-        return jsonify({"logs": [], "error": str(e)})
-
-
-@app.route("/api/update", methods=["POST"])
-def api_update():
-    import subprocess, shutil
-    script = "/config/bitvavo-bot/update.sh"
-    if not shutil.which("sh"):
-        return jsonify({"error": "sh niet gevonden"}), 500
-    import os as _os
-    if not _os.path.isfile(script):
-        return jsonify({"error": f"Update script niet gevonden: {script}"}), 404
-    try:
-        subprocess.Popen(
-            ["sh", script],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        return jsonify({"ok": True, "message": "Update gestart — bot herstart over enkele seconden."})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/markets/available")

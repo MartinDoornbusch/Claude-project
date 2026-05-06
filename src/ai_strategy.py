@@ -1,13 +1,11 @@
-"""AI Trading Orchestrator — drie gespecialiseerde providers in volgorde.
+"""AI Trading Orchestrator — gespecialiseerde providers in volgorde.
 
-Stap 1  Groq        Tactische Verkenner  — snelle TA, altijd uitgevoerd
-Stap 2  Gemini      Sentiment Analist    — nieuws/marktsfeer, alleen bij potentieel signaal
-Stap 3  Anthropic   Risicomanager        — finale validatie, alleen bij concrete trade
+Stap 1  Tactisch    Groq (primair) → Cerebras (backup) — snel, altijd uitgevoerd
+Stap 2  Sentiment   Pool: Gemini + Mistral (primair), Groq/Cerebras (fallback)
+         Majority-vote; Gemini wint bij staking. Cache: 20 min TTL.
+Stap 3  Risico      Lokale manager (deterministisch) — geen AI-call nodig
 
-Rolverdeling is automatisch op basis van geconfigureerde providers:
-- Groq  → tactisch (technisch)
-- Google → sentiment (alleen als er ook een tactisch provider is)
-- Anthropic → risicomanager (alleen als Groq tactisch is; anders zelf tactisch)
+Providervolgorde per rol hardcoded; aanwezigheid bepaald door geconfigureerde API keys.
 """
 
 from __future__ import annotations
@@ -36,8 +34,14 @@ def ai_enabled() -> bool:
 _DECISION_SCORE:  dict[str, float] = {"BUY": 1.0, "HOLD": 0.0, "SELL": -1.0}
 _SENTIMENT_SCORE: dict[str, float] = {"POSITIVE": 1.0, "NEUTRAL": 0.0, "NEGATIVE": -1.0}
 
-# Cache: {market: (parsed_result, monotonic_timestamp)}
-_sentiment_cache: dict[str, tuple[dict, float]] = {}
+# Cache: {market: (votes_list, monotonic_timestamp)}
+# votes_list = [(provider, result_dict), ...]
+_sentiment_cache: dict[str, tuple[list, float]] = {}
+
+# ── Provider-rolverdeling (volgorde = prioriteit) ─────────────────────────────
+_TACTICAL_CHAIN:       tuple[str, ...] = ("groq", "cerebras", "mistral", "anthropic", "google")
+_SENTIMENT_PRIMARY:    tuple[str, ...] = ("google", "mistral")   # altijd bevraagd voor confluence
+_SENTIMENT_FALLBACK:   tuple[str, ...] = ("groq", "cerebras")    # bij onvoldoende primaire stemmen
 
 # ── System prompts ────────────────────────────────────────────────────────────
 
@@ -446,33 +450,60 @@ def _local_risk_check(
 
 # ── Orchestrator ──────────────────────────────────────────────────────────────
 
+def _combine_sentiment_votes(votes: list[tuple[str, dict]]) -> dict | None:
+    """Majority-vote over sentiment-stemmen. Gemini wint bij staking."""
+    if not votes:
+        return None
+    if len(votes) == 1:
+        _, result = votes[0]
+        return result
+
+    counts: dict[str, int] = {"POSITIVE": 0, "NEGATIVE": 0, "NEUTRAL": 0}
+    for _, r in votes:
+        counts[r["sentiment"]] += 1
+
+    max_count = max(counts.values())
+    winners = [s for s, c in counts.items() if c == max_count]
+
+    if len(winners) == 1:
+        winner = winners[0]
+    else:
+        # Staking: Google (Gemini) wint als casting vote
+        google_sent = next((r["sentiment"] for p, r in votes if p == "google"), None)
+        winner = google_sent if google_sent else winners[0]
+
+    winning_votes = [(p, r) for p, r in votes if r["sentiment"] == winner]
+    avg_conf = sum(r["confidence"] for _, r in winning_votes) / len(winning_votes)
+    # Klein bonusbedrag wanneer meerdere providers het eens zijn
+    conf = min(1.0, avg_conf + 0.05 * (len(winning_votes) - 1))
+
+    reasoning = " | ".join(f"[{p}] {r['reasoning']}" for p, r in winning_votes)
+    all_votes  = ", ".join(f"{p}:{r['sentiment']}" for p, r in votes)
+    logger.info("Sentiment pool: %d/%d eens over %s (conf=%.2f) [%s]",
+                len(winning_votes), len(votes), winner, conf, all_votes)
+
+    return {"sentiment": winner, "confidence": conf, "reasoning": reasoning}
+
+
 def _assign_roles(providers: list[tuple[str, str]]) -> dict[str, str]:
     """
-    Wijst rollen toe op basis van beschikbare providers.
+    Wijst tactische en risico-rollen toe.
 
-    Mogelijke rollen: "tactical" | "sentiment" | "tactical_only"
-    Risicobeheer is lokaal; Anthropic wordt niet meer als risk-manager ingezet.
+    Sentiment is een pool (zie _SENTIMENT_PRIMARY/_SENTIMENT_FALLBACK) en krijgt
+    geen expliciete rol. Mogelijke rollen: "tactical" | "risk"
     """
     pdict = dict(providers)
     roles: dict[str, str] = {}
 
-    has_groq      = "groq" in pdict
-    has_google    = "google" in pdict
-    has_anthropic = "anthropic" in pdict
+    # Tactisch: eerste beschikbare in _TACTICAL_CHAIN
+    for p in _TACTICAL_CHAIN:
+        if p in pdict:
+            roles[p] = "tactical"
+            break
 
-    if has_groq:
-        roles["groq"] = "tactical"
-        if has_google:
-            roles["google"] = "sentiment"
-    elif has_anthropic:
-        # Geen Groq → Anthropic speelt zowel tactisch als risico niet dubbel;
-        # gebruik het als enige tactische analyst.
-        roles["anthropic"] = "tactical_only"
-        if has_google:
-            roles["google"] = "sentiment"
-    elif has_google:
-        # Alleen Google → tactisch fallback
-        roles["google"] = "tactical_only"
+    # Risico: Anthropic alleen als het NIET tactisch is
+    if "anthropic" in pdict and roles.get("anthropic") != "tactical":
+        roles["anthropic"] = "risk"
 
     return roles
 
@@ -593,107 +624,111 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         pdict = dict(providers)
         roles = _assign_roles(providers)
 
-        # ── Stap 1: Tactische Verkenner (Groq of fallback) ───────────────────
-        tactical_prov = next(
-            (p for p, r in roles.items() if r in ("tactical", "tactical_only")), None
-        )
+        # ── Stap 1: Tactische Verkenner — fallback-keten ─────────────────────
+        tactical_prov:   str | None  = None
         tactical_result: dict | None = None
-        tactical_score = 0.0
+        tactical_score   = 0.0
 
-        if tactical_prov:
+        for cand in _TACTICAL_CHAIN:
+            if cand not in pdict:
+                continue
             try:
-                _tact_model = pdict[tactical_prov]
-                if not is_strong_signal and tactical_prov == "groq":
-                    _tact_model = os.getenv("GROQ_LIGHT_MODEL", "llama-3.1-8b-instant")
-                elif not is_strong_signal and tactical_prov == "anthropic":
-                    _tact_model = os.getenv("ANTHROPIC_LIGHT_MODEL", "claude-haiku-4-5")
-                text = complete_for(tactical_prov, _tact_model,
-                                    _TACTICAL_PROMPT, prompt, max_tokens=80)
-                logger.debug("[%s] %s/%s raw: %.200s", market, tactical_prov, _tact_model, text)
+                text   = complete_for(cand, pdict[cand], _TACTICAL_PROMPT, prompt, max_tokens=160)
+                logger.debug("[%s] %s raw: %.200s", market, cand, text)
                 parsed = _parse_decision(text)
                 if parsed:
+                    tactical_prov   = cand
                     tactical_result = parsed
                     tactical_score  = _DECISION_SCORE[parsed["decision"]] * parsed["confidence"]
-                    logger.info("[%s] %s/%s (tactisch): %s %.0f%% score=%+.2f",
-                                market, tactical_prov, _tact_model, parsed["decision"],
+                    logger.info("[%s] %s (tactisch): %s %.0f%% score=%+.2f",
+                                market, cand, parsed["decision"],
                                 parsed["confidence"] * 100, tactical_score)
-                else:
-                    logger.warning("[%s] %s: kon tactisch besluit niet parsen", market, tactical_prov)
+                    break
+                logger.warning("[%s] %s: kon tactisch besluit niet parsen", market, cand)
             except Exception as exc:
-                logger.warning("[%s] %s (tactisch) fout: %s", market, tactical_prov, exc)
+                logger.warning("[%s] %s (tactisch) fout: %s — probeer backup", market, cand, exc)
 
         if tactical_result is None:
             return "HOLD", 0.0, "Geen tactisch analyse resultaat beschikbaar"
 
-        # Snelle HOLD: score te laag en geen sentimentprovider
-        sentiment_prov = next((p for p, r in roles.items() if r == "sentiment"), None)
-        if not sentiment_prov and abs(tactical_score) < score_threshold:
+        # Snelle HOLD als geen sentiment-providers beschikbaar zijn
+        any_sentiment = any(p in pdict for p in _SENTIMENT_PRIMARY + _SENTIMENT_FALLBACK)
+        if not any_sentiment and abs(tactical_score) < score_threshold:
             return "HOLD", abs(tactical_score), (
                 f"Score {tactical_score:+.2f} onder drempel {score_threshold:.1f} — "
                 f"{tactical_result['reasoning']}"
             )
 
-        # ── Stap 2: Sentiment Analist (Gemini) — met cache, overgeslagen bij bearish trend ──
+        # ── Stap 2: Sentiment Pool — met cache, overgeslagen bij bearish trend ─
         sentiment_result: dict | None = None
-        sentiment_score = 0.0
+        sentiment_score  = 0.0
 
-        if sentiment_prov and not trend_bearish:
+        if not trend_bearish:
             cache_ttl    = env_float("SENTIMENT_CACHE_MINUTES", 20.0) * 60
             now_mono     = time.monotonic()
             cached_entry = _sentiment_cache.get(market)
 
             if cached_entry and (now_mono - cached_entry[1]) < cache_ttl:
-                sentiment_result = cached_entry[0]
-                sentiment_score  = _SENTIMENT_SCORE[sentiment_result["sentiment"]] * sentiment_result["confidence"]
-                logger.info(
-                    "[%s] %s (sentiment, cache %ds oud): %s %.0f%% score=%+.2f",
-                    market, sentiment_prov, int(now_mono - cached_entry[1]),
-                    sentiment_result["sentiment"], sentiment_result["confidence"] * 100, sentiment_score,
-                )
+                cached_votes = cached_entry[0]
+                sentiment_result = _combine_sentiment_votes(cached_votes)
+                if sentiment_result:
+                    sentiment_score = (_SENTIMENT_SCORE[sentiment_result["sentiment"]]
+                                       * sentiment_result["confidence"])
+                    logger.info("[%s] Sentiment pool (cache %ds oud): %s %.0f%%",
+                                market, int(now_mono - cached_entry[1]),
+                                sentiment_result["sentiment"],
+                                sentiment_result["confidence"] * 100)
             else:
-                # Max 2 pogingen bij parse-fout; bij API-fout direct stoppen
-                for attempt in range(2):
+                votes: list[tuple[str, dict]] = []
+                queried: set[str] = set()
+
+                # Primaire pool: Gemini + Mistral
+                for sent_prov in _SENTIMENT_PRIMARY:
+                    if sent_prov not in pdict:
+                        continue
+                    queried.add(sent_prov)
                     try:
-                        _sent_model = pdict[sentiment_prov]
-                        if not is_strong_signal and sentiment_prov == "google":
-                            _sent_model = os.getenv("GOOGLE_LIGHT_MODEL", "").strip() or _sent_model
-                        _attempt_prompt = prompt if attempt == 0 else (
-                            prompt + "\n\nIMPORTANT: Use ONLY raw JSON. No text before or after.")
-                        text = complete_for(sentiment_prov, _sent_model,
-                                            _SENTIMENT_PROMPT, _attempt_prompt, max_tokens=50)
-                        logger.debug("[%s] %s/%s (poging %d) raw: %.200s",
-                                     market, sentiment_prov, _sent_model, attempt + 1, text)
+                        text   = complete_for(sent_prov, pdict[sent_prov],
+                                              _SENTIMENT_PROMPT, prompt, max_tokens=80)
+                        logger.debug("[%s] %s raw: %.200s", market, sent_prov, text)
                         parsed = _parse_sentiment(text)
                         if parsed:
-                            sentiment_result = parsed
-                            sentiment_score  = _SENTIMENT_SCORE[parsed["sentiment"]] * parsed["confidence"]
-                            _sentiment_cache[market] = (parsed, now_mono)
-                            logger.info("[%s] %s/%s (sentiment, poging %d): %s %.0f%% score=%+.2f",
-                                        market, sentiment_prov, _sent_model, attempt + 1,
-                                        parsed["sentiment"], parsed["confidence"] * 100, sentiment_score)
-                            break
+                            votes.append((sent_prov, parsed))
+                            logger.info("[%s] %s (sentiment): %s %.0f%%",
+                                        market, sent_prov, parsed["sentiment"],
+                                        parsed["confidence"] * 100)
                         else:
-                            logger.warning("[%s] %s poging %d: kon sentiment niet parsen",
-                                           market, sentiment_prov, attempt + 1)
+                            logger.warning("[%s] %s: kon sentiment niet parsen", market, sent_prov)
                     except Exception as exc:
-                        logger.warning("[%s] %s (sentiment) fout: %s", market, sentiment_prov, exc)
-                        break  # bij API-fout niet herhalen
+                        logger.warning("[%s] %s (sentiment) fout: %s", market, sent_prov, exc)
 
-                # Fallback naar tactische provider als beide pogingen mislukten
-                if sentiment_result is None and tactical_prov and tactical_prov != sentiment_prov:
-                    try:
-                        fb_text = complete_for(tactical_prov, pdict[tactical_prov],
-                                               _SENTIMENT_PROMPT, prompt, max_tokens=50)
-                        fb_parsed = _parse_sentiment(fb_text)
-                        if fb_parsed:
-                            sentiment_result = fb_parsed
-                            sentiment_score  = _SENTIMENT_SCORE[fb_parsed["sentiment"]] * fb_parsed["confidence"]
-                            _sentiment_cache[market] = (fb_parsed, now_mono)
-                            logger.info("[%s] %s (sentiment fallback): %s %.0f%% score=%+.2f",
-                                        market, tactical_prov, fb_parsed["sentiment"],
-                                        fb_parsed["confidence"] * 100, sentiment_score)
-                    except Exception as fb_exc:
-                        logger.debug("[%s] Sentiment fallback ook mislukt: %s", market, fb_exc)
+                # Fallback pool: Groq / Cerebras (als primaire onvoldoende)
+                if len(votes) < 2:
+                    for fb_prov in _SENTIMENT_FALLBACK:
+                        if fb_prov not in pdict or fb_prov in queried:
+                            continue
+                        queried.add(fb_prov)
+                        try:
+                            text   = complete_for(fb_prov, pdict[fb_prov],
+                                                  _SENTIMENT_PROMPT, prompt, max_tokens=80)
+                            logger.debug("[%s] %s raw: %.200s", market, fb_prov, text)
+                            parsed = _parse_sentiment(text)
+                            if parsed:
+                                votes.append((fb_prov, parsed))
+                                logger.info("[%s] %s (sentiment fallback): %s %.0f%%",
+                                            market, fb_prov, parsed["sentiment"],
+                                            parsed["confidence"] * 100)
+                        except Exception as exc:
+                            logger.warning("[%s] %s (sentiment fallback) fout: %s", market, fb_prov, exc)
+                        if len(votes) >= 2:
+                            break
+
+                if votes:
+                    _sentiment_cache[market] = (votes, now_mono)
+                    sentiment_result = _combine_sentiment_votes(votes)
+                    if sentiment_result:
+                        sentiment_score = (_SENTIMENT_SCORE[sentiment_result["sentiment"]]
+                                           * sentiment_result["confidence"])
 
         # ── Stap 3: Gewogen gecombineerde score ──────────────────────────────
         if sentiment_result is not None:
@@ -707,7 +742,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         if abs(combined_score) < score_threshold:
             parts = [f"[{tactical_prov}] {tactical_result['reasoning']}"]
             if sentiment_result:
-                parts.append(f"[{sentiment_prov}] {sentiment_result['reasoning']}")
+                parts.append(sentiment_result['reasoning'])
             return "HOLD", abs(combined_score), (
                 f"Score {combined_score:+.2f} onder drempel {score_threshold:.1f} — "
                 + " | ".join(parts)
@@ -737,10 +772,12 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                 + f"[{tactical_prov}] {tactical_result['reasoning']}"
             )
 
-        # ── Stap 4: Lokale risicomanager (geen API-call) ─────────────────────
+        # ── Stap 4: Risicomanager (alleen bij Anthropic + concrete trade) ───────
+        risk_prov = next((p for p, r in roles.items() if r == "risk"), None)
+        final_confidence = min(abs(combined_score), 1.0)
         base_reasoning_parts = [f"[{tactical_prov}] {tactical_result['reasoning']}"]
         if sentiment_result:
-            base_reasoning_parts.append(f"[{sentiment_prov}] {sentiment_result['reasoning']}")
+            base_reasoning_parts.append(sentiment_result['reasoning'])
 
         risk_approved, risk_confidence, risk_reasoning = _local_risk_check(
             market, signals, price, potential_action, combined_score

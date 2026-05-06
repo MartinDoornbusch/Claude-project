@@ -1,5 +1,13 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.14
+- feat: Mistral AI als tweede sentiment-provider — majority-vote pool (Gemini + Mistral)
+- feat: Cerebras als tactische backup (Groq → Cerebras fallback-keten)
+- feat: Pool van 4 sentiment-providers (Gemini, Mistral, Groq, Cerebras) met majority-vote
+- feat: Generieke OpenAI-compatible adapter voor Mistral & Cerebras (één codepad)
+- feat: Token-gauges op dashboard voor Gemini, Mistral en Cerebras
+- feat: API-sleutel + model-instellingen voor Mistral en Cerebras in Instellingen
+
 ## v1.18.13
 - fix: Google spending cap zet automatisch 24u backoff (niet alleen op dag 1 van de maand)
 - feat: Google API verzoekenteller op dashboard (Gemini Verzoeken 24h, standaard limiet 1500/dag)
@@ -24,7 +32,6 @@
 
 ## v1.18.9
 - Logboek-pagina in web-UI met filter op INFO / WARNING / ERROR / DEBUG
-- Update-knop in Instellingen die `update.sh` op de achtergrond uitvoert
 - Log-buffer (laatste 500 regels) live zichtbaar zonder SSH
 
 ## v1.18.8

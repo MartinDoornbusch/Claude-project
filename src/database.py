@@ -177,10 +177,24 @@ def init_db() -> None:
             );
 
             CREATE TABLE IF NOT EXISTS google_request_log (
-                id      INTEGER PRIMARY KEY AUTOINCREMENT,
-                ts      TEXT NOT NULL,
-                date    TEXT NOT NULL,
-                requests INTEGER NOT NULL DEFAULT 1
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts          TEXT NOT NULL,
+                date        TEXT NOT NULL,
+                requests    INTEGER NOT NULL DEFAULT 1
+            );
+
+            CREATE TABLE IF NOT EXISTS mistral_token_log (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts          TEXT NOT NULL,
+                date        TEXT NOT NULL,
+                tokens_used INTEGER NOT NULL DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS cerebras_token_log (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts          TEXT NOT NULL,
+                date        TEXT NOT NULL,
+                tokens_used INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS ai_accuracy (
@@ -842,12 +856,7 @@ def save_groq_tokens(tokens: int) -> None:
 
 
 def get_groq_daily_tokens() -> int:
-    """Geeft het totaal aantal Groq tokens in het rollende 24-uurs venster.
-
-    Groq hanteert een rolling window (geen vaste daggrens op midnight).
-    We tellen alles met ts >= 24 uur geleden op basis van de opgeslagen
-    Amsterdam-tijdstempel.
-    """
+    """Geeft het totaal aantal Groq tokens in het rollende 24-uurs venster."""
     from datetime import timedelta
     cutoff = (datetime.now(_AMS) - timedelta(hours=24)).isoformat(timespec="seconds")
     with get_conn() as conn:
@@ -859,7 +868,7 @@ def get_groq_daily_tokens() -> int:
 
 
 def save_google_requests(n: int = 1) -> None:
-    """Sla het aantal Google API verzoeken op voor vandaag."""
+    """Sla het aantal Google API-verzoeken op (rollend 24u venster)."""
     today = _today()
     with get_conn() as conn:
         conn.execute(
@@ -869,12 +878,56 @@ def save_google_requests(n: int = 1) -> None:
 
 
 def get_google_daily_requests() -> int:
-    """Geeft het totaal aantal Google API verzoeken in het rollende 24-uurs venster."""
+    """Geeft het totaal aantal Google API-verzoeken in het rollende 24-uurs venster."""
     from datetime import timedelta
     cutoff = (datetime.now(_AMS) - timedelta(hours=24)).isoformat(timespec="seconds")
     with get_conn() as conn:
         row = conn.execute(
             "SELECT COALESCE(SUM(requests), 0) AS total FROM google_request_log WHERE ts >= ?",
+            (cutoff,),
+        ).fetchone()
+    return int(row["total"]) if row else 0
+
+
+def save_mistral_tokens(tokens: int) -> None:
+    """Sla het aantal gebruikte Mistral tokens op."""
+    today = _today()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO mistral_token_log (ts, date, tokens_used) VALUES (?,?,?)",
+            (_now(), today, tokens),
+        )
+
+
+def get_mistral_daily_tokens() -> int:
+    """Geeft het totaal aantal Mistral tokens in het rollende 24-uurs venster."""
+    from datetime import timedelta
+    cutoff = (datetime.now(_AMS) - timedelta(hours=24)).isoformat(timespec="seconds")
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(tokens_used), 0) AS total FROM mistral_token_log WHERE ts >= ?",
+            (cutoff,),
+        ).fetchone()
+    return int(row["total"]) if row else 0
+
+
+def save_cerebras_tokens(tokens: int) -> None:
+    """Sla het aantal gebruikte Cerebras tokens op."""
+    today = _today()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO cerebras_token_log (ts, date, tokens_used) VALUES (?,?,?)",
+            (_now(), today, tokens),
+        )
+
+
+def get_cerebras_daily_tokens() -> int:
+    """Geeft het totaal aantal Cerebras tokens in het rollende 24-uurs venster."""
+    from datetime import timedelta
+    cutoff = (datetime.now(_AMS) - timedelta(hours=24)).isoformat(timespec="seconds")
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(tokens_used), 0) AS total FROM cerebras_token_log WHERE ts >= ?",
             (cutoff,),
         ).fetchone()
     return int(row["total"]) if row else 0
