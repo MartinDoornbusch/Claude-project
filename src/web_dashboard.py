@@ -610,6 +610,24 @@ def api_groq_models():
         return jsonify({"error": str(e), "models": []}), 500
 
 
+@app.route("/api/ai/mistral/models")
+def api_mistral_models():
+    try:
+        from src.ai_provider import list_mistral_models
+        return jsonify({"models": list_mistral_models()})
+    except Exception as e:
+        return jsonify({"error": str(e), "models": []}), 500
+
+
+@app.route("/api/ai/cerebras/models")
+def api_cerebras_models():
+    try:
+        from src.ai_provider import list_cerebras_models
+        return jsonify({"models": list_cerebras_models()})
+    except Exception as e:
+        return jsonify({"error": str(e), "models": []}), 500
+
+
 @app.route("/api/markets/available")
 def api_markets_available():
     try:

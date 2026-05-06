@@ -1,5 +1,12 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.15
+- fix: Mistral en Cerebras model-dropdown breder (volledige modelnaam zichtbaar)
+- feat: Live model-detectie (↻) voor Mistral en Cerebras
+- fix: "Risico Claude" verwijderd uit orchestrator-beschrijving (lokale manager)
+- fix: Mistral en Cerebras toegevoegd aan STRATEGIE-statuswidget
+- feat: /api/ai/mistral/models en /api/ai/cerebras/models API-endpoints
+
 ## v1.18.14
 - feat: Mistral AI als tweede sentiment-provider — majority-vote pool (Gemini + Mistral)
 - feat: Cerebras als tactische backup (Groq → Cerebras fallback-keten)
