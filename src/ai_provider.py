@@ -159,6 +159,44 @@ def list_groq_models() -> list[dict]:
         return []
 
 
+def _list_openai_compat_models(provider: str) -> list[dict]:
+    """Haal modellen op via de OpenAI-compatibele /models endpoint."""
+    import httpx
+    cfg = _OPENAI_COMPAT[provider]
+    key = os.getenv(cfg["env"], "")
+    if not key:
+        return []
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.get(
+                f"{cfg['url']}/models",
+                headers={"Authorization": f"Bearer {key}"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        result = []
+        for m in data.get("data", []):
+            mid = m.get("id", "")
+            if not mid:
+                continue
+            result.append({"value": mid, "label": mid})
+        result.sort(key=lambda x: x["value"], reverse=True)
+        return result
+    except Exception as exc:
+        logger.warning("Kon %s modellen niet ophalen: %s", provider, exc)
+        return []
+
+
+def list_mistral_models() -> list[dict]:
+    """Geeft beschikbare Mistral-modellen terug via de live Mistral API."""
+    return _list_openai_compat_models("mistral")
+
+
+def list_cerebras_models() -> list[dict]:
+    """Geeft beschikbare Cerebras-modellen terug via de live Cerebras API."""
+    return _list_openai_compat_models("cerebras")
+
+
 def complete(system: str, user: str, max_tokens: int = 2048) -> str:
     """
     Stuurt een verzoek naar de geconfigureerde AI provider.
