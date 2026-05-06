@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time as _time
 
 import pandas as pd
 
@@ -12,6 +13,29 @@ from src.env_utils import env_float
 logger = logging.getLogger(__name__)
 
 CORR_LOOKBACK = 30  # dagelijkse candles
+_CACHE_TTL = 3600   # dagelijkse candles veranderen maximaal 1×/dag
+
+_price_cache: dict[str, tuple[pd.Series, float]] = {}  # market → (series, timestamp)
+
+
+def _get_cached_prices(client, markets: list[str]) -> dict[str, pd.Series]:
+    """Haalt dagelijkse sluitingskoersen op met 1-uurs cache."""
+    from src.candles import get_candles
+    now = _time.monotonic()
+    prices: dict[str, pd.Series] = {}
+    for m in markets:
+        cached = _price_cache.get(m)
+        if cached and (now - cached[1]) < _CACHE_TTL:
+            prices[m] = cached[0]
+        else:
+            try:
+                df = get_candles(client, m, "1d", limit=CORR_LOOKBACK + 5)
+                series = df.set_index("timestamp")["close"]
+                _price_cache[m] = (series, now)
+                prices[m] = series
+            except Exception:
+                pass
+    return prices
 
 
 def get_correlated_markets(
@@ -22,7 +46,7 @@ def get_correlated_markets(
 ) -> list[str]:
     """
     Retourneert markten die sterk gecorreleerd zijn met `market` (>= threshold).
-    Gebruikt 30 dagelijkse sluitingskoersen voor berekening.
+    Gebruikt 30 dagelijkse sluitingskoersen voor berekening (gecached per uur).
     """
     if threshold is None:
         threshold = env_float("CORR_THRESHOLD", 0.8)
@@ -30,15 +54,7 @@ def get_correlated_markets(
     if len(all_markets) < 2:
         return []
 
-    from src.candles import get_candles
-
-    prices: dict[str, pd.Series] = {}
-    for m in all_markets:
-        try:
-            df = get_candles(client, m, "1d", limit=CORR_LOOKBACK + 5)
-            prices[m] = df.set_index("timestamp")["close"]
-        except Exception:
-            pass
+    prices = _get_cached_prices(client, all_markets)
 
     if market not in prices:
         return []

@@ -11,10 +11,11 @@ git fetch origin main
 git reset --hard origin/main
 
 echo "[update] Add-on bestanden kopiëren naar $ADDON_DIR..."
-cp "$REPO_DIR/ha-addon/config.yaml"  "$ADDON_DIR/config.yaml"
-cp "$REPO_DIR/ha-addon/Dockerfile"   "$ADDON_DIR/Dockerfile"
-cp "$REPO_DIR/ha-addon/run.sh"       "$ADDON_DIR/run.sh"
-cp "$REPO_DIR/requirements.txt"      "$ADDON_DIR/requirements.txt"
+cp "$REPO_DIR/ha-addon/config.yaml"    "$ADDON_DIR/config.yaml"
+cp "$REPO_DIR/ha-addon/Dockerfile"     "$ADDON_DIR/Dockerfile"
+cp "$REPO_DIR/ha-addon/run.sh"         "$ADDON_DIR/run.sh"
+cp "$REPO_DIR/requirements.txt"        "$ADDON_DIR/requirements.txt"
+cp "$REPO_DIR/ha-addon/CHANGELOG.md"   "$ADDON_DIR/CHANGELOG.md"
 
 echo "[update] Add-on herladen..."
 ha addons reload

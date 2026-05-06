@@ -68,40 +68,13 @@ decision: BUY | SELL | HOLD  —  confidence: 0.0–1.0\
 """
 
 _SENTIMENT_PROMPT = """\
-You are a crypto sentiment analyst. Your response must be ONLY a JSON object — nothing before, nothing after.
-Start your response with { and end with }. No analysis, no bullets, no markdown.
+You are a crypto sentiment analyst.
+Return ONLY a JSON object. No markdown blocks, no intro, no outro.
 
-Assess sentiment from the provided price action and indicators:
-- POSITIVE: clear uptrend, healthy volume, momentum building
-- NEGATIVE: downtrend, deteriorating momentum, risk-off signals
-- NEUTRAL: mixed or unclear signals
+{"sentiment": "POSITIVE", "confidence": 0.75, "reasoning": "short explanation"}
 
-Output exactly this structure (fill in values):
-{"sentiment": "POSITIVE", "confidence": 0.75, "reasoning": "max 10 words"}
-sentiment: POSITIVE | NEGATIVE | NEUTRAL — confidence: 0.0–1.0\
-"""
-
-_RISK_PROMPT = """\
-You are a risk manager for a crypto trading bot on the Bitvavo exchange.
-You receive a proposed trade action and all available analysis. Decide if the trade is safe to execute.
-
-Approve if:
-- Proposed action aligns with market data and portfolio state
-- No excessive loss streak (fewer than 3 consecutive losses)
-- Daily loss limit is not nearly exhausted (< 80% used)
-- Combined AI confidence is convincing
-
-Reject if:
-- 3+ consecutive losing trades (bot is in a bad streak)
-- Daily loss limit > 80% used
-- Extreme volatility makes the outcome unpredictable
-- Proposed action clearly contradicts the market data
-- Open position already shows a deep unrealized loss (> 15%)
-
-IMPORTANT: respond with ONLY raw JSON — no markdown, no code blocks, no explanation before or after.
-Output format (copy exactly, fill in values):
-{"approved": true, "confidence": 0.88, "reasoning": "one concise English sentence"}
-approved: true | false  —  confidence: 0.0–1.0\
+Analyze the provided data and respond with the JSON above.
+Sentiment must be POSITIVE, NEGATIVE, or NEUTRAL. Confidence 0.0–1.0. Reasoning max 10 words.\
 """
 
 
@@ -349,13 +322,15 @@ def _parse_sentiment(text: str) -> dict | None:
 
     # ── Pad C: keyword-scan voor vrije tekst (JSON-instructie genegeerd) ─────
     upper = cleaned.upper()
-    if any(w in upper for w in ("BULLISH", "POSITIVE", "UPTREND", "UPWARD", "STRONG BUY")):
+    if any(w in upper for w in ("BULLISH", "POSITIVE", "UPTREND", "UPWARD", "STRONG BUY",
+                                "BUY", "MOON", "STRENGTH")):
         kw_sent = "POSITIVE"
-    elif any(w in upper for w in ("BEARISH", "NEGATIVE", "DOWNTREND", "BEAR", "STRONG SELL")):
+    elif any(w in upper for w in ("BEARISH", "NEGATIVE", "DOWNTREND", "BEAR", "STRONG SELL",
+                                  "SELL", "WEAKNESS", "DUMP")):
         kw_sent = "NEGATIVE"
     elif any(w in upper for w in ("NEUTRAL", "SIDEWAYS", "MIXED", "FLAT",
                                    "UNCERTAIN", "CONSOLIDAT", "RANGE", "LOW VOLUME",
-                                   "ALIGN", "INDECIS")):
+                                   "ALIGN", "INDECIS", "WAIT")):
         kw_sent = "NEUTRAL"
     elif cleaned:
         # Pad D: niet-lege response maar geen enkel herkenbaar signaal →
@@ -371,20 +346,106 @@ def _parse_sentiment(text: str) -> dict | None:
             "reasoning": f"(keyword: {cleaned[:60]})"}
 
 
-def _parse_risk(text: str) -> dict | None:
-    raw = _extract_json(text, "approved")
-    if not raw:
-        logger.debug("_parse_risk: geen JSON gevonden in: %.300s", text)
-        return None
-    try:
-        data       = json.loads(raw)
-        approved   = bool(data.get("approved", False))
-        confidence = max(0.0, min(1.0, float(data.get("confidence", 0.0))))
-        reasoning  = str(data.get("reasoning", ""))
-        return {"approved": approved, "confidence": confidence, "reasoning": reasoning}
-    except (json.JSONDecodeError, ValueError, TypeError) as exc:
-        logger.debug("_parse_risk: JSON-parse fout (%s) in: %.300s", exc, raw)
-        return None
+
+def _tech_confluence(signals: dict, price: float) -> tuple[int, str]:
+    """
+    Lokale technische confluentiesscore (0–5) zonder API-call.
+
+    Telt het aantal gealignde indicatoren en bepaalt de dominante richting.
+    Returns: (score, direction) — direction is "bullish" | "bearish" | "mixed".
+    """
+    bullish = 0
+    bearish = 0
+
+    rsi = signals.get("rsi_14")
+    if rsi is not None:
+        if float(rsi) < 35:
+            bullish += 1
+        elif float(rsi) > 65:
+            bearish += 1
+
+    if signals.get("ma_cross") == "golden_cross":
+        bullish += 1
+    elif signals.get("ma_cross") == "death_cross":
+        bearish += 1
+
+    sma_20 = signals.get("sma_20")
+    sma_50 = signals.get("sma_50")
+    if sma_20 and sma_50 and float(sma_50) > 0:
+        if float(sma_20) > float(sma_50):
+            bullish += 1
+        else:
+            bearish += 1
+
+    vol     = signals.get("volume")
+    vol_avg = signals.get("volume_avg_20")
+    if vol and vol_avg and float(vol_avg) > 0 and float(vol) / float(vol_avg) > 1.2:
+        if bullish >= bearish:
+            bullish += 1
+        else:
+            bearish += 1
+
+    hist      = float(signals.get("macd_hist") or 0)
+    hist_prev = float(signals.get("macd_hist_prev") or 0)
+    if hist > 0 and hist > hist_prev:
+        bullish += 1
+    elif hist < 0 and hist < hist_prev:
+        bearish += 1
+
+    direction = "bullish" if bullish > bearish else ("bearish" if bearish > bullish else "mixed")
+    return max(bullish, bearish), direction
+
+
+def _local_risk_check(
+    market: str,
+    signals: dict,
+    price: float,
+    potential_action: str,
+    combined_score: float,
+) -> tuple[bool, float, str]:
+    """
+    Deterministisch risicobeheer zonder API-call.
+    Controleert dezelfde regels als de voormalige AI-risicomanager.
+    Returns: (approved, confidence, reasoning)
+    """
+    from src.database import get_daily_loss
+
+    # Verliesreeks ≥ 3 opeenvolgende trades → weiger
+    past_pairs = get_recent_trade_pairs(market, limit=3)
+    if past_pairs:
+        loss_streak = 0
+        for p in reversed(past_pairs):
+            if p["pnl_eur"] < 0:
+                loss_streak += 1
+            else:
+                break
+        if loss_streak >= 3:
+            return False, 0.9, f"Verliesreeks: {loss_streak} opeenvolgende verliezen"
+
+    # Daglimiet > 80% verbruikt → weiger
+    daily_loss  = get_daily_loss(market)
+    daily_limit = env_float("DAILY_LOSS_LIMIT_EUR", 50)
+    if daily_loss < 0 and daily_limit > 0:
+        used_pct = abs(daily_loss) / daily_limit
+        if used_pct >= 0.8:
+            return False, 0.85, f"Daglimiet {used_pct:.0%} verbruikt (€{abs(daily_loss):.2f}/€{daily_limit:.0f})"
+
+    # Extreme volatiliteit ATR > 8% → weiger
+    atr = signals.get("atr_14")
+    if atr is not None and price > 0:
+        atr_pct = float(atr) / price * 100
+        if atr_pct > 8:
+            return False, 0.75, f"Extreme volatiliteit: ATR {atr_pct:.1f}% > 8%"
+
+    # BUY terwijl open positie > 15% in verlies → weiger
+    if potential_action == "BUY":
+        pos = get_position(market)
+        if pos["amount"] > 0 and float(pos.get("avg_price", 0)) > 0 and price > 0:
+            pnl_pct = (price - float(pos["avg_price"])) / float(pos["avg_price"]) * 100
+            if pnl_pct < -15:
+                return False, 0.8, f"Open positie in diep verlies ({pnl_pct:.1f}%)"
+
+    return True, min(abs(combined_score), 1.0), "Risicocheck: geen bezwaren"
 
 
 # ── Orchestrator ──────────────────────────────────────────────────────────────
@@ -521,6 +582,31 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
             "[%s] Trendfilter actief (bearish, positie open): sentiment overgeslagen",
             market,
         )
+
+    # ── Technische confluentiesscore — vroege exit + modelkeuze ──────────────
+    confluence, conf_dir = _tech_confluence(signals, price)
+    min_conf_score  = env_int("MIN_CONFLUENCE_SCORE", 2)
+    high_conf_score = env_int("HIGH_CONFLUENCE_SCORE", 4)
+    _eff_min = min_conf_score
+
+    # Open positie met verlies en bearish signaal → drempel naar 1 (SELL mogelijk nodig)
+    if confluence >= 1 and conf_dir == "bearish":
+        _pos_conf = _early_pos if trend_bearish else get_position(market)
+        if _pos_conf["amount"] > 0 and float(_pos_conf.get("avg_price", 0)) > 0:
+            _pnl_conf = (price - float(_pos_conf["avg_price"])) / float(_pos_conf["avg_price"]) * 100
+            if _pnl_conf < -3:
+                _eff_min = 1
+
+    if confluence < _eff_min:
+        logger.info(
+            "[%s] Confluence %d/%d (%s) — te laag voor AI (geen API-calls)",
+            market, confluence, _eff_min, conf_dir,
+        )
+        return "HOLD", 0.0, f"Technische confluence {confluence} ({conf_dir}) te laag"
+
+    is_strong_signal = confluence >= high_conf_score
+    logger.info("[%s] Confluence: %d (%s) → %s modellen",
+                market, confluence, conf_dir, "zwaar" if is_strong_signal else "licht")
 
     recent_signals = get_latest_signals(market, limit=3)
 
@@ -693,37 +779,18 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         if sentiment_result:
             base_reasoning_parts.append(sentiment_result['reasoning'])
 
-        if risk_prov:
-            risk_prompt = (
-                f"Proposed action: {potential_action}\n"
-                f"Combined score: {combined_score:+.2f} (threshold: {score_threshold:.1f})\n"
-                f"Technical [{tactical_prov}]: {tactical_result['reasoning']}\n"
+        risk_approved, risk_confidence, risk_reasoning = _local_risk_check(
+            market, signals, price, potential_action, combined_score
+        )
+        logger.info("[%s] Risico (lokaal): %s %.0f%% — %s",
+                    market, "OK" if risk_approved else "AFGEWEZEN",
+                    risk_confidence * 100, risk_reasoning)
+        if not risk_approved:
+            return "HOLD", risk_confidence, (
+                f"Risicobeheer: {risk_reasoning} | " + " | ".join(base_reasoning_parts)
             )
-            if sentiment_result:
-                risk_prompt += f"Sentiment [{sentiment_prov}]: {sentiment_result['reasoning']}\n"
-            risk_prompt += f"\nFull market context:\n{context}"
-
-            try:
-                text = complete_for(risk_prov, pdict[risk_prov],
-                                    _RISK_PROMPT, risk_prompt, max_tokens=180)
-                logger.debug("[%s] %s raw: %.200s", market, risk_prov, text)
-                risk = _parse_risk(text)
-                if risk:
-                    logger.info("[%s] %s (risico): %s %.0f%% — %s",
-                                market, risk_prov,
-                                "GOEDGEKEURD" if risk["approved"] else "AFGEWEZEN",
-                                risk["confidence"] * 100, risk["reasoning"])
-                    if not risk["approved"]:
-                        return "HOLD", risk["confidence"], (
-                            f"[{risk_prov}] risicobeheer: {risk['reasoning']} | "
-                            + " | ".join(base_reasoning_parts)
-                        )
-                    final_confidence = (abs(combined_score) + risk["confidence"]) / 2
-                    base_reasoning_parts.append(f"[{risk_prov}] {risk['reasoning']}")
-                else:
-                    logger.warning("[%s] %s: kon risico-check niet parsen", market, risk_prov)
-            except Exception as exc:
-                logger.warning("[%s] %s (risico) fout: %s — trade gaat door op score", market, risk_prov, exc)
+        final_confidence = (abs(combined_score) + risk_confidence) / 2
+        base_reasoning_parts.append(f"[risico] {risk_reasoning}")
 
         # Finale confidence check
         if final_confidence < min_confidence:

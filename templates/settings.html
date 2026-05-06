@@ -653,7 +653,7 @@
                 </div>
                 <div id="prov-row-google" {% if config.AI_GOOGLE_ENABLED == 'false' %}style="display:none"{% endif %}>
                   <div class="row g-2 mt-1">
-                    <div class="col-md-5">
+                    <div class="col-md-8">
                       {% set gm = config.AI_MODEL_GOOGLE %}
                       <div class="input-group input-group-sm">
                         <select class="form-select form-select-sm" name="AI_MODEL_GOOGLE" id="google-model-select">
@@ -668,7 +668,7 @@
                       </div>
                       <div class="form-text" id="google-model-status"></div>
                     </div>
-                    <div class="col-md-7">
+                    <div class="col-md-4">
                       <div class="input-group input-group-sm">
                         <input type="password" class="form-control font-monospace" name="GOOGLE_API_KEY" id="google-api-key-input"
                                placeholder="{{ '●●●●●●●● (ingesteld)' if config.GOOGLE_API_KEY else 'AIza...' }}">
@@ -701,7 +701,7 @@
                 </div>
                 <div id="prov-row-groq" {% if config.AI_GROQ_ENABLED == 'false' %}style="display:none"{% endif %}>
                   <div class="row g-2 mt-1">
-                    <div class="col-md-5">
+                    <div class="col-md-8">
                       {% set rm = config.AI_MODEL_GROQ %}
                       <div class="input-group input-group-sm">
                         <select class="form-select form-select-sm" name="AI_MODEL_GROQ" id="groq-model-select">
@@ -716,7 +716,7 @@
                       </div>
                       <div class="form-text" id="groq-model-status"></div>
                     </div>
-                    <div class="col-md-7">
+                    <div class="col-md-4">
                       <div class="input-group input-group-sm">
                         <input type="password" class="form-control font-monospace" name="GROQ_API_KEY"
                                placeholder="{{ '●●●●●●●● (ingesteld)' if config.GROQ_API_KEY else 'gsk_...' }}">
