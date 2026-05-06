@@ -64,17 +64,13 @@ decision: BUY | SELL | HOLD  —  confidence: 0.0–1.0\
 """
 
 _SENTIMENT_PROMPT = """\
-You are a crypto sentiment analyst. Your response must be ONLY a JSON object — nothing before, nothing after.
-Start your response with { and end with }. No analysis, no bullets, no markdown.
+You are a crypto sentiment analyst.
+Return ONLY a JSON object. No markdown blocks, no intro, no outro.
 
-Assess sentiment from the provided price action and indicators:
-- POSITIVE: clear uptrend, healthy volume, momentum building
-- NEGATIVE: downtrend, deteriorating momentum, risk-off signals
-- NEUTRAL: mixed or unclear signals
+{"sentiment": "POSITIVE", "confidence": 0.75, "reasoning": "short explanation"}
 
-Output exactly this structure (fill in values):
-{"sentiment": "POSITIVE", "confidence": 0.75, "reasoning": "max 10 words"}
-sentiment: POSITIVE | NEGATIVE | NEUTRAL — confidence: 0.0–1.0\
+Analyze the provided data and respond with the JSON above.
+Sentiment must be POSITIVE, NEGATIVE, or NEUTRAL. Confidence 0.0–1.0. Reasoning max 10 words.\
 """
 
 
