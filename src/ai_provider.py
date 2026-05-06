@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 # Na een 429 op dag 1 wachten we tot de UTC-middernacht gepasseerd is.
 
 _google_monthly_backoff_until: float = 0.0  # epoch-seconden
+_GOOGLE_SPENDING_CAP_BACKOFF = 24 * 3600    # 24 uur backoff bij spending cap
 
 
 def _google_is_month_boundary_429() -> bool:
@@ -212,12 +213,16 @@ def _google(system: str, user: str, model: str, max_tokens: int) -> str:
             ),
             contents=user,
         )
+        try:
+            from src.database import save_google_requests
+            save_google_requests(1)
+        except Exception:
+            pass
         return response.text
     except Exception as exc:
         exc_str = str(exc)
         if "429" in exc_str or "RESOURCE_EXHAUSTED" in exc_str or "spending cap" in exc_str.lower():
             if _google_is_month_boundary_429():
-                # Wacht tot 02:05 UTC dag 1 zodat de reset zeker klaar is
                 now_utc = datetime.now(timezone.utc)
                 seconds_to_wait = max(0, (2 * 3600 + 5 * 60) - (now_utc.hour * 3600 + now_utc.minute * 60 + now_utc.second))
                 _google_monthly_backoff_until = time.time() + seconds_to_wait
@@ -227,7 +232,13 @@ def _google(system: str, user: str, model: str, max_tokens: int) -> str:
                     now_utc.hour, now_utc.minute, seconds_to_wait,
                 )
             else:
-                logger.warning("Google 429 RESOURCE_EXHAUSTED: %s", exc_str[:120])
+                # Spending cap buiten maandgrens: 24u backoff zodat bot niet
+                # elke cyclus opnieuw een nutteloze Google-call doet
+                _google_monthly_backoff_until = time.time() + _GOOGLE_SPENDING_CAP_BACKOFF
+                logger.warning(
+                    "Google spending cap geraakt — 24u backoff ingesteld; "
+                    "bot gebruikt Groq-fallback voor sentiment"
+                )
             raise RuntimeError(f"Google rate limit (429): {exc_str[:80]}")
         if "401" in exc_str or "API_KEY_INVALID" in exc_str or "UNAUTHENTICATED" in exc_str:
             raise EnvironmentError(f"Google API key ongeldig: {exc_str[:80]}")

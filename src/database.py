@@ -176,6 +176,13 @@ def init_db() -> None:
                 tokens_used INTEGER NOT NULL DEFAULT 0
             );
 
+            CREATE TABLE IF NOT EXISTS google_request_log (
+                id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts      TEXT NOT NULL,
+                date    TEXT NOT NULL,
+                requests INTEGER NOT NULL DEFAULT 1
+            );
+
             CREATE TABLE IF NOT EXISTS ai_accuracy (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 decision_id INTEGER NOT NULL UNIQUE,
@@ -846,6 +853,28 @@ def get_groq_daily_tokens() -> int:
     with get_conn() as conn:
         row = conn.execute(
             "SELECT COALESCE(SUM(tokens_used), 0) AS total FROM groq_token_log WHERE ts >= ?",
+            (cutoff,),
+        ).fetchone()
+    return int(row["total"]) if row else 0
+
+
+def save_google_requests(n: int = 1) -> None:
+    """Sla het aantal Google API verzoeken op voor vandaag."""
+    today = _today()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO google_request_log (ts, date, requests) VALUES (?,?,?)",
+            (_now(), today, n),
+        )
+
+
+def get_google_daily_requests() -> int:
+    """Geeft het totaal aantal Google API verzoeken in het rollende 24-uurs venster."""
+    from datetime import timedelta
+    cutoff = (datetime.now(_AMS) - timedelta(hours=24)).isoformat(timespec="seconds")
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(requests), 0) AS total FROM google_request_log WHERE ts >= ?",
             (cutoff,),
         ).fetchone()
     return int(row["total"]) if row else 0

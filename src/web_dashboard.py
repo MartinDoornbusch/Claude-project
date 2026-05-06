@@ -221,6 +221,18 @@ def index():
         except Exception:
             pass
 
+    # ── Google Request Gauge ──────────────────────────────────────────────────
+    google_requests_data: dict = {"used": 0, "limit": 1_500, "pct_used": 0.0}
+    if "google" in active_providers:
+        try:
+            from src.database import get_google_daily_requests
+            limit    = int(os.getenv("GOOGLE_DAILY_LIMIT", "1500"))
+            used     = get_google_daily_requests()
+            pct_used = min(100.0, used / limit * 100) if limit > 0 else 0.0
+            google_requests_data = {"used": used, "limit": limit, "pct_used": round(pct_used, 1)}
+        except Exception:
+            pass
+
     return render_template(
         "index.html",
         live_mode=live_mode,
@@ -235,6 +247,7 @@ def index():
         ai_votes_by_market=ai_votes_by_market,
         positions_data=positions_data,
         groq_tokens=groq_tokens_data,
+        google_requests=google_requests_data,
     )
 
 

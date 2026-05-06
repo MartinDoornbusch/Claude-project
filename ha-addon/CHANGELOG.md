@@ -1,5 +1,10 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.13
+- fix: Google spending cap zet automatisch 24u backoff (niet alleen op dag 1 van de maand)
+- feat: Google API verzoekenteller op dashboard (Gemini Verzoeken 24h, standaard limiet 1500/dag)
+- feat: GOOGLE_DAILY_LIMIT env var om eigen limiet in te stellen
+
 ## v1.18.12
 - fix: sentiment-prompt strenger — JSON-voorbeeld bovenaan voorkomt extra tekst van Gemini
 - feat: retry-logica sentiment — max 2 pogingen bij parse-fout, 2e poging met striktere instructie

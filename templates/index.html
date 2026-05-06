@@ -163,6 +163,26 @@
       </div>
     </div>
     {% endif %}
+    {% if ai_enabled and 'google' in active_providers %}
+    <div class="col-6 col-md-3">
+      <div class="card p-3">
+        <div class="stat-label text-center">Gemini Verzoeken (24h)</div>
+        <div class="fw-bold text-center {% if google_requests.pct_used >= 80 %}pnl-neg{% elif google_requests.pct_used >= 50 %}text-warning{% else %}text-muted{% endif %}"
+             style="font-size:1.05rem; margin-top:4px;">
+          {{ "{:,}".format(google_requests.used) }}
+        </div>
+        <div class="mt-2">
+          <div class="rsi-bar">
+            <div class="rsi-fill {% if google_requests.pct_used >= 80 %}bg-danger{% elif google_requests.pct_used >= 50 %}bg-warning{% else %}bg-success{% endif %}"
+                 style="width: {{ [google_requests.pct_used, 1] | max }}%"></div>
+          </div>
+          <div style="font-size:.7rem; color:#94a3b8; margin-top:3px; text-align:center;">
+            {{ google_requests.pct_used }}% van {{ "{:,}".format(google_requests.limit) }} limiet
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
   </div>
 
   <!-- Echt Bitvavo Portfolio (secundair in paper modus) -->
