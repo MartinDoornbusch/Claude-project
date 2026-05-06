@@ -318,13 +318,15 @@ def _parse_sentiment(text: str) -> dict | None:
 
     # ── Pad C: keyword-scan voor vrije tekst (JSON-instructie genegeerd) ─────
     upper = cleaned.upper()
-    if any(w in upper for w in ("BULLISH", "POSITIVE", "UPTREND", "UPWARD", "STRONG BUY")):
+    if any(w in upper for w in ("BULLISH", "POSITIVE", "UPTREND", "UPWARD", "STRONG BUY",
+                                "BUY", "MOON", "STRENGTH")):
         kw_sent = "POSITIVE"
-    elif any(w in upper for w in ("BEARISH", "NEGATIVE", "DOWNTREND", "BEAR", "STRONG SELL")):
+    elif any(w in upper for w in ("BEARISH", "NEGATIVE", "DOWNTREND", "BEAR", "STRONG SELL",
+                                  "SELL", "WEAKNESS", "DUMP")):
         kw_sent = "NEGATIVE"
     elif any(w in upper for w in ("NEUTRAL", "SIDEWAYS", "MIXED", "FLAT",
                                    "UNCERTAIN", "CONSOLIDAT", "RANGE", "LOW VOLUME",
-                                   "ALIGN", "INDECIS")):
+                                   "ALIGN", "INDECIS", "WAIT")):
         kw_sent = "NEUTRAL"
     elif cleaned:
         # Pad D: niet-lege response maar geen enkel herkenbaar signaal →
@@ -649,42 +651,49 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                     sentiment_result["sentiment"], sentiment_result["confidence"] * 100, sentiment_score,
                 )
             else:
-                try:
-                    _sent_model = pdict[sentiment_prov]
-                    if not is_strong_signal and sentiment_prov == "google":
-                        # Gebruik expliciet ingesteld licht model, anders het geconfigureerde model
-                        # (nooit hardcoded fallback — voorkomt 404 bij deprecated modelnamen)
-                        _sent_model = os.getenv("GOOGLE_LIGHT_MODEL", "").strip() or _sent_model
-                    text = complete_for(sentiment_prov, _sent_model,
-                                        _SENTIMENT_PROMPT, prompt, max_tokens=50)
-                    logger.debug("[%s] %s/%s raw: %.200s", market, sentiment_prov, _sent_model, text)
-                    parsed = _parse_sentiment(text)
-                    if parsed:
-                        sentiment_result = parsed
-                        sentiment_score  = _SENTIMENT_SCORE[parsed["sentiment"]] * parsed["confidence"]
-                        _sentiment_cache[market] = (parsed, now_mono)
-                        logger.info("[%s] %s/%s (sentiment): %s %.0f%% score=%+.2f",
-                                    market, sentiment_prov, _sent_model, parsed["sentiment"],
-                                    parsed["confidence"] * 100, sentiment_score)
-                    else:
-                        logger.warning("[%s] %s: kon sentiment niet parsen", market, sentiment_prov)
-                except Exception as exc:
-                    logger.warning("[%s] %s (sentiment) fout: %s", market, sentiment_prov, exc)
-                    # Fallback: gebruik tactische provider voor sentiment als primaire faalt
-                    if tactical_prov and tactical_prov != sentiment_prov:
-                        try:
-                            fb_text = complete_for(tactical_prov, pdict[tactical_prov],
-                                                   _SENTIMENT_PROMPT, prompt, max_tokens=50)
-                            fb_parsed = _parse_sentiment(fb_text)
-                            if fb_parsed:
-                                sentiment_result = fb_parsed
-                                sentiment_score  = _SENTIMENT_SCORE[fb_parsed["sentiment"]] * fb_parsed["confidence"]
-                                _sentiment_cache[market] = (fb_parsed, now_mono)
-                                logger.info("[%s] %s (sentiment fallback): %s %.0f%% score=%+.2f",
-                                            market, tactical_prov, fb_parsed["sentiment"],
-                                            fb_parsed["confidence"] * 100, sentiment_score)
-                        except Exception as fb_exc:
-                            logger.debug("[%s] Sentiment fallback ook mislukt: %s", market, fb_exc)
+                # Max 2 pogingen bij parse-fout; bij API-fout direct stoppen
+                for attempt in range(2):
+                    try:
+                        _sent_model = pdict[sentiment_prov]
+                        if not is_strong_signal and sentiment_prov == "google":
+                            _sent_model = os.getenv("GOOGLE_LIGHT_MODEL", "").strip() or _sent_model
+                        _attempt_prompt = prompt if attempt == 0 else (
+                            prompt + "\n\nIMPORTANT: Use ONLY raw JSON. No text before or after.")
+                        text = complete_for(sentiment_prov, _sent_model,
+                                            _SENTIMENT_PROMPT, _attempt_prompt, max_tokens=50)
+                        logger.debug("[%s] %s/%s (poging %d) raw: %.200s",
+                                     market, sentiment_prov, _sent_model, attempt + 1, text)
+                        parsed = _parse_sentiment(text)
+                        if parsed:
+                            sentiment_result = parsed
+                            sentiment_score  = _SENTIMENT_SCORE[parsed["sentiment"]] * parsed["confidence"]
+                            _sentiment_cache[market] = (parsed, now_mono)
+                            logger.info("[%s] %s/%s (sentiment, poging %d): %s %.0f%% score=%+.2f",
+                                        market, sentiment_prov, _sent_model, attempt + 1,
+                                        parsed["sentiment"], parsed["confidence"] * 100, sentiment_score)
+                            break
+                        else:
+                            logger.warning("[%s] %s poging %d: kon sentiment niet parsen",
+                                           market, sentiment_prov, attempt + 1)
+                    except Exception as exc:
+                        logger.warning("[%s] %s (sentiment) fout: %s", market, sentiment_prov, exc)
+                        break  # bij API-fout niet herhalen
+
+                # Fallback naar tactische provider als beide pogingen mislukten
+                if sentiment_result is None and tactical_prov and tactical_prov != sentiment_prov:
+                    try:
+                        fb_text = complete_for(tactical_prov, pdict[tactical_prov],
+                                               _SENTIMENT_PROMPT, prompt, max_tokens=50)
+                        fb_parsed = _parse_sentiment(fb_text)
+                        if fb_parsed:
+                            sentiment_result = fb_parsed
+                            sentiment_score  = _SENTIMENT_SCORE[fb_parsed["sentiment"]] * fb_parsed["confidence"]
+                            _sentiment_cache[market] = (fb_parsed, now_mono)
+                            logger.info("[%s] %s (sentiment fallback): %s %.0f%% score=%+.2f",
+                                        market, tactical_prov, fb_parsed["sentiment"],
+                                        fb_parsed["confidence"] * 100, sentiment_score)
+                    except Exception as fb_exc:
+                        logger.debug("[%s] Sentiment fallback ook mislukt: %s", market, fb_exc)
 
         # ── Stap 3: Gewogen gecombineerde score ──────────────────────────────
         if sentiment_result is not None:
