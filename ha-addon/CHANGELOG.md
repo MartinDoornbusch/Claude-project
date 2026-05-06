@@ -1,5 +1,11 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.12
+- fix: sentiment-prompt strenger — JSON-voorbeeld bovenaan voorkomt extra tekst van Gemini
+- feat: retry-logica sentiment — max 2 pogingen bij parse-fout, 2e poging met striktere instructie
+- feat: uitgebreide keywords in parser — BUY/MOON/STRENGTH → POSITIVE, SELL/WEAKNESS/DUMP → NEGATIVE
+- perf: candle cache in correlatie-bewaking — van 64 naar max 8 API-calls per cyclus (1 uur TTL)
+
 ## v1.18.11
 - fix: Update-knop en Logboek-link verwijderd uit web-app (behoorden er niet in thuis)
 - fix: Gemini model gebruikt nu altijd het geselecteerde model als fallback (geen deprecated hardcoded naam)
