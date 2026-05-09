@@ -18,7 +18,7 @@ from src.database import (
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
 from src.portfolio import get_ticker_price
-from src.ai_strategy import ai_enabled
+from src.ai_strategy import ai_enabled, classify_market
 from src.config_manager import read_config, write_config, config_from_form
 from src.env_utils import env_float
 
@@ -110,6 +110,7 @@ def _build_market_data() -> list[dict]:
             "sma_50": latest.get("sma_50"),
             "signal": latest.get("signal", "—"),
             "ts": latest.get("ts", "—"),
+            "market_class": classify_market(market),
         })
     return rows
 

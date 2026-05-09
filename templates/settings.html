@@ -888,6 +888,33 @@
                   Statische ATR% drempel — HOLD als ATR onder deze waarde ligt. Standaard: 0.5%.
                 </div>
               </div>
+
+              <hr class="my-3">
+
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Altcoin drempel-multiplier</label>
+                <div class="input-group" style="max-width:180px;">
+                  <input type="number" class="form-control" name="ALT_THRESHOLD_MULTIPLIER"
+                         value="{{ config.ALT_THRESHOLD_MULTIPLIER }}" step="0.1" min="1.0" max="5.0">
+                  <span class="input-group-text">×</span>
+                </div>
+                <div class="form-text">
+                  Score-drempel en min. confluence worden met deze factor verhoogd voor ALT-markten.
+                  <strong>1.5 = aanbevolen</strong> — stap 1.0 (uitgeschakeld) t/m 3.0 (zeer streng).
+                </div>
+              </div>
+              <div class="mb-0">
+                <label class="form-label fw-semibold">Extra ALT-markten <small class="text-muted fw-normal">(overschrijft auto-classificatie)</small></label>
+                <input type="text" class="form-control" name="ALT_MARKETS"
+                       value="{{ config.ALT_MARKETS }}" placeholder="bijv. DOGE-EUR,SHIB-EUR,PEPE-EUR">
+                <div class="form-text">
+                  Komma-gescheiden markten die altijd als ALT worden behandeld, ook als ze in de MID-lijst staan.
+                  Laat leeg om alleen de ingebouwde classificatie te gebruiken
+                  (<span class="fw-semibold text-primary">LARGE</span>: BTC, ETH —
+                   <span class="fw-semibold" style="color:#7e22ce;">MID</span>: SOL, ADA, XRP, AVAX… —
+                   <span class="fw-semibold" style="color:#854d0e;">ALT</span>: al het overige).
+                </div>
+              </div>
             </div>
 
           </div>

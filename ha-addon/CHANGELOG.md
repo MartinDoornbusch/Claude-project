@@ -1,5 +1,12 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.17
+- feat: Marktclassificatie LARGE / MID / ALT — badge op dashboard naast elke markt
+- feat: ALT-markten krijgen automatisch strenger drempel (× ALT_THRESHOLD_MULTIPLIER, standaard 1.5)
+- feat: Min. confluence +1 voor ALT-markten (minder valse signalen op illiquide coins)
+- feat: ALT_MARKETS env var om specifieke markten als ALT te forceren
+- feat: Instellingenpagina: ALT-drempel-multiplier + ALT-markten veld
+
 ## v1.18.16
 - feat: Gemini-gate — Google/Gemini alleen aangeroepen bij |score| ≥ GEMINI_GATE_SCORE (standaard 0.5)
 - perf: Primaire sentiment-pool gewijzigd naar Mistral + Groq (ruim quotum); Cerebras als fallback

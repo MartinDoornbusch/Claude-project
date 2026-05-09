@@ -45,6 +45,34 @@ _SENTIMENT_PRIMARY:    tuple[str, ...] = ("mistral", "groq")     # altijd bevraa
 _SENTIMENT_FALLBACK:   tuple[str, ...] = ("cerebras",)           # bij onvoldoende primaire stemmen
 _SENTIMENT_PREMIUM:    tuple[str, ...] = ("google",)             # Gemini: alleen bij hoge score
 
+# ── Marktclassificatie — bepaalt drempelstrengte ──────────────────────────────
+_LARGE_CAPS: frozenset[str] = frozenset({"BTC", "ETH"})
+_MID_CAPS:   frozenset[str] = frozenset({
+    "SOL", "ADA", "XRP", "BNB", "DOT", "LINK", "MATIC", "POL", "AVAX",
+    "ATOM", "UNI", "LTC", "BCH", "ALGO", "NEAR", "FIL", "ICP", "VET",
+    "SAND", "MANA", "CRV", "AAVE", "MKR", "COMP", "SNX", "YFI",
+    "1INCH", "ENS", "APE", "IMX", "OP", "ARB", "PEPE", "SHIB", "DOGE",
+    "TON", "SUI", "SEI", "INJ", "TIA", "PYTH", "JUP", "WIF",
+})
+
+
+def classify_market(market: str) -> str:
+    """Classifies a market as LARGE, MID, or ALT based on coin symbol."""
+    coin = market.split("-")[0].upper()
+    # ALT_MARKETS env var forces specific coins into ALT category
+    alt_override = {
+        m.strip().split("-")[0].upper()
+        for m in os.getenv("ALT_MARKETS", "").split(",")
+        if m.strip()
+    }
+    if coin in alt_override:
+        return "ALT"
+    if coin in _LARGE_CAPS:
+        return "LARGE"
+    if coin in _MID_CAPS:
+        return "MID"
+    return "ALT"
+
 # ── System prompts ────────────────────────────────────────────────────────────
 
 _TACTICAL_PROMPT = """\
@@ -521,6 +549,13 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
     cooldown_minutes   = env_int("AI_COOLDOWN_MINUTES", 60)
     score_threshold    = env_float("AI_SCORE_THRESHOLD", 0.5)
 
+    # Alt-markten krijgen strengere drempels
+    market_class = classify_market(market)
+    if market_class == "ALT":
+        alt_mult      = env_float("ALT_THRESHOLD_MULTIPLIER", 1.5)
+        score_threshold = score_threshold * alt_mult
+        logger.debug("[%s] ALT-markt — score_threshold × %.1f = %.2f", market, alt_mult, score_threshold)
+
     if not ai_enabled():
         return "HOLD", 0.0, "AI strategie uitgeschakeld"
 
@@ -589,6 +624,8 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
     confluence, conf_dir = _tech_confluence(signals, price)
     min_conf_score  = env_int("MIN_CONFLUENCE_SCORE", 2)
     high_conf_score = env_int("HIGH_CONFLUENCE_SCORE", 4)
+    if market_class == "ALT":
+        min_conf_score = min(high_conf_score, min_conf_score + 1)
     _eff_min = min_conf_score
 
     # Open positie met verlies en bearish signaal → drempel naar 1 (SELL mogelijk nodig)
