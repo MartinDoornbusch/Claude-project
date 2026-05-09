@@ -1,5 +1,11 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.16
+- feat: Gemini-gate — Google/Gemini alleen aangeroepen bij |score| ≥ GEMINI_GATE_SCORE (standaard 0.5)
+- perf: Primaire sentiment-pool gewijzigd naar Mistral + Groq (ruim quotum); Cerebras als fallback
+- perf: Gemini-verzoeken gereduceerd van ~120/uur naar ~10–40/dag (alleen bij sterke signalen)
+- feat: GEMINI_GATE_SCORE env var (standaard 0.5) om Gemini-drempel in te stellen
+
 ## v1.18.15
 - fix: Mistral en Cerebras model-dropdown breder (volledige modelnaam zichtbaar)
 - feat: Live model-detectie (↻) voor Mistral en Cerebras

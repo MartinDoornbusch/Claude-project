@@ -1,7 +1,8 @@
 """AI Trading Orchestrator — gespecialiseerde providers in volgorde.
 
 Stap 1  Tactisch    Groq (primair) → Cerebras (backup) — snel, altijd uitgevoerd
-Stap 2  Sentiment   Pool: Gemini + Mistral (primair), Groq/Cerebras (fallback)
+Stap 2  Sentiment   Pool: Mistral + Groq (primair), Cerebras (fallback),
+         Gemini (premium-gate: alleen bij |score| ≥ GEMINI_GATE_SCORE).
          Majority-vote; Gemini wint bij staking. Cache: 20 min TTL.
 Stap 3  Risico      Lokale manager (deterministisch) — geen AI-call nodig
 
@@ -40,8 +41,9 @@ _sentiment_cache: dict[str, tuple[list, float]] = {}
 
 # ── Provider-rolverdeling (volgorde = prioriteit) ─────────────────────────────
 _TACTICAL_CHAIN:       tuple[str, ...] = ("groq", "cerebras", "mistral", "anthropic", "google")
-_SENTIMENT_PRIMARY:    tuple[str, ...] = ("google", "mistral")   # altijd bevraagd voor confluence
-_SENTIMENT_FALLBACK:   tuple[str, ...] = ("groq", "cerebras")    # bij onvoldoende primaire stemmen
+_SENTIMENT_PRIMARY:    tuple[str, ...] = ("mistral", "groq")     # altijd bevraagd (ruim quotum)
+_SENTIMENT_FALLBACK:   tuple[str, ...] = ("cerebras",)           # bij onvoldoende primaire stemmen
+_SENTIMENT_PREMIUM:    tuple[str, ...] = ("google",)             # Gemini: alleen bij hoge score
 
 # ── System prompts ────────────────────────────────────────────────────────────
 
@@ -652,7 +654,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
             return "HOLD", 0.0, "Geen tactisch analyse resultaat beschikbaar"
 
         # Snelle HOLD als geen sentiment-providers beschikbaar zijn
-        any_sentiment = any(p in pdict for p in _SENTIMENT_PRIMARY + _SENTIMENT_FALLBACK)
+        any_sentiment = any(p in pdict for p in _SENTIMENT_PRIMARY + _SENTIMENT_FALLBACK + _SENTIMENT_PREMIUM)
         if not any_sentiment and abs(tactical_score) < score_threshold:
             return "HOLD", abs(tactical_score), (
                 f"Score {tactical_score:+.2f} onder drempel {score_threshold:.1f} — "
@@ -682,7 +684,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                 votes: list[tuple[str, dict]] = []
                 queried: set[str] = set()
 
-                # Primaire pool: Gemini + Mistral
+                # Primaire pool: Mistral + Groq
                 for sent_prov in _SENTIMENT_PRIMARY:
                     if sent_prov not in pdict:
                         continue
@@ -702,7 +704,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                     except Exception as exc:
                         logger.warning("[%s] %s (sentiment) fout: %s", market, sent_prov, exc)
 
-                # Fallback pool: Groq / Cerebras (als primaire onvoldoende)
+                # Fallback pool: Cerebras (als primaire onvoldoende)
                 if len(votes) < 2:
                     for fb_prov in _SENTIMENT_FALLBACK:
                         if fb_prov not in pdict or fb_prov in queried:
@@ -722,6 +724,27 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                             logger.warning("[%s] %s (sentiment fallback) fout: %s", market, fb_prov, exc)
                         if len(votes) >= 2:
                             break
+
+                # Premium gate: Gemini alleen bij sterke score (spaart dagquotum)
+                gemini_gate = env_float("GEMINI_GATE_SCORE", 0.5)
+                if (abs(tactical_score) >= gemini_gate
+                        and not trend_bearish
+                        and "google" in pdict
+                        and "google" not in queried):
+                    try:
+                        text   = complete_for("google", pdict["google"],
+                                              _SENTIMENT_PROMPT, prompt, max_tokens=80)
+                        logger.debug("[%s] google raw: %.200s", market, text)
+                        parsed = _parse_sentiment(text)
+                        if parsed:
+                            votes.append(("google", parsed))
+                            logger.info("[%s] google (premium gate ≥%.1f): %s %.0f%%",
+                                        market, gemini_gate, parsed["sentiment"],
+                                        parsed["confidence"] * 100)
+                        else:
+                            logger.warning("[%s] google (premium gate): kon sentiment niet parsen", market)
+                    except Exception as exc:
+                        logger.warning("[%s] google (premium gate) fout: %s", market, exc)
 
                 if votes:
                     _sentiment_cache[market] = (votes, now_mono)
