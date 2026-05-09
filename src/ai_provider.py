@@ -52,9 +52,9 @@ PROVIDER_MODELS: dict[str, list[dict]] = {
         {"value": "open-mistral-7b",       "label": "Mistral 7B Open — volledig gratis"},
     ],
     "cerebras": [
-        {"value": "llama-3.3-70b",  "label": "Llama 3.3 70B — beste kwaliteit ★"},
-        {"value": "llama3.1-70b",   "label": "Llama 3.1 70B — snel"},
-        {"value": "llama3.1-8b",    "label": "Llama 3.1 8B — snelst"},
+        {"value": "llama3.3-70b",    "label": "Llama 3.3 70B — beste kwaliteit ★"},
+        {"value": "llama3.1-70b",    "label": "Llama 3.1 70B — snel"},
+        {"value": "llama3.1-8b",     "label": "Llama 3.1 8B — snelst"},
     ],
 }
 
@@ -63,7 +63,7 @@ _DEFAULT_MODEL: dict[str, str] = {
     "google":    "gemini-2.0-flash",
     "groq":      "llama-3.3-70b-versatile",
     "mistral":   "mistral-small-latest",
-    "cerebras":  "llama-3.3-70b",
+    "cerebras":  "llama3.3-70b",
 }
 
 _KEY_ENV: dict[str, str] = {
@@ -225,7 +225,7 @@ def _anthropic(system: str, user: str, model: str, max_tokens: int) -> str:
     if not key:
         raise EnvironmentError("ANTHROPIC_API_KEY niet ingesteld")
 
-    client = anthropic.Anthropic(api_key=key)
+    client = anthropic.Anthropic(api_key=key, timeout=30.0)
     kwargs: dict = dict(
         model=model,
         max_tokens=max_tokens,
@@ -265,7 +265,11 @@ def _google(system: str, user: str, model: str, max_tokens: int) -> str:
         remaining = int(_google_monthly_backoff_until - time.time())
         raise RuntimeError(f"Google spending cap reset nog niet klaar — wacht nog {remaining}s")
 
-    client = genai.Client(api_key=key)
+    from google.genai import types as _gtypes
+    client = genai.Client(
+        api_key=key,
+        http_options=_gtypes.HttpOptions(timeout=30_000),  # 30s in milliseconden
+    )
     try:
         response = client.models.generate_content(
             model=model,
@@ -325,7 +329,7 @@ def _groq(system: str, user: str, model: str, max_tokens: int) -> str:
         user = user[:max_user_chars] + "\n[context afgekapt — tokenslimiet]"
         logger.debug("Groq prompt afgekapt tot %d tekens", max_user_chars)
 
-    client = Groq(api_key=key)
+    client = Groq(api_key=key, timeout=30.0)
     resp = client.chat.completions.create(
         model=model,
         messages=[

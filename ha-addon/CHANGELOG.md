@@ -1,5 +1,14 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.19
+- fix: Flask dashboard draait nu multi-threaded (geen bevriezing meer bij gelijktijdige requests)
+- fix: Groq / Anthropic / Google API-calls hebben nu een 30s timeout (voorkomen oneindige hang)
+- fix: APScheduler misfire_grace_time zodat vertraagde cycli niet opstapelen
+
+## v1.18.18
+- fix: Cerebras model default gecorrigeerd (llama-3.3-70b → llama3.3-70b, geen 404 meer)
+- fix: Marktverkenner roept Google/Gemini niet meer aan (dagquotum beschermen)
+
 ## v1.18.17
 - feat: Marktclassificatie LARGE / MID / ALT — badge op dashboard naast elke markt
 - feat: ALT-markten krijgen automatisch strenger drempel (× ALT_THRESHOLD_MULTIPLIER, standaard 1.5)
