@@ -1,5 +1,8 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.20
+- feat: PnL percentage zichtbaar per positie op dashboard (naast EUR bedrag)
+
 ## v1.18.19
 - fix: Flask dashboard draait nu multi-threaded (geen bevriezing meer bij gelijktijdige requests)
 - fix: Groq / Anthropic / Google API-calls hebben nu een 30s timeout (voorkomen oneindige hang)

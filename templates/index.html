@@ -138,8 +138,9 @@
       <div class="card p-3 text-center">
         <div class="stat-label">{{ market }}</div>
         <div class="stat-value">€{{ "%.2f"|format(pos.eur_value) }}</div>
-        <div class="{% if pos.pnl >= 0 %}pnl-pos{% else %}pnl-neg{% endif %} small">
+        <div class="{% if pos.pnl >= 0 %}pnl-pos{% else %}pnl-neg{% endif %} small fw-semibold">
           {{ "%+.2f"|format(pos.pnl) }} EUR
+          <span style="font-size:.8em; opacity:.85;">({{ "%+.1f"|format(pos.pnl_pct) }}%)</span>
         </div>
         <button class="btn btn-sm btn-outline-danger mt-2" style="font-size:.72rem; padding:2px 10px;"
                 onclick="manualSell('{{ market }}')">Verkoop</button>
