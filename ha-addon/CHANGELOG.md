@@ -1,5 +1,44 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.21
+- feat: Fee-tracking — transactiekosten opgeslagen per trade (fee kolom in DB), totaal zichtbaar op dashboard
+- feat: BTC HOLD benchmark op Analytics — bot PnL vs passief BTC kopen op startdatum
+- feat: Profit Factor KPI op Analytics (bruto winst / bruto verlies per markt + totaal)
+- feat: Tijdfilter — handel automatisch overgeslagen buiten ingestelde TRADE_HOURS_START/END
+- feat: Handelsuren instelbaar via Instellingen pagina
+
+## v1.18.20
+- feat: PnL percentage zichtbaar per positie op dashboard (naast EUR bedrag)
+
+## v1.18.19
+- fix: Flask dashboard draait nu multi-threaded (geen bevriezing meer bij gelijktijdige requests)
+- fix: Groq / Anthropic / Google API-calls hebben nu een 30s timeout (voorkomen oneindige hang)
+- fix: APScheduler misfire_grace_time zodat vertraagde cycli niet opstapelen
+
+## v1.18.18
+- fix: Cerebras model default gecorrigeerd (llama-3.3-70b → llama3.3-70b, geen 404 meer)
+- fix: Marktverkenner roept Google/Gemini niet meer aan (dagquotum beschermen)
+
+## v1.18.17
+- feat: Marktclassificatie LARGE / MID / ALT — badge op dashboard naast elke markt
+- feat: ALT-markten krijgen automatisch strenger drempel (× ALT_THRESHOLD_MULTIPLIER, standaard 1.5)
+- feat: Min. confluence +1 voor ALT-markten (minder valse signalen op illiquide coins)
+- feat: ALT_MARKETS env var om specifieke markten als ALT te forceren
+- feat: Instellingenpagina: ALT-drempel-multiplier + ALT-markten veld
+
+## v1.18.16
+- feat: Gemini-gate — Google/Gemini alleen aangeroepen bij |score| ≥ GEMINI_GATE_SCORE (standaard 0.5)
+- perf: Primaire sentiment-pool gewijzigd naar Mistral + Groq (ruim quotum); Cerebras als fallback
+- perf: Gemini-verzoeken gereduceerd van ~120/uur naar ~10–40/dag (alleen bij sterke signalen)
+- feat: GEMINI_GATE_SCORE env var (standaard 0.5) om Gemini-drempel in te stellen
+
+## v1.18.15
+- fix: Mistral en Cerebras model-dropdown breder (volledige modelnaam zichtbaar)
+- feat: Live model-detectie (↻) voor Mistral en Cerebras
+- fix: "Risico Claude" verwijderd uit orchestrator-beschrijving (lokale manager)
+- fix: Mistral en Cerebras toegevoegd aan STRATEGIE-statuswidget
+- feat: /api/ai/mistral/models en /api/ai/cerebras/models API-endpoints
+
 ## v1.18.14
 - feat: Mistral AI als tweede sentiment-provider — majority-vote pool (Gemini + Mistral)
 - feat: Cerebras als tactische backup (Groq → Cerebras fallback-keten)

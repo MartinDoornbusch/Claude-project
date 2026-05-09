@@ -13,7 +13,7 @@ from src.database import (
     get_all_paper_trades_asc, get_daily_pnl_series, get_trading_paused, set_trading_paused,
     get_live_trades, reset_paper_trading, get_portfolio_snapshots,
     get_all_positions, get_total_daily_loss, get_latest_portfolio_total, get_position_meta,
-    get_last_buy_ts,
+    get_last_buy_ts, get_total_fees_paid,
 )
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
@@ -257,6 +257,11 @@ def index():
         except Exception:
             pass
 
+    try:
+        total_fees = get_total_fees_paid()
+    except Exception:
+        total_fees = 0.0
+
     return render_template(
         "index.html",
         live_mode=live_mode,
@@ -274,6 +279,7 @@ def index():
         google_requests=google_requests_data,
         mistral_tokens=mistral_tokens_data,
         cerebras_tokens=cerebras_tokens_data,
+        total_fees=total_fees,
     )
 
 
@@ -741,17 +747,21 @@ def api_analytics():
             wins_m   = [p for p in mps if p["pnl_eur"] > 0]
             losses_m = [p for p in mps if p["pnl_eur"] <= 0]
             total    = sum(p["pnl_eur"] for p in mps)
+            gross_profit = sum(p["pnl_eur"] for p in wins_m)
+            gross_loss   = abs(sum(p["pnl_eur"] for p in losses_m))
+            profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0 else None
             per_market.append({
-                "market":      mkt,
-                "num_trades":  len(mps),
-                "total_pnl":   round(total, 2),
-                "win_rate":    round(len(wins_m) / len(mps) * 100, 1) if mps else 0.0,
-                "num_wins":    len(wins_m),
-                "num_losses":  len(losses_m),
-                "avg_pnl_eur": round(total / len(mps), 2) if mps else 0.0,
-                "avg_pnl_pct": round(sum(p["pnl_pct"] for p in mps) / len(mps), 2) if mps else 0.0,
-                "best_trade":  round(max((p["pnl_eur"] for p in mps), default=0), 2),
-                "worst_trade": round(min((p["pnl_eur"] for p in mps), default=0), 2),
+                "market":        mkt,
+                "num_trades":    len(mps),
+                "total_pnl":     round(total, 2),
+                "win_rate":      round(len(wins_m) / len(mps) * 100, 1) if mps else 0.0,
+                "num_wins":      len(wins_m),
+                "num_losses":    len(losses_m),
+                "avg_pnl_eur":   round(total / len(mps), 2) if mps else 0.0,
+                "avg_pnl_pct":   round(sum(p["pnl_pct"] for p in mps) / len(mps), 2) if mps else 0.0,
+                "best_trade":    round(max((p["pnl_eur"] for p in mps), default=0), 2),
+                "worst_trade":   round(min((p["pnl_eur"] for p in mps), default=0), 2),
+                "profit_factor": profit_factor,
             })
         per_market.sort(key=lambda x: x["total_pnl"], reverse=True)
 
@@ -795,6 +805,10 @@ def api_analytics():
         except Exception:
             pass
 
+        gross_profit_all = sum(p["pnl_eur"] for p in wins)
+        gross_loss_all   = abs(sum(p["pnl_eur"] for p in losses))
+        profit_factor_all = round(gross_profit_all / gross_loss_all, 2) if gross_loss_all > 0 else None
+
         return jsonify({
             "pairs":        pairs_sorted,
             "equity":       equity,
@@ -809,9 +823,69 @@ def api_analytics():
             "avg_loss_eur": round(sum(p["pnl_eur"] for p in losses) / len(losses), 2) if losses else 0.0,
             "best_trade":   round(max((p["pnl_eur"] for p in pairs), default=0), 2),
             "worst_trade":  round(min((p["pnl_eur"] for p in pairs), default=0), 2),
+            "profit_factor":       profit_factor_all,
             "sharpe_ratio":        sharpe_ratio,
             "max_drawdown_pct":    max_drawdown_pct,
             "current_drawdown_pct": current_drawdown_pct,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/analytics/benchmark")
+def api_benchmark():
+    """Vergelijkt bot-prestaties met simpel BTC kopen-en-vasthouden."""
+    try:
+        from src.database import get_all_paper_trades_asc, get_portfolio_snapshots
+        trades = get_all_paper_trades_asc(None)
+        if not trades:
+            return jsonify({"available": False, "reason": "Nog geen trades"})
+
+        start_date = trades[0]["ts"][:10]
+        starting_capital = env_float("PAPER_STARTING_CAPITAL", 1000.0)
+
+        # BTC-prijs op startdatum ophalen uit opgeslagen signalen
+        with __import__("src.database", fromlist=["get_conn"]).get_conn() as conn:
+            row = conn.execute(
+                "SELECT close FROM signals WHERE market='BTC-EUR' AND ts >= ? ORDER BY ts ASC LIMIT 1",
+                (start_date,)
+            ).fetchone()
+        if not row:
+            return jsonify({"available": False, "reason": "Geen BTC-EUR signalen vanaf startdatum"})
+
+        btc_start_price = float(row[0])
+        btc_amount      = starting_capital / btc_start_price
+
+        # Huidige BTC-prijs
+        try:
+            client = get_client()
+            btc_now = get_ticker_price(client, "BTC-EUR") or btc_start_price
+        except Exception:
+            btc_now = btc_start_price
+
+        btc_value_now = btc_amount * btc_now
+        btc_pnl       = btc_value_now - starting_capital
+        btc_pnl_pct   = btc_pnl / starting_capital * 100
+
+        # Huidige bot-waarde uit snapshots
+        snaps = get_portfolio_snapshots(limit=1)
+        bot_value = snaps[0]["total_eur"] if snaps else starting_capital
+        bot_pnl     = bot_value - starting_capital
+        bot_pnl_pct = bot_pnl / starting_capital * 100
+
+        return jsonify({
+            "available":        True,
+            "start_date":       start_date,
+            "starting_capital": starting_capital,
+            "btc_start_price":  round(btc_start_price, 2),
+            "btc_amount":       round(btc_amount, 8),
+            "btc_value_now":    round(btc_value_now, 2),
+            "btc_pnl":          round(btc_pnl, 2),
+            "btc_pnl_pct":      round(btc_pnl_pct, 2),
+            "bot_value":        round(bot_value, 2),
+            "bot_pnl":          round(bot_pnl, 2),
+            "bot_pnl_pct":      round(bot_pnl_pct, 2),
+            "alpha":            round(bot_pnl_pct - btc_pnl_pct, 2),
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

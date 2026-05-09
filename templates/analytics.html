@@ -69,6 +69,7 @@
               <th class="text-end hide-sm" style="cursor:pointer;" onclick="sortCoins('avg_pnl_pct')">Gem. %</th>
               <th class="text-end hide-sm" style="cursor:pointer;" onclick="sortCoins('best_trade')">Beste</th>
               <th class="text-end hide-sm" style="cursor:pointer;" onclick="sortCoins('worst_trade')">Slechtste</th>
+              <th class="text-end hide-sm" style="cursor:pointer;" onclick="sortCoins('profit_factor')">PF</th>
               <th class="text-center">Score</th>
             </tr>
           </thead>
@@ -113,6 +114,11 @@
       <div class="stat-value" id="v-wl">—</div>
     </div></div>
     <div class="col-6 col-md-3"><div class="card p-3 text-center">
+      <div class="stat-label">Profit Factor</div>
+      <div class="stat-value" id="v-pf">—</div>
+      <div style="font-size:.7rem; color:#94a3b8;">bruto winst ÷ bruto verlies</div>
+    </div></div>
+    <div class="col-6 col-md-3"><div class="card p-3 text-center">
       <div class="stat-label">Sharpe Ratio</div>
       <div class="stat-value" id="v-sharpe">—</div>
     </div></div>
@@ -120,6 +126,17 @@
       <div class="stat-label">Max Drawdown</div>
       <div class="stat-value neg" id="v-maxdd">—</div>
     </div></div>
+  </div>
+
+  <!-- BTC Benchmark -->
+  <div class="card mb-4" id="benchmark-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>Bot vs BTC HOLD benchmark</span>
+      <span style="font-size:.75rem; color:#94a3b8;">Starkapitaal geïnvesteerd op eerste trade-datum</span>
+    </div>
+    <div class="card-body" id="benchmark-body">
+      <div class="text-center text-muted py-3" style="font-size:.85rem;">Laden…</div>
+    </div>
   </div>
 
   <!-- Cumulatieve PnL curve -->
@@ -281,6 +298,11 @@
         </td>
         <td class="text-end hide-sm pos">+€${r.best_trade.toFixed(2)}</td>
         <td class="text-end hide-sm neg">€${r.worst_trade.toFixed(2)}</td>
+        <td class="text-end hide-sm">
+          ${r.profit_factor != null
+            ? `<span class="${r.profit_factor >= 1.5 ? 'pos' : r.profit_factor >= 1 ? '' : 'neg'}">${r.profit_factor.toFixed(2)}</span>`
+            : '<span class="text-muted">—</span>'}
+        </td>
         <td class="text-center">
           <span style="font-size:.72rem;padding:2px 8px;border-radius:10px;
                        background:${scoreBg};color:${scoreClr};font-weight:600;">
@@ -305,6 +327,14 @@
     document.getElementById('v-sharpe').textContent = d.sharpe_ratio != null ? d.sharpe_ratio.toFixed(2) : '—';
     document.getElementById('v-sharpe').className = 'stat-value ' + (d.sharpe_ratio > 1 ? 'pos' : d.sharpe_ratio < 0 ? 'neg' : '');
     document.getElementById('v-maxdd').textContent = d.max_drawdown_pct != null ? '-' + d.max_drawdown_pct.toFixed(1) + '%' : '—';
+    const pfEl = document.getElementById('v-pf');
+    if (d.profit_factor != null) {
+      pfEl.textContent = d.profit_factor.toFixed(2);
+      pfEl.className = 'stat-value ' + (d.profit_factor >= 1.5 ? 'pos' : d.profit_factor < 1 ? 'neg' : '');
+    } else {
+      pfEl.textContent = '—';
+      pfEl.className = 'stat-value';
+    }
   }
 
   function setVal(id, text, cls) {
@@ -422,6 +452,41 @@
   // Laad direct bij pagina open
   loadAnalytics();
   loadAiAccuracy();
+  loadBenchmark();
+
+  async function loadBenchmark() {
+    const body = document.getElementById('benchmark-body');
+    if (!body) return;
+    try {
+      const r = await fetch(BASE_URL + '/api/analytics/benchmark');
+      const d = await r.json();
+      if (!d.available) {
+        body.innerHTML = '<p class="text-muted mb-0">Nog niet genoeg data (minimaal 1 afgesloten trade vereist).</p>';
+        return;
+      }
+      const alphaCls = d.alpha >= 0 ? 'pos' : 'neg';
+      const botCls   = d.bot_pnl_pct >= 0 ? 'pos' : 'neg';
+      const btcCls   = d.btc_pnl_pct >= 0 ? 'pos' : 'neg';
+      body.innerHTML = `
+        <p class="text-muted mb-3" style="font-size:.85rem;">Startdatum: ${d.start_date} &nbsp;|&nbsp; BTC prijs toen: €${d.btc_start_price != null ? d.btc_start_price.toFixed(2) : '—'}</p>
+        <div class="row g-3">
+          <div class="col-6 col-md-4">
+            <div class="stat-label">Bot PnL</div>
+            <div class="stat-value ${botCls}">${d.bot_pnl_pct >= 0 ? '+' : ''}${d.bot_pnl_pct.toFixed(2)}%</div>
+          </div>
+          <div class="col-6 col-md-4">
+            <div class="stat-label">BTC HOLD PnL</div>
+            <div class="stat-value ${btcCls}">${d.btc_pnl_pct >= 0 ? '+' : ''}${d.btc_pnl_pct.toFixed(2)}%</div>
+          </div>
+          <div class="col-6 col-md-4">
+            <div class="stat-label">Alpha (bot − BTC)</div>
+            <div class="stat-value ${alphaCls} fw-bold">${d.alpha >= 0 ? '+' : ''}${d.alpha.toFixed(2)}%</div>
+          </div>
+        </div>`;
+    } catch(e) {
+      body.innerHTML = `<p class="text-muted mb-0">Benchmark niet beschikbaar: ${e.message}</p>`;
+    }
+  }
 
   async function loadAiAccuracy() {
     try {
