@@ -882,4 +882,4 @@ def api_backtest():
 
 
 def start(host: str = "0.0.0.0", port: int = 5000, debug: bool = False) -> None:
-    app.run(host=host, port=port, debug=debug)
+    app.run(host=host, port=port, debug=debug, threaded=True)

@@ -339,6 +339,7 @@ def start() -> None:
         id="trading_cycle",
         max_instances=1,
         coalesce=True,
+        misfire_grace_time=check_minutes * 30,  # geef een vertraagde cyclus extra tijd
     )
 
     def _shutdown(signum, frame):
