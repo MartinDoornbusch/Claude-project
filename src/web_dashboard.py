@@ -482,7 +482,9 @@ def api_markets_advise():
         for m in stats:
             upsert_market_stats(m["market"], m["price"], m["change_24h"], m["volume_eur"])
 
-        providers = get_configured_providers() or [get_active()]
+        # Google/Gemini heeft een strikt dagquotum — niet gebruiken voor bulk marktadvies
+        providers = [(p, m) for p, m in (get_configured_providers() or [get_active()])
+                     if p != "google"]
         all_markets_set = {m["market"] for m in stats}
 
         vote_yes: dict[str, int] = {}

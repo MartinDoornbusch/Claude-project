@@ -52,9 +52,9 @@ PROVIDER_MODELS: dict[str, list[dict]] = {
         {"value": "open-mistral-7b",       "label": "Mistral 7B Open — volledig gratis"},
     ],
     "cerebras": [
-        {"value": "llama-3.3-70b",  "label": "Llama 3.3 70B — beste kwaliteit ★"},
-        {"value": "llama3.1-70b",   "label": "Llama 3.1 70B — snel"},
-        {"value": "llama3.1-8b",    "label": "Llama 3.1 8B — snelst"},
+        {"value": "llama3.3-70b",    "label": "Llama 3.3 70B — beste kwaliteit ★"},
+        {"value": "llama3.1-70b",    "label": "Llama 3.1 70B — snel"},
+        {"value": "llama3.1-8b",     "label": "Llama 3.1 8B — snelst"},
     ],
 }
 
@@ -63,7 +63,7 @@ _DEFAULT_MODEL: dict[str, str] = {
     "google":    "gemini-2.0-flash",
     "groq":      "llama-3.3-70b-versatile",
     "mistral":   "mistral-small-latest",
-    "cerebras":  "llama-3.3-70b",
+    "cerebras":  "llama3.3-70b",
 }
 
 _KEY_ENV: dict[str, str] = {
