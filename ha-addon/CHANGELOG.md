@@ -1,5 +1,11 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.23
+- feat: LARGE/MID/ALT badge in Marktverkenner naast elke marktnaam
+- feat: Filterknop LARGE / MID / ALT in Marktverkenner
+- fix: PnL% per positiekaart correct berekend en getoond (bijv. "+0.86 EUR (+0.46%)")
+- feat: AI provider diagnose-log — logboek toont welke providers actief zijn per cyclus
+
 ## v1.18.22
 - feat: Near-realtime SL/TP/trailing stop — aparte lichtgewicht prijscheck elke 15 seconden (standaard)
 - feat: PRICE_CHECK_INTERVAL_SECONDS instelbaar via Instellingen pagina
