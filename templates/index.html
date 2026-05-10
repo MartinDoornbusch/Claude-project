@@ -107,12 +107,25 @@
       <div class="card p-3 text-center" style="border-color:#86efac;">
         <div class="stat-label">Paper Totaal</div>
         <div class="stat-value" style="color:#16a34a;">€{{ "%.2f"|format(portfolio.total_eur) }}</div>
+        <div class="small text-muted" style="font-size:.75rem;">
+          {% set pnl_total = portfolio.total_eur - 1000 %}
+          <span class="{% if pnl_total >= 0 %}pnl-pos{% else %}pnl-neg{% endif %}">
+            {{ "%+.2f"|format(pnl_total) }} vs start
+          </span>
+        </div>
       </div>
     </div>
     <div class="col-6 col-md-3">
       <div class="card p-3 text-center">
         <div class="stat-label">Cash</div>
         <div class="stat-value">€{{ "%.2f"|format(portfolio.cash_eur) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card p-3 text-center">
+        <div class="stat-label">Fees Betaald</div>
+        <div class="stat-value text-warning">€{{ "%.2f"|format(total_fees) }}</div>
+        <div class="small text-muted" style="font-size:.75rem;">0.25% per trade</div>
       </div>
     </div>
     <div class="col-6 col-md-3">

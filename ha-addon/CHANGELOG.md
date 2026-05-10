@@ -1,5 +1,15 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.21
+- feat: Fee-tracking — transactiekosten opgeslagen per trade (fee kolom in DB), totaal zichtbaar op dashboard
+- feat: BTC HOLD benchmark op Analytics — bot PnL vs passief BTC kopen op startdatum
+- feat: Profit Factor KPI op Analytics (bruto winst / bruto verlies per markt + totaal)
+- feat: Tijdfilter — handel automatisch overgeslagen buiten ingestelde TRADE_HOURS_START/END
+- feat: Handelsuren instelbaar via Instellingen pagina
+
+## v1.18.20
+- feat: PnL percentage zichtbaar per positie op dashboard (naast EUR bedrag)
+
 ## v1.18.19
 - fix: Flask dashboard draait nu multi-threaded (geen bevriezing meer bij gelijktijdige requests)
 - fix: Groq / Anthropic / Google API-calls hebben nu een 30s timeout (voorkomen oneindige hang)

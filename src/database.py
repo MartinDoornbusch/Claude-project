@@ -221,6 +221,8 @@ def init_db() -> None:
         trade_cols = {r["name"] for r in conn.execute("PRAGMA table_info(paper_trades)").fetchall()}
         if "planned_price" not in trade_cols:
             conn.execute("ALTER TABLE paper_trades ADD COLUMN planned_price REAL")
+        if "fee" not in trade_cols:
+            conn.execute("ALTER TABLE paper_trades ADD COLUMN fee REAL NOT NULL DEFAULT 0")
         sig_cols = {r["name"] for r in conn.execute("PRAGMA table_info(signals)").fetchall()}
         if "atr_14" not in sig_cols:
             conn.execute("ALTER TABLE signals ADD COLUMN atr_14 REAL")
@@ -296,16 +298,23 @@ def set_position(market: str, amount: float, avg_price: float) -> None:
 
 def save_paper_trade(
     market: str, side: str, price: float, amount: float,
-    reason: str = "", planned_price: float | None = None,
+    reason: str = "", planned_price: float | None = None, fee: float = 0.0,
 ) -> None:
     with get_conn() as conn:
         conn.execute("""
-            INSERT INTO paper_trades (ts, market, side, price, amount, eur_total, reason, planned_price)
-            VALUES (?,?,?,?,?,?,?,?)
+            INSERT INTO paper_trades (ts, market, side, price, amount, eur_total, reason, planned_price, fee)
+            VALUES (?,?,?,?,?,?,?,?,?)
         """, (
             _now(),
-            market, side, price, amount, price * amount, reason, planned_price,
+            market, side, price, amount, price * amount, reason, planned_price, fee,
         ))
+
+
+def get_total_fees_paid() -> float:
+    """Totaal betaalde transactiekosten over alle paper trades."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT COALESCE(SUM(fee), 0) FROM paper_trades").fetchone()
+        return float(row[0])
 
 
 def get_paper_trades(market: str | None = None, limit: int = 50) -> list[dict]:

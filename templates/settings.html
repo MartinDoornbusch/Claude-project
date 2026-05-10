@@ -892,6 +892,22 @@
               <hr class="my-3">
 
               <div class="mb-3">
+                <label class="form-label fw-semibold">Handelsuren</label>
+                <div class="d-flex align-items-center gap-2" style="max-width:260px;">
+                  <input type="number" class="form-control" name="TRADE_HOURS_START"
+                         value="{{ config.TRADE_HOURS_START }}" min="0" max="23" step="1" style="width:80px;">
+                  <span class="text-muted">:00 t/m</span>
+                  <input type="number" class="form-control" name="TRADE_HOURS_END"
+                         value="{{ config.TRADE_HOURS_END }}" min="0" max="23" step="1" style="width:80px;">
+                  <span class="text-muted">:00</span>
+                </div>
+                <div class="form-text">
+                  Bot slaat cycli buiten deze uren over (Amsterdam-tijd). <strong>6–23 = aanbevolen</strong> (laag volume 's nachts).
+                  Gebruik 0–0 voor 24/7.
+                </div>
+              </div>
+
+              <div class="mb-3">
                 <label class="form-label fw-semibold">Altcoin drempel-multiplier</label>
                 <div class="input-group" style="max-width:180px;">
                   <input type="number" class="form-control" name="ALT_THRESHOLD_MULTIPLIER"
