@@ -250,12 +250,15 @@ def portfolio_value(market_prices: dict[str, float]) -> dict:
             price = market_prices.get(market, pos["avg_price"])
             eur_value = pos["amount"] * price
             total += eur_value
+            cost_basis = pos["amount"] * pos["avg_price"]
+            pnl        = eur_value - cost_basis
             positions[market] = {
                 "amount": pos["amount"],
                 "avg_price": pos["avg_price"],
                 "current_price": price,
                 "eur_value": eur_value,
-                "pnl": eur_value - (pos["amount"] * pos["avg_price"]),
+                "pnl": pnl,
+                "pnl_pct": (pnl / cost_basis * 100) if cost_basis > 0 else 0.0,
             }
 
     return {"cash_eur": cash, "positions": positions, "total_eur": total}
