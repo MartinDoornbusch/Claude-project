@@ -660,6 +660,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
         if not providers:
             return "HOLD", 0.0, "Geen AI provider geconfigureerd of ingeschakeld"
 
+        logger.info("AI providers beschikbaar: %s", ", ".join(p for p, _ in providers))
         pdict = dict(providers)
         roles = _assign_roles(providers)
 
