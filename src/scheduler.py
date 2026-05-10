@@ -18,12 +18,14 @@ from src.database import (
     save_portfolio_snapshot, get_trading_paused, set_trading_paused,
     get_latest_portfolio_total, get_cash, mark_ai_decision_executed,
     get_portfolio_peak, get_pending_accuracy_decisions, save_ai_accuracy,
+    get_all_positions,
 )
 from src.paper_trader import portfolio_value
 from src.strategy import evaluate
 from src.ai_strategy import ai_enabled, ai_evaluate
 from src.mqtt_publisher import publish_all
 from src.trade_manager import execute_buy, execute_sell, check_sl_tp, check_house_money, mode
+from src.portfolio import get_ticker_price
 from src.env_utils import env_float, env_int
 
 logger = logging.getLogger(__name__)
@@ -44,6 +46,30 @@ def _active_markets() -> list[str]:
     except Exception:
         active = _env_markets()
     return [m for m in active if m.upper() not in blacklist]
+
+
+def run_price_check() -> None:
+    """Lichtgewicht SL/TP prijscheck — draait elke minuut, alleen voor open posities."""
+    try:
+        if get_trading_paused():
+            return
+        positions = get_all_positions()
+        if not positions:
+            return
+        client = get_client()
+        for pos in positions:
+            market = pos["market"]
+            try:
+                price = get_ticker_price(client, market)
+                if price is None:
+                    continue
+                triggered = check_sl_tp(client, market, price)
+                if not triggered:
+                    check_house_money(client, market, price)
+            except Exception as exc:
+                logger.debug("[%s] Prijscheck fout: %s", market, exc)
+    except Exception as exc:
+        logger.debug("run_price_check fout: %s", exc)
 
 
 def run_cycle() -> None:
@@ -349,6 +375,7 @@ def start() -> None:
 
     global _scheduler
     check_minutes = env_int("CHECK_INTERVAL_MINUTES", 60)
+    price_check_seconds = env_int("PRICE_CHECK_INTERVAL_SECONDS", 15)
     _scheduler = BlockingScheduler(timezone="Europe/Amsterdam")
     _scheduler.add_job(
         run_cycle,
@@ -358,6 +385,15 @@ def start() -> None:
         coalesce=True,
         misfire_grace_time=check_minutes * 30,  # geef een vertraagde cyclus extra tijd
     )
+    _scheduler.add_job(
+        run_price_check,
+        trigger=IntervalTrigger(seconds=price_check_seconds),
+        id="price_check",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=30,
+    )
+    logger.info("Prijscheck gestart: elke %d seconden (SL/TP/trailing)", price_check_seconds)
 
     def _shutdown(signum, frame):
         logger.info("Afsluiten...")
