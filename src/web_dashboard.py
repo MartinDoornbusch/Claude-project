@@ -18,7 +18,7 @@ from src.database import (
 from src.paper_trader import portfolio_value
 from src.bitvavo_client import get_client
 from src.portfolio import get_ticker_price
-from src.ai_strategy import ai_enabled
+from src.ai_strategy import ai_enabled, classify_market
 from src.config_manager import read_config, write_config, config_from_form
 from src.env_utils import env_float
 
@@ -110,6 +110,7 @@ def _build_market_data() -> list[dict]:
             "sma_50": latest.get("sma_50"),
             "signal": latest.get("signal", "—"),
             "ts": latest.get("ts", "—"),
+            "market_class": classify_market(market),
         })
     return rows
 
@@ -487,7 +488,9 @@ def api_markets_advise():
         for m in stats:
             upsert_market_stats(m["market"], m["price"], m["change_24h"], m["volume_eur"])
 
-        providers = get_configured_providers() or [get_active()]
+        # Google/Gemini heeft een strikt dagquotum — niet gebruiken voor bulk marktadvies
+        providers = [(p, m) for p, m in (get_configured_providers() or [get_active()])
+                     if p != "google"]
         all_markets_set = {m["market"] for m in stats}
 
         vote_yes: dict[str, int] = {}
@@ -612,6 +615,24 @@ def api_groq_models():
     try:
         from src.ai_provider import list_groq_models
         return jsonify({"models": list_groq_models()})
+    except Exception as e:
+        return jsonify({"error": str(e), "models": []}), 500
+
+
+@app.route("/api/ai/mistral/models")
+def api_mistral_models():
+    try:
+        from src.ai_provider import list_mistral_models
+        return jsonify({"models": list_mistral_models()})
+    except Exception as e:
+        return jsonify({"error": str(e), "models": []}), 500
+
+
+@app.route("/api/ai/cerebras/models")
+def api_cerebras_models():
+    try:
+        from src.ai_provider import list_cerebras_models
+        return jsonify({"models": list_cerebras_models()})
     except Exception as e:
         return jsonify({"error": str(e), "models": []}), 500
 
@@ -935,4 +956,4 @@ def api_backtest():
 
 
 def start(host: str = "0.0.0.0", port: int = 5000, debug: bool = False) -> None:
-    app.run(host=host, port=port, debug=debug)
+    app.run(host=host, port=port, debug=debug, threaded=True)

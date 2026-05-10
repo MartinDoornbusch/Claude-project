@@ -1,7 +1,8 @@
 """AI Trading Orchestrator — gespecialiseerde providers in volgorde.
 
 Stap 1  Tactisch    Groq (primair) → Cerebras (backup) — snel, altijd uitgevoerd
-Stap 2  Sentiment   Pool: Gemini + Mistral (primair), Groq/Cerebras (fallback)
+Stap 2  Sentiment   Pool: Mistral + Groq (primair), Cerebras (fallback),
+         Gemini (premium-gate: alleen bij |score| ≥ GEMINI_GATE_SCORE).
          Majority-vote; Gemini wint bij staking. Cache: 20 min TTL.
 Stap 3  Risico      Lokale manager (deterministisch) — geen AI-call nodig
 
@@ -40,8 +41,37 @@ _sentiment_cache: dict[str, tuple[list, float]] = {}
 
 # ── Provider-rolverdeling (volgorde = prioriteit) ─────────────────────────────
 _TACTICAL_CHAIN:       tuple[str, ...] = ("groq", "cerebras", "mistral", "anthropic", "google")
-_SENTIMENT_PRIMARY:    tuple[str, ...] = ("google", "mistral")   # altijd bevraagd voor confluence
-_SENTIMENT_FALLBACK:   tuple[str, ...] = ("groq", "cerebras")    # bij onvoldoende primaire stemmen
+_SENTIMENT_PRIMARY:    tuple[str, ...] = ("mistral", "groq")     # altijd bevraagd (ruim quotum)
+_SENTIMENT_FALLBACK:   tuple[str, ...] = ("cerebras",)           # bij onvoldoende primaire stemmen
+_SENTIMENT_PREMIUM:    tuple[str, ...] = ("google",)             # Gemini: alleen bij hoge score
+
+# ── Marktclassificatie — bepaalt drempelstrengte ──────────────────────────────
+_LARGE_CAPS: frozenset[str] = frozenset({"BTC", "ETH"})
+_MID_CAPS:   frozenset[str] = frozenset({
+    "SOL", "ADA", "XRP", "BNB", "DOT", "LINK", "MATIC", "POL", "AVAX",
+    "ATOM", "UNI", "LTC", "BCH", "ALGO", "NEAR", "FIL", "ICP", "VET",
+    "SAND", "MANA", "CRV", "AAVE", "MKR", "COMP", "SNX", "YFI",
+    "1INCH", "ENS", "APE", "IMX", "OP", "ARB", "PEPE", "SHIB", "DOGE",
+    "TON", "SUI", "SEI", "INJ", "TIA", "PYTH", "JUP", "WIF",
+})
+
+
+def classify_market(market: str) -> str:
+    """Classifies a market as LARGE, MID, or ALT based on coin symbol."""
+    coin = market.split("-")[0].upper()
+    # ALT_MARKETS env var forces specific coins into ALT category
+    alt_override = {
+        m.strip().split("-")[0].upper()
+        for m in os.getenv("ALT_MARKETS", "").split(",")
+        if m.strip()
+    }
+    if coin in alt_override:
+        return "ALT"
+    if coin in _LARGE_CAPS:
+        return "LARGE"
+    if coin in _MID_CAPS:
+        return "MID"
+    return "ALT"
 
 # ── System prompts ────────────────────────────────────────────────────────────
 
@@ -519,6 +549,13 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
     cooldown_minutes   = env_int("AI_COOLDOWN_MINUTES", 60)
     score_threshold    = env_float("AI_SCORE_THRESHOLD", 0.5)
 
+    # Alt-markten krijgen strengere drempels
+    market_class = classify_market(market)
+    if market_class == "ALT":
+        alt_mult      = env_float("ALT_THRESHOLD_MULTIPLIER", 1.5)
+        score_threshold = score_threshold * alt_mult
+        logger.debug("[%s] ALT-markt — score_threshold × %.1f = %.2f", market, alt_mult, score_threshold)
+
     if not ai_enabled():
         return "HOLD", 0.0, "AI strategie uitgeschakeld"
 
@@ -587,6 +624,8 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
     confluence, conf_dir = _tech_confluence(signals, price)
     min_conf_score  = env_int("MIN_CONFLUENCE_SCORE", 2)
     high_conf_score = env_int("HIGH_CONFLUENCE_SCORE", 4)
+    if market_class == "ALT":
+        min_conf_score = min(high_conf_score, min_conf_score + 1)
     _eff_min = min_conf_score
 
     # Open positie met verlies en bearish signaal → drempel naar 1 (SELL mogelijk nodig)
@@ -652,7 +691,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
             return "HOLD", 0.0, "Geen tactisch analyse resultaat beschikbaar"
 
         # Snelle HOLD als geen sentiment-providers beschikbaar zijn
-        any_sentiment = any(p in pdict for p in _SENTIMENT_PRIMARY + _SENTIMENT_FALLBACK)
+        any_sentiment = any(p in pdict for p in _SENTIMENT_PRIMARY + _SENTIMENT_FALLBACK + _SENTIMENT_PREMIUM)
         if not any_sentiment and abs(tactical_score) < score_threshold:
             return "HOLD", abs(tactical_score), (
                 f"Score {tactical_score:+.2f} onder drempel {score_threshold:.1f} — "
@@ -682,7 +721,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                 votes: list[tuple[str, dict]] = []
                 queried: set[str] = set()
 
-                # Primaire pool: Gemini + Mistral
+                # Primaire pool: Mistral + Groq
                 for sent_prov in _SENTIMENT_PRIMARY:
                     if sent_prov not in pdict:
                         continue
@@ -702,7 +741,7 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                     except Exception as exc:
                         logger.warning("[%s] %s (sentiment) fout: %s", market, sent_prov, exc)
 
-                # Fallback pool: Groq / Cerebras (als primaire onvoldoende)
+                # Fallback pool: Cerebras (als primaire onvoldoende)
                 if len(votes) < 2:
                     for fb_prov in _SENTIMENT_FALLBACK:
                         if fb_prov not in pdict or fb_prov in queried:
@@ -722,6 +761,27 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
                             logger.warning("[%s] %s (sentiment fallback) fout: %s", market, fb_prov, exc)
                         if len(votes) >= 2:
                             break
+
+                # Premium gate: Gemini alleen bij sterke score (spaart dagquotum)
+                gemini_gate = env_float("GEMINI_GATE_SCORE", 0.5)
+                if (abs(tactical_score) >= gemini_gate
+                        and not trend_bearish
+                        and "google" in pdict
+                        and "google" not in queried):
+                    try:
+                        text   = complete_for("google", pdict["google"],
+                                              _SENTIMENT_PROMPT, prompt, max_tokens=80)
+                        logger.debug("[%s] google raw: %.200s", market, text)
+                        parsed = _parse_sentiment(text)
+                        if parsed:
+                            votes.append(("google", parsed))
+                            logger.info("[%s] google (premium gate ≥%.1f): %s %.0f%%",
+                                        market, gemini_gate, parsed["sentiment"],
+                                        parsed["confidence"] * 100)
+                        else:
+                            logger.warning("[%s] google (premium gate): kon sentiment niet parsen", market)
+                    except Exception as exc:
+                        logger.warning("[%s] google (premium gate) fout: %s", market, exc)
 
                 if votes:
                     _sentiment_cache[market] = (votes, now_mono)

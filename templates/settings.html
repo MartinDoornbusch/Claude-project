@@ -91,7 +91,7 @@
           </div>
 
           <!-- Regel ↔ AI -->
-          {% set _prov_map = {"anthropic": "Claude", "google": "Gemini", "groq": "Groq"} %}
+          {% set _prov_map = {"anthropic": "Claude", "google": "Gemini", "groq": "Groq", "mistral": "Mistral", "cerebras": "Cerebras"} %}
           {% set _prov_labels = active_providers | map('lower') | map('replace', 'anthropic', 'Claude') | list %}
           {% set _ai_names = [] %}
           {% for p in active_providers %}{% if _prov_map[p] is defined %}{% set _ = _ai_names.append(_prov_map[p]) %}{% endif %}{% endfor %}
@@ -592,7 +592,7 @@
               <strong>Orchestrator-modus</strong> — providers werken in volgorde:
               <span class="badge bg-primary" style="font-size:.7rem;">Tactisch</span> <strong>Groq → Cerebras</strong> scoort razendsnel de indicatoren.
               <span class="badge bg-warning text-dark" style="font-size:.7rem;">Sentiment</span> <strong>Gemini + Mistral</strong> stemmen (majority-vote; fallback Groq/Cerebras).
-              <span class="badge bg-danger" style="font-size:.7rem;">Risico</span> <strong>Claude</strong> keurt de trade goed of af (alleen bij concrete actie — bespaart API-kosten).
+              Risico wordt lokaal bepaald (deterministisch, geen API-kosten).
             </div>
 
             <!-- ── Anthropic ── -->
@@ -749,18 +749,22 @@
                 </div>
                 <div id="prov-row-mistral" {% if config.AI_MISTRAL_ENABLED == 'false' %}style="display:none"{% endif %}>
                   <div class="row g-2 mt-1">
-                    <div class="col-md-5">
+                    <div class="col-md-8">
                       {% set mm = config.AI_MODEL_MISTRAL %}
-                      <select class="form-select form-select-sm" name="AI_MODEL_MISTRAL">
-                        <option value="mistral-small-latest"  {{ 'selected' if mm == 'mistral-small-latest'  or not mm }}>★ Mistral Small — snel & gratis tier</option>
-                        <option value="mistral-medium-latest" {{ 'selected' if mm == 'mistral-medium-latest' }}>Mistral Medium — goede balans</option>
-                        <option value="open-mistral-7b"       {{ 'selected' if mm == 'open-mistral-7b' }}>Mistral 7B Open — volledig gratis</option>
-                        {% if mm and mm not in ('mistral-small-latest','mistral-medium-latest','open-mistral-7b') %}
-                        <option value="{{ mm }}" selected>{{ mm }}</option>
-                        {% endif %}
-                      </select>
+                      <div class="input-group input-group-sm">
+                        <select class="form-select form-select-sm" name="AI_MODEL_MISTRAL" id="mistral-model-select">
+                          <option value="mistral-small-latest"  {{ 'selected' if mm == 'mistral-small-latest'  or not mm }}>★ Mistral Small — snel & gratis tier</option>
+                          <option value="mistral-medium-latest" {{ 'selected' if mm == 'mistral-medium-latest' }}>Mistral Medium — goede balans</option>
+                          <option value="open-mistral-7b"       {{ 'selected' if mm == 'open-mistral-7b' }}>Mistral 7B Open — volledig gratis</option>
+                          {% if mm and mm not in ('mistral-small-latest','mistral-medium-latest','open-mistral-7b') %}
+                          <option value="{{ mm }}" selected>{{ mm }}</option>
+                          {% endif %}
+                        </select>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="detectMistralModels()" title="Haal live modellen op via je API key">↻</button>
+                      </div>
+                      <div class="form-text" id="mistral-model-status"></div>
                     </div>
-                    <div class="col-md-7">
+                    <div class="col-md-4">
                       <div class="input-group input-group-sm">
                         <input type="password" class="form-control font-monospace" name="MISTRAL_API_KEY"
                                placeholder="{{ '●●●●●●●● (ingesteld)' if config.MISTRAL_API_KEY else 'API key...' }}">
@@ -793,18 +797,22 @@
                 </div>
                 <div id="prov-row-cerebras" {% if config.AI_CEREBRAS_ENABLED == 'false' %}style="display:none"{% endif %}>
                   <div class="row g-2 mt-1">
-                    <div class="col-md-5">
+                    <div class="col-md-8">
                       {% set cm = config.AI_MODEL_CEREBRAS %}
-                      <select class="form-select form-select-sm" name="AI_MODEL_CEREBRAS">
-                        <option value="llama-3.3-70b" {{ 'selected' if cm == 'llama-3.3-70b' or not cm }}>★ Llama 3.3 70B — beste kwaliteit</option>
-                        <option value="llama3.1-70b"  {{ 'selected' if cm == 'llama3.1-70b' }}>Llama 3.1 70B — snel</option>
-                        <option value="llama3.1-8b"   {{ 'selected' if cm == 'llama3.1-8b' }}>Llama 3.1 8B — snelst</option>
-                        {% if cm and cm not in ('llama-3.3-70b','llama3.1-70b','llama3.1-8b') %}
-                        <option value="{{ cm }}" selected>{{ cm }}</option>
-                        {% endif %}
-                      </select>
+                      <div class="input-group input-group-sm">
+                        <select class="form-select form-select-sm" name="AI_MODEL_CEREBRAS" id="cerebras-model-select">
+                          <option value="llama-3.3-70b" {{ 'selected' if cm == 'llama-3.3-70b' or not cm }}>★ Llama 3.3 70B — beste kwaliteit</option>
+                          <option value="llama3.1-70b"  {{ 'selected' if cm == 'llama3.1-70b' }}>Llama 3.1 70B — snel</option>
+                          <option value="llama3.1-8b"   {{ 'selected' if cm == 'llama3.1-8b' }}>Llama 3.1 8B — snelst</option>
+                          {% if cm and cm not in ('llama-3.3-70b','llama3.1-70b','llama3.1-8b') %}
+                          <option value="{{ cm }}" selected>{{ cm }}</option>
+                          {% endif %}
+                        </select>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="detectCerebrasModels()" title="Haal live modellen op via je API key">↻</button>
+                      </div>
+                      <div class="form-text" id="cerebras-model-status"></div>
                     </div>
-                    <div class="col-md-7">
+                    <div class="col-md-4">
                       <div class="input-group input-group-sm">
                         <input type="password" class="form-control font-monospace" name="CEREBRAS_API_KEY"
                                placeholder="{{ '●●●●●●●● (ingesteld)' if config.CEREBRAS_API_KEY else 'API key...' }}">
@@ -1337,6 +1345,44 @@
     status.style.color = '#64748b';
     try {
       const r = await fetch(BASE_URL + '/api/ai/groq/models');
+      const d = await r.json();
+      if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#dc2626'; return; }
+      if (!d.models || !d.models.length) { status.textContent = 'Geen modellen gevonden (API key ingesteld?)'; status.style.color = '#f59e0b'; return; }
+      _buildOptions(sel, d.models, sel.value);
+      status.textContent = `✓ ${d.models.length} modellen geladen`;
+      status.style.color = '#16a34a';
+    } catch(e) {
+      status.textContent = 'Netwerk fout: ' + e.message;
+      status.style.color = '#dc2626';
+    }
+  }
+
+  async function detectMistralModels() {
+    const status = document.getElementById('mistral-model-status');
+    const sel    = document.getElementById('mistral-model-select');
+    status.textContent = 'Modellen ophalen…';
+    status.style.color = '#64748b';
+    try {
+      const r = await fetch(BASE_URL + '/api/ai/mistral/models');
+      const d = await r.json();
+      if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#dc2626'; return; }
+      if (!d.models || !d.models.length) { status.textContent = 'Geen modellen gevonden (API key ingesteld?)'; status.style.color = '#f59e0b'; return; }
+      _buildOptions(sel, d.models, sel.value);
+      status.textContent = `✓ ${d.models.length} modellen geladen`;
+      status.style.color = '#16a34a';
+    } catch(e) {
+      status.textContent = 'Netwerk fout: ' + e.message;
+      status.style.color = '#dc2626';
+    }
+  }
+
+  async function detectCerebrasModels() {
+    const status = document.getElementById('cerebras-model-status');
+    const sel    = document.getElementById('cerebras-model-select');
+    status.textContent = 'Modellen ophalen…';
+    status.style.color = '#64748b';
+    try {
+      const r = await fetch(BASE_URL + '/api/ai/cerebras/models');
       const d = await r.json();
       if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#dc2626'; return; }
       if (!d.models || !d.models.length) { status.textContent = 'Geen modellen gevonden (API key ingesteld?)'; status.style.color = '#f59e0b'; return; }

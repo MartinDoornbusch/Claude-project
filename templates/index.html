@@ -46,6 +46,10 @@
     .reasoning-text { font-size: 0.82rem; color: #64748b; font-style: italic; }
     .pos-strip { font-size: 0.72rem; border-radius: 6px; padding: 4px 8px; background: #f0fdf4; border: 1px solid #86efac; }
     .ai-votes-strip { font-size: 0.7rem; border-top: 1px dashed #e2e8f0; padding-top: 6px; margin-top: 8px; color: #64748b; }
+    .cap-badge { font-size: 0.6rem; padding: 1px 5px; border-radius: 8px; font-weight: 700; letter-spacing: .04em; vertical-align: middle; }
+    .cap-LARGE { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+    .cap-MID   { background: #f3e8ff; color: #7e22ce; border: 1px solid #d8b4fe; }
+    .cap-ALT   { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
   </style>
 <script>const BASE_URL = '{{ url_for("index") }}'.replace(/\/$/, '');</script>
 </head>
@@ -264,7 +268,7 @@
     <div class="col-12 col-md-6">
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-          <span>{{ m.market }}</span>
+          <span>{{ m.market }} <span class="cap-badge cap-{{ m.market_class }}">{{ m.market_class }}</span></span>
           <span class="signal-{{ m.signal }}">{{ m.signal }}</span>
         </div>
         <div class="card-body">
