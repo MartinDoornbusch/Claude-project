@@ -1,6 +1,6 @@
 name: "Bitvavo Trading Bot"
 description: "AI-gestuurde crypto trading bot met web dashboard"
-version: "1.18.21"
+version: "1.18.22"
 slug: "bitvavo_bot"
 init: false
 arch:

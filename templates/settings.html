@@ -220,7 +220,13 @@
               <label class="form-label">Check interval (minuten)</label>
               <input type="number" class="form-control" name="CHECK_INTERVAL_MINUTES"
                      value="{{ config.CHECK_INTERVAL_MINUTES }}" min="1" max="1440">
-              <div class="form-text">Hoe vaak de strategie draait</div>
+              <div class="form-text">Hoe vaak de volledige strategie draait (candles + AI)</div>
+            </div>
+            <div>
+              <label class="form-label">Prijscheck interval (seconden)</label>
+              <input type="number" class="form-control" name="PRICE_CHECK_INTERVAL_SECONDS"
+                     value="{{ config.PRICE_CHECK_INTERVAL_SECONDS }}" min="10" max="300">
+              <div class="form-text">Hoe vaak SL/TP/trailing stop wordt gecontroleerd via live ticker. <strong>15 seconden aanbevolen</strong> — Bitvavo heeft hier geen relevante rate-limit voor. Alleen open posities worden gecheckt.</div>
             </div>
           </div>
         </div>

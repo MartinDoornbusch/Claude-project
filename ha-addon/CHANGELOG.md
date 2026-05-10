@@ -1,5 +1,10 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.22
+- feat: Near-realtime SL/TP/trailing stop — aparte lichtgewicht prijscheck elke 15 seconden (standaard)
+- feat: PRICE_CHECK_INTERVAL_SECONDS instelbaar via Instellingen pagina
+- perf: Prijscheck alleen voor markten met open positie (geen onnodige API-calls)
+
 ## v1.18.21
 - feat: Fee-tracking — transactiekosten opgeslagen per trade (fee kolom in DB), totaal zichtbaar op dashboard
 - feat: BTC HOLD benchmark op Analytics — bot PnL vs passief BTC kopen op startdatum
