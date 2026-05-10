@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 
-from flask import Flask, render_template, jsonify, request, redirect, url_for
+from flask import Flask, render_template, jsonify, request, redirect, url_for, Response
 
 from src.database import (
     get_latest_signals, get_paper_trades, get_cash, get_position, get_ai_decisions,
@@ -954,6 +954,32 @@ def api_backtest():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/export/trades.csv")
+def export_trades_csv():
+    """Exporteer alle paper trades als CSV voor trade journaling."""
+    import csv, io
+    trades = get_all_paper_trades_asc(None)
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["Datum", "Markt", "Side", "Prijs (EUR)", "Hoeveelheid", "Totaal EUR", "Fee EUR", "Reden"])
+    for t in trades:
+        writer.writerow([
+            t.get("ts", ""),
+            t.get("market", ""),
+            t.get("side", ""),
+            t.get("price", ""),
+            t.get("amount", ""),
+            t.get("eur_total", ""),
+            t.get("fee", 0),
+            t.get("reason", ""),
+        ])
+    return Response(
+        out.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=trades.csv"},
+    )
 
 
 def start(host: str = "0.0.0.0", port: int = 5000, debug: bool = False) -> None:

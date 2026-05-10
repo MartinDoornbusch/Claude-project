@@ -482,6 +482,41 @@
               </div>
             </div>
 
+            <!-- DCA -->
+            <div class="mt-3 pt-3 border-top">
+              <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox" id="dcaEnabled"
+                       name="DCA_ENABLED"
+                       {{ 'checked' if config.DCA_ENABLED == 'true' }}
+                       onchange="document.getElementById('dcaFields').style.display=this.checked?'block':'none'">
+                <label class="form-check-label" for="dcaEnabled">
+                  <strong>DCA — Dollar Cost Averaging</strong>
+                </label>
+              </div>
+              <div class="form-text mb-2">
+                Bot koopt automatisch bij als de prijs voldoende daalt onder de gemiddelde inkoopprijs.
+              </div>
+              <div id="dcaFields" style="display:{{ 'block' if config.DCA_ENABLED == 'true' else 'none' }}">
+                <div class="row g-3 mt-1">
+                  <div class="col-6">
+                    <label class="form-label">Bijkoop drempel</label>
+                    <div class="input-group">
+                      <input type="number" class="form-control" name="DCA_THRESHOLD_PCT"
+                             value="{{ config.DCA_THRESHOLD_PCT }}" step="0.5" min="1" max="30">
+                      <span class="input-group-text">%</span>
+                    </div>
+                    <div class="form-text">Hoe ver onder gemiddelde prijs voor bijkoop. <strong>5% aanbevolen.</strong></div>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label">Max DCA lagen</label>
+                    <input type="number" class="form-control" name="DCA_MAX_LAYERS"
+                           value="{{ config.DCA_MAX_LAYERS }}" step="1" min="1" max="5">
+                    <div class="form-text">Max bijkopen per positie. <strong>2 aanbevolen.</strong></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Huisgeld-modus -->
             <div class="mt-3 pt-3 border-top">
               <div class="form-check form-switch mb-1">
@@ -892,6 +927,20 @@
                 </div>
                 <div class="form-text">
                   Statische ATR% drempel — HOLD als ATR onder deze waarde ligt. Standaard: 0.5%.
+                </div>
+              </div>
+
+              <hr class="my-3">
+
+              <div class="mb-3">
+                <label class="form-label fw-semibold">ADX Trend drempel</label>
+                <div class="input-group" style="max-width:180px;">
+                  <input type="number" class="form-control" name="ADX_TREND_THRESHOLD"
+                         value="{{ config.ADX_TREND_THRESHOLD }}" step="1" min="10" max="50">
+                </div>
+                <div class="form-text">
+                  ADX onder deze waarde = sideways markt → strengere confluence vereist.
+                  <strong>25 = aanbevolen</strong> (20 = gevoeliger, 30 = strenger).
                 </div>
               </div>
 

@@ -1,5 +1,15 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.24
+- feat: VWAP (24h rollend) — institutioneel referentiepunt, meegewogen in confluence + AI-prompt
+- feat: RSI Divergentie — bullish/bearish divergentie detectie (+2 confluence gewicht)
+- feat: ADX Marktregime — sideways markt (ADX < 25) triggert strengere confluence drempel
+- feat: Support & Resistance — automatisch 50-candle swing high/low, zichtbaar in AI-analyse
+- feat: DCA (Dollar Cost Averaging) — bijkopen bij X% daling onder inkoopprijs, max N lagen
+- feat: Trade Journal CSV — exporteer alle trades via Analytics pagina (⬇ CSV exporteren)
+- feat: ADX drempel instelbaar via Instellingen (standaard 25)
+- feat: DCA instellingen (drempel %, max lagen) in Instellingen
+
 ## v1.18.23
 - feat: LARGE/MID/ALT badge in Marktverkenner naast elke marktnaam
 - feat: Filterknop LARGE / MID / ALT in Marktverkenner

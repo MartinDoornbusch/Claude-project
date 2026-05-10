@@ -54,6 +54,14 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     atr = ta_volatility.AverageTrueRange(df["high"], df["low"], close, window=14)
     df["atr_14"] = atr.average_true_range()
 
+    # VWAP (rollend 24-candle venster — herstelt niet per dag maar geeft institutioneel referentiepunt)
+    typical = (df["high"] + df["low"] + close) / 3
+    df["vwap_24"] = (typical * df["volume"]).rolling(24).sum() / df["volume"].rolling(24).sum()
+
+    # ADX — marktregime (> 25 trending, < 20 sideways)
+    adx_ind = ta_trend.ADXIndicator(df["high"], df["low"], close, window=14)
+    df["adx_14"] = adx_ind.adx()
+
     return df
 
 
@@ -181,12 +189,33 @@ def latest_signals(df: pd.DataFrame) -> dict:
     _atr_series = df["atr_14"].tail(24).dropna() if "atr_14" in df.columns else pd.Series([], dtype=float)
     avg_atr_24h = float(_atr_series.mean()) if len(_atr_series) >= 12 else None
 
+    # VWAP & ADX
+    vwap_24 = float(last["vwap_24"]) if pd.notna(last.get("vwap_24")) else None
+    adx_14  = float(last["adx_14"])  if pd.notna(last.get("adx_14"))  else None
+
+    # RSI divergentie — vergelijk laatste candle met 10 candles terug
+    rsi_divergence: str | None = None
+    rsi_14 = last.get("rsi_14")
+    if len(df) >= 11 and pd.notna(rsi_14):
+        lookback = df.iloc[-11]
+        price_chg = float(last["close"]) - float(lookback["close"])
+        rsi_chg   = float(rsi_14) - float(lookback["rsi_14"]) if pd.notna(lookback.get("rsi_14")) else 0.0
+        if price_chg < -0.001 * float(last["close"]) and rsi_chg > 3:
+            rsi_divergence = "bullish"   # prijs daalt maar RSI stijgt → koop-signaal
+        elif price_chg > 0.001 * float(last["close"]) and rsi_chg < -3:
+            rsi_divergence = "bearish"   # prijs stijgt maar RSI daalt → verkoop-signaal
+
+    # Support & Resistance — swing extremen over laatste 50 candles
+    lookback_sr = df.tail(50)
+    support    = float(lookback_sr["low"].min())   if len(lookback_sr) >= 10 else None
+    resistance = float(lookback_sr["high"].max())  if len(lookback_sr) >= 10 else None
+
     return {
         "ts": ts_str,
         "close": last["close"],
         "sma_20": last.get("sma_20"),
         "sma_50": last.get("sma_50"),
-        "rsi_14": last.get("rsi_14"),
+        "rsi_14": rsi_14,
         "macd": last.get("macd"),
         "macd_signal": last.get("macd_signal"),
         "macd_hist": macd_hist,
@@ -199,4 +228,9 @@ def latest_signals(df: pd.DataFrame) -> dict:
         "atr_14": atr_14,
         "avg_atr_24h": avg_atr_24h,
         "sma_200": float(last["sma_200"]) if pd.notna(last.get("sma_200")) else None,
+        "vwap_24": vwap_24,
+        "adx_14": adx_14,
+        "rsi_divergence": rsi_divergence,
+        "support": support,
+        "resistance": resistance,
     }

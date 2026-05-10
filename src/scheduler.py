@@ -24,7 +24,7 @@ from src.paper_trader import portfolio_value
 from src.strategy import evaluate
 from src.ai_strategy import ai_enabled, ai_evaluate
 from src.mqtt_publisher import publish_all
-from src.trade_manager import execute_buy, execute_sell, check_sl_tp, check_house_money, mode
+from src.trade_manager import execute_buy, execute_sell, check_sl_tp, check_house_money, check_dca, mode
 from src.portfolio import get_ticker_price
 from src.env_utils import env_float, env_int
 
@@ -66,6 +66,8 @@ def run_price_check() -> None:
                 triggered = check_sl_tp(client, market, price)
                 if not triggered:
                     check_house_money(client, market, price)
+                if not triggered:
+                    check_dca(client, market, price)
             except Exception as exc:
                 logger.debug("[%s] Prijscheck fout: %s", market, exc)
     except Exception as exc:

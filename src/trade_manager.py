@@ -217,6 +217,51 @@ def execute_buy(
     return result
 
 
+def check_dca(client: Bitvavo, market: str, current_price: float) -> bool:
+    """
+    Dollar Cost Averaging: koop bij als prijs DCA_THRESHOLD_PCT% onder gemiddelde inkoopprijs ligt
+    en het maximale aantal DCA-lagen nog niet bereikt is.
+    Geeft True terug als er bijgekocht is.
+    """
+    if os.getenv("DCA_ENABLED", "false").lower() != "true":
+        return False
+
+    pos = get_position(market)
+    if pos["amount"] <= 0 or pos["avg_price"] <= 0:
+        return False  # geen positie om bij te kopen
+
+    avg = float(pos["avg_price"])
+    drop_pct = (avg - current_price) / avg * 100
+    threshold = env_float("DCA_THRESHOLD_PCT", 5.0)
+    if drop_pct < threshold:
+        return False
+
+    # Tel hoeveel BUY-trades al open staan voor deze positie (DCA-lagen)
+    from src.database import get_conn
+    with get_conn() as conn:
+        last_sell = conn.execute(
+            "SELECT ts FROM paper_trades WHERE market=? AND side='SELL' ORDER BY ts DESC LIMIT 1",
+            (market,)
+        ).fetchone()
+        since = last_sell["ts"] if last_sell else "1970-01-01"
+        buy_count = conn.execute(
+            "SELECT COUNT(*) FROM paper_trades WHERE market=? AND side='BUY' AND ts > ?",
+            (market, since)
+        ).fetchone()[0]
+
+    max_layers = int(env_float("DCA_MAX_LAYERS", 2))
+    if buy_count > max_layers:
+        logger.info("[%s] DCA: max %d lagen bereikt (%d buys) — overgeslagen", market, max_layers, buy_count)
+        return False
+
+    logger.info(
+        "[%s] DCA: prijs €%.4f is %.1f%% onder gemiddelde €%.4f — laag %d/%d bijkopen",
+        market, current_price, drop_pct, avg, buy_count, max_layers,
+    )
+    result = execute_buy(client, market, current_price, reason=f"DCA laag {buy_count} (−{drop_pct:.1f}%)")
+    return bool(result)
+
+
 def execute_sell(client: Bitvavo, market: str, price: float, reason: str = "") -> dict | None:
     from src.notifier import notify_trade
     if os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true":

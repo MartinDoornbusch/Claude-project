@@ -194,6 +194,26 @@ def _build_context(market: str, signals: dict, recent_signals: list[dict], fg_st
         vol_level = "HIGH volatility ⚠" if atr_pct > 4 else ("elevated" if atr_pct > 2 else "low/normal")
         lines.append(f"ATR-14: €{atr:.4f} ({atr_pct:.2f}% of price — {vol_level})")
 
+    # VWAP, ADX, RSI divergentie en S/R
+    vwap = signals.get("vwap_24")
+    if vwap and price > 0:
+        vwap_pos = "ABOVE VWAP (bullish)" if price > float(vwap) else "BELOW VWAP (bearish)"
+        lines.append(f"VWAP (24h): €{float(vwap):.4f}  — price is {vwap_pos}")
+
+    adx = signals.get("adx_14")
+    if adx is not None:
+        regime = "TRENDING ↗" if float(adx) >= 25 else ("sideways ↔" if float(adx) < 20 else "weakly trending")
+        lines.append(f"ADX-14: {float(adx):.1f}  ({regime})")
+
+    div = signals.get("rsi_divergence")
+    if div:
+        lines.append(f"RSI Divergence: {div.upper()} ({'price falling but RSI rising — potential reversal' if div == 'bullish' else 'price rising but RSI falling — potential reversal'})")
+
+    support    = signals.get("support")
+    resistance = signals.get("resistance")
+    if support and resistance:
+        lines.append(f"Support (50-candle low): €{support:.4f}  |  Resistance (50-candle high): €{resistance:.4f}")
+
     lines += ["", "=== Portfolio State ===",
               f"Available cash: €{cash:.2f}",
               f"Open position: {pos['amount']:.6f} units @ avg €{pos['avg_price']:.4f}"]
@@ -422,6 +442,21 @@ def _tech_confluence(signals: dict, price: float) -> tuple[int, str]:
     elif hist < 0 and hist < hist_prev:
         bearish += 1
 
+    # VWAP: prijs boven VWAP = bullish, eronder = bearish
+    vwap = signals.get("vwap_24")
+    if vwap and float(vwap) > 0:
+        if price > float(vwap) * 1.002:
+            bullish += 1
+        elif price < float(vwap) * 0.998:
+            bearish += 1
+
+    # RSI divergentie: sterk contra-trend signaal (+2 gewicht)
+    div = signals.get("rsi_divergence")
+    if div == "bullish":
+        bullish += 2
+    elif div == "bearish":
+        bearish += 2
+
     direction = "bullish" if bullish > bearish else ("bearish" if bearish > bullish else "mixed")
     return max(bullish, bearish), direction
 
@@ -620,12 +655,21 @@ def ai_evaluate(market: str, signals: dict) -> tuple[str, float, str]:
             market,
         )
 
+    # ── Marktregime: ADX-filter (sideways markt = strengere drempel) ─────────
+    adx = signals.get("adx_14")
+    adx_threshold = env_float("ADX_TREND_THRESHOLD", 25.0)
+    sideways = adx is not None and float(adx) < adx_threshold
+    if sideways:
+        logger.info("[%s] ADX %.1f < %.0f — sideways markt gedetecteerd", market, float(adx), adx_threshold)
+
     # ── Technische confluentiesscore — vroege exit + modelkeuze ──────────────
     confluence, conf_dir = _tech_confluence(signals, price)
     min_conf_score  = env_int("MIN_CONFLUENCE_SCORE", 2)
     high_conf_score = env_int("HIGH_CONFLUENCE_SCORE", 4)
     if market_class == "ALT":
         min_conf_score = min(high_conf_score, min_conf_score + 1)
+    if sideways:
+        min_conf_score = min(high_conf_score, min_conf_score + 1)  # extra drempel bij zijwaartse markt
     _eff_min = min_conf_score
 
     # Open positie met verlies en bearish signaal → drempel naar 1 (SELL mogelijk nodig)
