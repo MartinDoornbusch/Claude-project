@@ -47,6 +47,7 @@
       {% endfor %}
     </select>
     <button class="btn btn-sm btn-outline-secondary" onclick="loadAnalytics()">⟳ Verversen</button>
+    <a class="btn btn-sm btn-outline-success" href="{{ url_for('export_trades_csv') }}" download>⬇ CSV exporteren</a>
   </div>
 
   <!-- Per-coin vergelijking -->
