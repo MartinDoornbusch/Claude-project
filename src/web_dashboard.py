@@ -456,6 +456,7 @@ def markets_page():
             except Exception:
                 pass
         row["provider_votes"] = provider_votes
+        row["market_class"] = classify_market(row["market"])
     return render_template(
         "markets.html",
         watchlist=watchlist,

@@ -22,6 +22,10 @@
     .trend-crash  { background:#fca5a5; color:#7f1d1d; font-weight:600; border-radius:4px; padding:1px 6px; white-space:nowrap; }
     .badge-stable { background:#e2e8f0; color:#475569; font-size:.7rem; border-radius:4px; padding:1px 5px; margin-left:4px; }
     .badge-meme   { background:#fef3c7; color:#92400e; font-size:.7rem; border-radius:4px; padding:1px 5px; margin-left:4px; }
+    .cap-badge { font-size: 0.6rem; padding: 1px 5px; border-radius: 8px; font-weight: 700; letter-spacing: .04em; vertical-align: middle; margin-left: 3px; }
+    .cap-LARGE { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+    .cap-MID   { background: #f3e8ff; color: #7e22ce; border: 1px solid #d8b4fe; }
+    .cap-ALT   { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
     tr.is-stable td { opacity: .6; }
     tr.is-stable { background: #f8fafc !important; }
     tbody tr:hover td { background: #f8fafc; }
@@ -125,6 +129,10 @@
     <button class="btn btn-sm" id="filter-flat"   onclick="setFilter('flat')"  style="background:#f1f5f9;color:#475569;border-color:#cbd5e1;">➡ Stabiel</button>
     <button class="btn btn-sm" id="filter-down"   onclick="setFilter('down')"  style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;">📉 Dalers</button>
     <button class="btn btn-sm" id="filter-crypto" onclick="setFilter('crypto')" style="border-color:#a78bfa;color:#6d28d9;">Alleen crypto</button>
+    <span class="text-muted" style="font-size:.8rem;">|</span>
+    <button class="btn btn-sm" id="filter-LARGE" onclick="setFilter('LARGE')" style="background:#dbeafe;color:#1d4ed8;border-color:#93c5fd;">LARGE</button>
+    <button class="btn btn-sm" id="filter-MID"   onclick="setFilter('MID')"   style="background:#f3e8ff;color:#7e22ce;border-color:#d8b4fe;">MID</button>
+    <button class="btn btn-sm" id="filter-ALT"   onclick="setFilter('ALT')"   style="background:#fef9c3;color:#854d0e;border-color:#fde047;">ALT</button>
     <div class="ms-auto">
       <input type="text" class="form-control form-control-sm" id="search-input"
              placeholder="Zoeken..." oninput="filterTable()"
@@ -171,9 +179,11 @@
                 data-enabled="{{ '1' if m.enabled else '0' }}"
                 data-ai="{{ '1' if m.ai_recommended else '0' }}"
                 data-trend="{{ tcat }}"
-                data-type="{{ 'stable' if is_stable else ('meme' if is_meme else 'crypto') }}">
+                data-type="{{ 'stable' if is_stable else ('meme' if is_meme else 'crypto') }}"
+                data-cap="{{ m.market_class }}">
               <td class="fw-semibold">
                 {{ m.market }}
+                <span class="cap-badge cap-{{ m.market_class }}">{{ m.market_class }}</span>
                 {% if is_stable %}<span class="badge-stable" title="Stablecoin — volgt een valuta, nauwelijks koersbeweging">🔒 Stable</span>{% endif %}
                 {% if is_meme %}<span class="badge-meme" title="Meme/speculatief coin — hoog risico, geen onderliggend nut">🎭 Meme</span>{% endif %}
               </td>
@@ -384,6 +394,14 @@
   // ── Stablecoin / meme detectie ──
   const _STABLES = new Set(['USDT','USDC','BUSD','DAI','TUSD','USDP','GUSD','FRAX','USDD','USTC','EURC','EURT','EURS','AGEUR','XAUT','PAXG']);
   const _MEMES   = new Set(['DOGE','SHIB','PEPE','FLOKI','BONK','WIF','MEME','BABYDOGE','ELON','SAFEMOON']);
+  const _LARGE   = new Set(['BTC','ETH']);
+  const _MID     = new Set(['SOL','ADA','XRP','BNB','DOT','LINK','MATIC','POL','AVAX','ATOM','UNI','LTC','BCH','ALGO','NEAR','FIL','ICP','VET','SAND','MANA','CRV','AAVE','MKR','COMP','SNX','YFI','1INCH','ENS','APE','IMX','OP','ARB','PEPE','SHIB','DOGE','TON','SUI','SEI','INJ','TIA','PYTH','JUP','WIF']);
+  function capClass(market) {
+    const base = market.split('-')[0].toUpperCase();
+    if (_LARGE.has(base)) return 'LARGE';
+    if (_MID.has(base))   return 'MID';
+    return 'ALT';
+  }
   function coinType(market) {
     const base = market.split('-')[0].toUpperCase();
     if (_STABLES.has(base)) return 'stable';
@@ -391,10 +409,12 @@
     return 'crypto';
   }
   function coinBadge(market) {
+    const cap = capClass(market);
+    const capBadge = `<span class="cap-badge cap-${cap}">${cap}</span>`;
     const t = coinType(market);
-    if (t === 'stable') return '<span class="badge-stable" title="Stablecoin — volgt een valuta, nauwelijks koersbeweging">🔒 Stable</span>';
-    if (t === 'meme')   return '<span class="badge-meme" title="Meme/speculatief — hoog risico, geen onderliggend nut">🎭 Meme</span>';
-    return '';
+    if (t === 'stable') return capBadge + '<span class="badge-stable" title="Stablecoin — volgt een valuta, nauwelijks koersbeweging">🔒 Stable</span>';
+    if (t === 'meme')   return capBadge + '<span class="badge-meme" title="Meme/speculatief — hoog risico, geen onderliggend nut">🎭 Meme</span>';
+    return capBadge;
   }
 
   // ── Trendklasse bepalen op basis van 24u % ──
@@ -425,7 +445,8 @@
         : '<span class="text-muted">—</span>';
 
       const ctype = coinType(m.market);
-      return `<tr class="market-row${ctype === 'stable' ? ' is-stable' : ''}" data-market="${m.market}" data-enabled="${enabled}" data-ai="${ai}" data-trend="${trend.cat}" data-type="${ctype}">
+      const cap   = capClass(m.market);
+      return `<tr class="market-row${ctype === 'stable' ? ' is-stable' : ''}" data-market="${m.market}" data-enabled="${enabled}" data-ai="${ai}" data-trend="${trend.cat}" data-type="${ctype}" data-cap="${cap}">
         <td class="fw-semibold">${m.market}${coinBadge(m.market)}</td>
         <td class="text-end font-monospace">${m.price ? '€' + m.price.toFixed(4) : '<span class="text-muted">—</span>'}</td>
         <td class="text-end hide-sm">${changeHtml}</td>
@@ -452,7 +473,7 @@
   // ── Filter ──
   function setFilter(f) {
     currentFilter = f;
-    ['all','enabled','ai','hot','flat','down','crypto'].forEach(id => {
+    ['all','enabled','ai','hot','flat','down','crypto','LARGE','MID','ALT'].forEach(id => {
       const el = document.getElementById('filter-' + id);
       if (el) el.classList.toggle('active', id === f);
     });
@@ -467,6 +488,7 @@
       const ai      = row.dataset.ai === '1';
       const trend   = row.dataset.trend || '';
       const type    = row.dataset.type  || 'crypto';
+      const cap     = row.dataset.cap   || capClass(row.dataset.market);
       const matchSearch = !q || market.includes(q);
       const matchFilter = currentFilter === 'all'
         || (currentFilter === 'enabled' && enabled)
@@ -474,7 +496,10 @@
         || (currentFilter === 'hot'     && trend === 'hot')
         || (currentFilter === 'flat'    && trend === 'flat')
         || (currentFilter === 'down'    && trend === 'down')
-        || (currentFilter === 'crypto'  && type === 'crypto');
+        || (currentFilter === 'crypto'  && type === 'crypto')
+        || (currentFilter === 'LARGE'   && cap === 'LARGE')
+        || (currentFilter === 'MID'     && cap === 'MID')
+        || (currentFilter === 'ALT'     && cap === 'ALT');
       row.style.display = matchSearch && matchFilter ? '' : 'none';
     });
   }
