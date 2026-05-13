@@ -1,5 +1,10 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.25
+- feat: Portfolio groeigrafiek op dashboard — totale waarde + cash + startkapitaal over tijd
+- feat: PnL% tov startkapitaal correct berekend op basis van PAPER_STARTING_CAPITAL instelling
+- feat: /api/portfolio/history endpoint voor historische portfoliowaarde
+
 ## v1.18.24
 - feat: VWAP (24h rollend) — institutioneel referentiepunt, meegewogen in confluence + AI-prompt
 - feat: RSI Divergentie — bullish/bearish divergentie detectie (+2 confluence gewicht)

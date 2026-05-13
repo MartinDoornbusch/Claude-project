@@ -263,6 +263,8 @@ def index():
     except Exception:
         total_fees = 0.0
 
+    starting_capital = env_float("PAPER_STARTING_CAPITAL", 1000.0)
+
     return render_template(
         "index.html",
         live_mode=live_mode,
@@ -281,6 +283,7 @@ def index():
         mistral_tokens=mistral_tokens_data,
         cerebras_tokens=cerebras_tokens_data,
         total_fees=total_fees,
+        starting_capital=starting_capital,
     )
 
 
@@ -310,6 +313,28 @@ def api_portfolio():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify(pf)
+
+
+@app.route("/api/portfolio/history")
+def api_portfolio_history():
+    """Portfolio waarde over tijd — voor de groeigrafiek op het dashboard."""
+    try:
+        limit  = int(request.args.get("limit", 500))
+        snaps  = get_portfolio_snapshots(limit=limit)
+        start  = float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
+        result = []
+        for s in snaps:
+            total = s["total_eur"]
+            result.append({
+                "ts":       s["ts"][:16],
+                "total":    round(total, 2),
+                "cash":     round(s["cash_eur"], 2),
+                "pos":      round(s["pos_eur"], 2),
+                "growth_pct": round((total - start) / start * 100, 2) if start > 0 else 0,
+            })
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/portfolio/cleanup", methods=["POST"])
