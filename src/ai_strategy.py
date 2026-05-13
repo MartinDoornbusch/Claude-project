@@ -370,6 +370,24 @@ def _parse_sentiment(text: str) -> dict | None:
         logger.debug("_parse_sentiment: Pad B (regex) voor '%.80s'", cleaned[:80])
         return {"sentiment": sentiment, "confidence": confidence, "reasoning": reasoning}
 
+    # ── Pad B2: alternatieve JSON-sleutels (signal/decision) ─────────────────
+    # Gemini geeft soms het tactische format {"signal":"HOLD"} terug i.p.v. sentiment-format
+    _ALT_MAP = {"BUY": "POSITIVE", "STRONG BUY": "POSITIVE",
+                "SELL": "NEGATIVE", "STRONG SELL": "NEGATIVE",
+                "HOLD": "NEUTRAL", "NEUTRAL": "NEUTRAL",
+                "POSITIVE": "POSITIVE", "NEGATIVE": "NEGATIVE"}
+    for _ak in ("signal", "decision", "vote"):
+        _ak_m = re.search(rf'"{_ak}"\s*:\s*"([A-Za-z ]+)', cleaned, re.IGNORECASE)
+        if _ak_m:
+            _v = _ak_m.group(1).upper().strip()
+            _mapped = _ALT_MAP.get(_v)
+            if _mapped:
+                _c_m = re.search(r'"confidence"\s*:\s*([0-9.]+)', cleaned)
+                _conf = max(0.0, min(1.0, float(_c_m.group(1)))) if _c_m else 0.40
+                logger.debug("_parse_sentiment: Pad B2 (%s=%s→%s)", _ak, _v, _mapped)
+                return {"sentiment": _mapped, "confidence": _conf,
+                        "reasoning": f"(alt sleutel: {_ak}={_v})"}
+
     # ── Pad C: keyword-scan voor vrije tekst (JSON-instructie genegeerd) ─────
     upper = cleaned.upper()
     if any(w in upper for w in ("BULLISH", "POSITIVE", "UPTREND", "UPWARD", "STRONG BUY",
@@ -380,7 +398,7 @@ def _parse_sentiment(text: str) -> dict | None:
         kw_sent = "NEGATIVE"
     elif any(w in upper for w in ("NEUTRAL", "SIDEWAYS", "MIXED", "FLAT",
                                    "UNCERTAIN", "CONSOLIDAT", "RANGE", "LOW VOLUME",
-                                   "ALIGN", "INDECIS", "WAIT")):
+                                   "ALIGN", "INDECIS", "WAIT", "HOLD")):
         kw_sent = "NEUTRAL"
     elif cleaned:
         # Pad D: niet-lege response maar geen enkel herkenbaar signaal →

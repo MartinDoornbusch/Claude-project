@@ -1,5 +1,8 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.33
+- fix: Google/Gemini signaal-parsing — detecteert nu ook `{"signal":"HOLD"}` en `{"decision":"BUY/SELL"}` naast het standaard sentiment-formaat; voegt "HOLD" toe aan NEUTRAL-keywords zodat tactische responses correct als sentiment worden geïnterpreteerd
+
 ## v1.18.32
 - fix: Oude batch-signalen (zelfde timestamp) worden bij elke opstart automatisch opgeruimd
 - fix: Stale-drempel verlaagd naar 90 minuten zodat grafieken sneller ververst worden
