@@ -263,6 +263,8 @@ def index():
     except Exception:
         total_fees = 0.0
 
+    starting_capital = env_float("PAPER_STARTING_CAPITAL", 1000.0)
+
     return render_template(
         "index.html",
         live_mode=live_mode,
@@ -281,12 +283,29 @@ def index():
         mistral_tokens=mistral_tokens_data,
         cerebras_tokens=cerebras_tokens_data,
         total_fees=total_fees,
+        starting_capital=starting_capital,
     )
 
 
 @app.route("/api/signals/<market>")
 def api_signals(market: str):
-    signals = get_latest_signals(market.upper(), limit=48)
+    market = market.upper()
+    signals = get_latest_signals(market, limit=48)
+    if not signals:
+        # Geen opgeslagen data — haal candles on-demand op voor directe weergave
+        try:
+            from src.candles import get_candles, add_indicators, latest_signals as _latest
+            from src.database import save_signal
+            client = get_client()
+            interval = os.getenv("CANDLE_INTERVAL", "1h")
+            df  = get_candles(client, market, interval, limit=48)
+            df  = add_indicators(df)
+            for i in range(max(1, len(df) - 47), len(df) + 1):
+                sig = _latest(df.iloc[:i].copy())
+                save_signal(market, interval, sig, None)
+            signals = get_latest_signals(market, limit=48)
+        except Exception:
+            pass
     return jsonify(signals)
 
 
@@ -310,6 +329,57 @@ def api_portfolio():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify(pf)
+
+
+@app.route("/api/portfolio/history")
+def api_portfolio_history():
+    """Portfolio waarde over tijd — voor de groeigrafiek op het dashboard."""
+    try:
+        limit  = int(request.args.get("limit", 500))
+        snaps  = get_portfolio_snapshots(limit=limit)
+        start  = float(os.getenv("PAPER_STARTING_CAPITAL", "1000"))
+        result = []
+        for s in snaps:
+            total = s["total_eur"]
+            result.append({
+                "ts":       s["ts"][:16],
+                "total":    round(total, 2),
+                "cash":     round(s["cash_eur"], 2),
+                "pos":      round(s["pos_eur"], 2),
+                "growth_pct": round((total - start) / start * 100, 2) if start > 0 else 0,
+            })
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/heartbeat")
+def api_heartbeat():
+    """Laatste bot-cyclus tijdstempel — voor de heartbeat-indicator op het dashboard."""
+    try:
+        import datetime
+        snaps = get_portfolio_snapshots(limit=1)
+        if not snaps:
+            return jsonify({"status": "unknown", "minutes_ago": None, "last_ts": None})
+        last_ts_str = snaps[0]["ts"]
+        last_ts = datetime.datetime.fromisoformat(last_ts_str)
+        now = datetime.datetime.utcnow()
+        minutes_ago = round((now - last_ts).total_seconds() / 60, 1)
+        check_minutes = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
+        if minutes_ago <= check_minutes * 1.5:
+            status = "ok"
+        elif minutes_ago <= check_minutes * 3:
+            status = "warning"
+        else:
+            status = "stale"
+        return jsonify({
+            "status": status,
+            "minutes_ago": minutes_ago,
+            "last_ts": last_ts_str[:16],
+            "check_interval": check_minutes,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/portfolio/cleanup", methods=["POST"])
