@@ -1,5 +1,13 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.28
+- fix: Grafieken bevroren — dashboard haalt nu altijd verse candles op van Bitvavo als data ouder is dan 2 uur
+- fix: Nieuwe coins tonen direct een grafiek (on-demand fetch, geen wachttijd)
+- feat: Laatste data-tijdstip zichtbaar in elke grafiek-header (zie direct of data vers is)
+- fix: X-as toont datum+tijd als data meerdere dagen beslaat
+- fix: VWAP/ADX berekening crasht niet meer bij coins met weinig volume
+- feat: /api/debug endpoint voor DB-diagnose (signaal-aantallen + laatste tijdstip per markt)
+
 ## v1.18.27
 - fix: Cache-Control: no-store + cache-busting op alle API-aanroepen — grafieken worden nooit meer bevroren door HA ingress-proxy
 - feat: Bot heartbeat statusbalk op dashboard (groen/geel/rood) — toont minuten geleden dat de bot voor het laast draaide
