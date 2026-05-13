@@ -824,22 +824,35 @@
         if (placeholder) placeholder.style.display = 'none';
         canvas.style.display = '';
 
-        // Toon laatste data-datum in kaart-header
+        // Converteer UTC-timestamp naar lokale browsertijd voor weergave
+        const toLocal = (ts) => {
+          if (!ts) return null;
+          try { return new Date(ts.slice(0, 19).replace(' ', 'T') + 'Z'); }
+          catch(e) { return null; }
+        };
+        const fmtTime = (ts) => {
+          const d = toLocal(ts); if (!d) return '';
+          return d.toLocaleTimeString('nl-NL', {hour: '2-digit', minute: '2-digit'});
+        };
+        const fmtFull = (ts) => {
+          const d = toLocal(ts); if (!d) return '';
+          return d.toLocaleString('nl-NL', {month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'});
+        };
+
+        // Toon laatste data-tijdstip (lokale tijd) in kaart-header
         const tsEl = document.getElementById('chart-ts-' + idx);
         if (tsEl && data[0] && data[0].ts) {
-          const lastTs = data[0].ts.slice(0, 16).replace('T', ' ');
-          tsEl.textContent = lastTs;
+          const d = toLocal(data[0].ts);
+          tsEl.textContent = d ? d.toLocaleString('nl-NL', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : data[0].ts.slice(0,16);
         }
 
         const reversed  = data.slice().reverse();
-        const allTs     = reversed.map(d => d.ts ? d.ts.slice(0, 16) : '');
-        // Toon datum+tijd als data meerdere dagen beslaat, anders alleen tijd
-        const firstDate = allTs[0] ? allTs[0].slice(0, 10) : '';
-        const lastDate  = allTs[allTs.length - 1] ? allTs[allTs.length - 1].slice(0, 10) : '';
-        const multiDay  = firstDate !== lastDate;
-        const labels    = reversed.map(d => {
+        const localDates = reversed.map(d => toLocal(d.ts));
+        const multiDay  = localDates.length > 1 && localDates[0] && localDates[localDates.length-1] &&
+                          localDates[0].toDateString() !== localDates[localDates.length-1].toDateString();
+        const labels    = reversed.map((d, i) => {
           if (!d.ts) return '';
-          return multiDay ? d.ts.slice(5, 16).replace('T', ' ') : d.ts.slice(11, 16);
+          return localDates[i] ? (multiDay ? fmtFull(d.ts) : fmtTime(d.ts)) : d.ts.slice(11, 16);
         });
         const prices    = reversed.map(d => d.close  ?? null);
         const sma20     = reversed.map(d => d.sma_20 ?? null);

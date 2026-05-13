@@ -313,21 +313,35 @@ def _signals_are_stale(signals: list[dict]) -> bool:
 def _fetch_live_signals(market: str) -> list[dict]:
     """Haal verse candles op van Bitvavo en geef als signaal-lijst terug."""
     from src.candles import get_candles, add_indicators, latest_signals as _latest
-    from src.database import save_signal
+    from src.database import save_signal, get_conn as _gc
     interval = os.getenv("CANDLE_INTERVAL", "1h")
     client = get_client()
     df = get_candles(client, market, interval, limit=200)
     df = add_indicators(df)
-    # Sla op in DB zodat de scheduler ze ook kan gebruiken
+
+    # Verwijder oude batch-signalen (herkennbaar: ≥10 rijen met exact dezelfde timestamp)
+    # zodat ze de sortering niet verstoren na de candle-timestamp fix
+    try:
+        with _gc() as conn:
+            conn.execute("""
+                DELETE FROM signals WHERE market=? AND ts IN (
+                    SELECT ts FROM signals WHERE market=?
+                    GROUP BY ts HAVING COUNT(*) >= 10
+                )
+            """, (market, market))
+    except Exception:
+        pass
+
+    # Sla de 48 meest recente candles op met hun eigen candle-timestamp
     for i in range(max(1, len(df) - 47), len(df) + 1):
         try:
             sig = _latest(df.iloc[:i].copy())
             save_signal(market, interval, sig, None)
         except Exception:
             pass
+
     result = get_latest_signals(market, limit=48)
     if not result:
-        # DB-save mislukt, lever toch live data terug
         result = [_latest(df)]
     return result
 
