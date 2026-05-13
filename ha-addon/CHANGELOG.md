@@ -1,5 +1,10 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.29
+- fix: X-as toont nu de echte candle-tijden (was eerder allemaal hetzelfde tijdstip)
+- fix: SMA 50 volledig zichtbaar — 200 candles ophalen i.p.v. 48
+- fix: Signal toont "—" i.p.v. "None" als er nog geen AI-evaluatie is
+
 ## v1.18.28
 - fix: Grafieken bevroren — dashboard haalt nu altijd verse candles op van Bitvavo als data ouder is dan 2 uur
 - fix: Nieuwe coins tonen direct een grafiek (on-demand fetch, geen wachttijd)

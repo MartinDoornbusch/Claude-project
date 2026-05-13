@@ -316,7 +316,7 @@ def _fetch_live_signals(market: str) -> list[dict]:
     from src.database import save_signal
     interval = os.getenv("CANDLE_INTERVAL", "1h")
     client = get_client()
-    df = get_candles(client, market, interval, limit=48)
+    df = get_candles(client, market, interval, limit=200)
     df = add_indicators(df)
     # Sla op in DB zodat de scheduler ze ook kan gebruiken
     for i in range(max(1, len(df) - 47), len(df) + 1):
