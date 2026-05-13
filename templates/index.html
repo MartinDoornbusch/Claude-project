@@ -290,7 +290,10 @@
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
           <span>{{ m.market }} <span class="cap-badge cap-{{ m.market_class }}">{{ m.market_class }}</span></span>
-          <span class="signal-{{ m.signal }}">{{ m.signal }}</span>
+          <span class="d-flex align-items-center gap-2">
+            <span id="chart-ts-{{ loop.index }}" style="font-size:.68rem; color:#94a3b8;"></span>
+            <span class="signal-{{ m.signal }}">{{ m.signal }}</span>
+          </span>
         </div>
         <div class="card-body">
           <div class="row text-center mb-3">
@@ -345,7 +348,7 @@
           {% endif %}
 
           <div class="chart-placeholder mt-3" style="display:none; text-align:center; padding:12px 0; font-size:.78rem; color:#94a3b8;">
-            Wachten op eerste scheduler-cyclus…
+            Geen data — bot heeft nog geen cyclus voltooid voor deze markt.
           </div>
           <canvas id="chart-{{ loop.index }}" height="80" class="mt-3"></canvas>
           <div id="atr-wrap-{{ loop.index }}" style="display:none; margin-top:4px;">
@@ -771,6 +774,32 @@
   }
   checkHeartbeat();
 
+  // DB diagnose — toon waarschuwing als er geen signalen in de DB staan
+  (async function checkDbHealth() {
+    try {
+      const r = await fetch(BASE_URL + '/api/debug?_t=' + Date.now());
+      const d = await r.json();
+      if (d.error) return;
+      const configured = d.markets_configured || [];
+      const hasSignals = (d.signals || []).some(s => s.cnt > 0);
+      if (!hasSignals && configured.length > 0) {
+        const bar  = document.getElementById('bot-heartbeat-bar');
+        const dot  = document.getElementById('heartbeat-dot');
+        const text = document.getElementById('heartbeat-text');
+        bar.style.display  = 'flex';
+        bar.style.background = '#fef2f2';
+        bar.style.border   = '1px solid #fca5a5';
+        dot.style.background = '#ef4444';
+        text.textContent   = 'Geen signalen in database — bot sloeg nog geen candle-data op. Controleer het Logboek op "Fout tijdens cyclus".';
+        text.style.color   = '#991b1b';
+      } else if (d.signals && d.signals.length > 0) {
+        // Toon laatste signaal-timestamp in console voor diagnose
+        const latest = d.signals.reduce((a, b) => (a.last_ts > b.last_ts ? a : b));
+        console.info('[debug] Laatste signaal in DB:', latest.market, latest.last_ts, '(' + latest.cnt + ' rijen)');
+      }
+    } catch(e) { /* stil */ }
+  })();
+
   // Auto-refresh pagina
   setTimeout(() => location.reload(true), 60000);
 
@@ -795,9 +824,23 @@
         if (placeholder) placeholder.style.display = 'none';
         canvas.style.display = '';
 
+        // Toon laatste data-datum in kaart-header
+        const tsEl = document.getElementById('chart-ts-' + idx);
+        if (tsEl && data[0] && data[0].ts) {
+          const lastTs = data[0].ts.slice(0, 16).replace('T', ' ');
+          tsEl.textContent = lastTs;
+        }
+
         const reversed  = data.slice().reverse();
         const allTs     = reversed.map(d => d.ts ? d.ts.slice(0, 16) : '');
-        const labels    = reversed.map(d => d.ts ? d.ts.slice(11, 16) : '');
+        // Toon datum+tijd als data meerdere dagen beslaat, anders alleen tijd
+        const firstDate = allTs[0] ? allTs[0].slice(0, 10) : '';
+        const lastDate  = allTs[allTs.length - 1] ? allTs[allTs.length - 1].slice(0, 10) : '';
+        const multiDay  = firstDate !== lastDate;
+        const labels    = reversed.map(d => {
+          if (!d.ts) return '';
+          return multiDay ? d.ts.slice(5, 16).replace('T', ' ') : d.ts.slice(11, 16);
+        });
         const prices    = reversed.map(d => d.close  ?? null);
         const sma20     = reversed.map(d => d.sma_20 ?? null);
         const sma50     = reversed.map(d => d.sma_50 ?? null);
@@ -905,8 +948,12 @@
           }
         }
       })
-      .catch(() => {
-        if (placeholder) placeholder.style.display = '';
+      .catch(err => {
+        console.warn('[signalen] Fetch fout voor ' + market + ':', err);
+        if (placeholder) {
+          placeholder.textContent = 'Fout bij ophalen: ' + (err.message || err);
+          placeholder.style.display = '';
+        }
         canvas.style.display = 'none';
       });
   });

@@ -218,6 +218,7 @@ def run_cycle() -> None:
 
             # Sla indicatoren altijd op — ook bij AI-strategie (nodig voor grafieken)
             save_signal(market, interval, sig, signal)
+            logger.debug("[%s] Signaal opgeslagen: %s @ €%.4f", market, signal, sig.get("close", 0))
 
             market_signals[market] = {**sig, "signal": signal}
             market_prices[market] = current_price
