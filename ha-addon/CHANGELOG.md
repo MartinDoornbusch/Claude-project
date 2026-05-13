@@ -1,5 +1,9 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.26
+- feat: Bot heartbeat indicator op dashboard — toont wanneer de laatste cyclus was (groen/geel/rood)
+- fix: Grafiek van nieuwe coin laadt direct — candles worden on-demand opgehaald zonder te wachten op de volgende cyclus
+
 ## v1.18.25
 - feat: Portfolio groeigrafiek op dashboard — totale waarde + cash + startkapitaal over tijd
 - feat: PnL% tov startkapitaal correct berekend op basis van PAPER_STARTING_CAPITAL instelling

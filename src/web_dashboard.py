@@ -289,7 +289,23 @@ def index():
 
 @app.route("/api/signals/<market>")
 def api_signals(market: str):
-    signals = get_latest_signals(market.upper(), limit=48)
+    market = market.upper()
+    signals = get_latest_signals(market, limit=48)
+    if not signals:
+        # Geen opgeslagen data — haal candles on-demand op voor directe weergave
+        try:
+            from src.candles import get_candles, add_indicators, latest_signals as _latest
+            from src.database import save_signal
+            client = get_client()
+            interval = os.getenv("CANDLE_INTERVAL", "1h")
+            df  = get_candles(client, market, interval, limit=48)
+            df  = add_indicators(df)
+            for i in range(max(1, len(df) - 47), len(df) + 1):
+                sig = _latest(df.iloc[:i].copy())
+                save_signal(market, interval, sig, None)
+            signals = get_latest_signals(market, limit=48)
+        except Exception:
+            pass
     return jsonify(signals)
 
 
@@ -333,6 +349,35 @@ def api_portfolio_history():
                 "growth_pct": round((total - start) / start * 100, 2) if start > 0 else 0,
             })
         return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/heartbeat")
+def api_heartbeat():
+    """Laatste bot-cyclus tijdstempel — voor de heartbeat-indicator op het dashboard."""
+    try:
+        import datetime
+        snaps = get_portfolio_snapshots(limit=1)
+        if not snaps:
+            return jsonify({"status": "unknown", "minutes_ago": None, "last_ts": None})
+        last_ts_str = snaps[0]["ts"]
+        last_ts = datetime.datetime.fromisoformat(last_ts_str)
+        now = datetime.datetime.utcnow()
+        minutes_ago = round((now - last_ts).total_seconds() / 60, 1)
+        check_minutes = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
+        if minutes_ago <= check_minutes * 1.5:
+            status = "ok"
+        elif minutes_ago <= check_minutes * 3:
+            status = "warning"
+        else:
+            status = "stale"
+        return jsonify({
+            "status": status,
+            "minutes_ago": minutes_ago,
+            "last_ts": last_ts_str[:16],
+            "check_interval": check_minutes,
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
