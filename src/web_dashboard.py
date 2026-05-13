@@ -290,12 +290,20 @@ def index():
     )
 
 
+import logging as _logging
+_log = _logging.getLogger(__name__)
+
+
 @app.route("/api/signals/<market>")
 def api_signals(market: str):
     market = market.upper()
-    signals = get_latest_signals(market, limit=48)
+    try:
+        signals = get_latest_signals(market, limit=48)
+    except Exception as exc:
+        _log.error("api_signals DB fout voor %s: %s", market, exc, exc_info=True)
+        return jsonify([])
+
     if not signals:
-        # Geen opgeslagen data — haal candles on-demand op voor directe weergave
         try:
             from src.candles import get_candles, add_indicators, latest_signals as _latest
             from src.database import save_signal
@@ -304,12 +312,40 @@ def api_signals(market: str):
             df  = get_candles(client, market, interval, limit=48)
             df  = add_indicators(df)
             for i in range(max(1, len(df) - 47), len(df) + 1):
-                sig = _latest(df.iloc[:i].copy())
-                save_signal(market, interval, sig, None)
+                try:
+                    sig = _latest(df.iloc[:i].copy())
+                    save_signal(market, interval, sig, None)
+                except Exception:
+                    pass
             signals = get_latest_signals(market, limit=48)
-        except Exception:
-            pass
+            if not signals:
+                # DB-save mislukt maar lever toch live data terug
+                sig = _latest(df)
+                signals = [sig]
+        except Exception as exc:
+            _log.warning("api_signals on-demand fetch mislukt voor %s: %s", market, exc)
     return jsonify(signals)
+
+
+@app.route("/api/debug")
+def api_debug():
+    """Diagnose-endpoint: DB-statistieken per markt."""
+    try:
+        from src.database import get_conn
+        with get_conn() as conn:
+            sig_rows = conn.execute(
+                "SELECT market, COUNT(*) AS cnt, MAX(ts) AS last_ts FROM signals GROUP BY market"
+            ).fetchall()
+            snap_row = conn.execute(
+                "SELECT COUNT(*) AS cnt, MAX(ts) AS last_ts FROM portfolio_snapshots"
+            ).fetchone()
+        return jsonify({
+            "signals": [dict(r) for r in sig_rows],
+            "snapshots": dict(snap_row) if snap_row else {},
+            "markets_configured": _dashboard_markets(),
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route("/api/ai_decisions")
