@@ -294,6 +294,44 @@ import logging as _logging
 _log = _logging.getLogger(__name__)
 
 
+def _signals_are_stale(signals: list[dict]) -> bool:
+    """True als het meest recente signaal ouder is dan 2 uur (bot miste cyclus)."""
+    if not signals:
+        return True
+    try:
+        import datetime as _dt
+        last_ts_str = signals[0]["ts"]  # DESC order → eerste is nieuwste
+        last_ts = _dt.datetime.fromisoformat(last_ts_str)
+        if last_ts.tzinfo is None:
+            last_ts = last_ts.replace(tzinfo=_dt.timezone.utc)
+        age_minutes = (_dt.datetime.now(_dt.timezone.utc) - last_ts).total_seconds() / 60
+        return age_minutes > 120  # ouder dan 2 uur
+    except Exception:
+        return False
+
+
+def _fetch_live_signals(market: str) -> list[dict]:
+    """Haal verse candles op van Bitvavo en geef als signaal-lijst terug."""
+    from src.candles import get_candles, add_indicators, latest_signals as _latest
+    from src.database import save_signal
+    interval = os.getenv("CANDLE_INTERVAL", "1h")
+    client = get_client()
+    df = get_candles(client, market, interval, limit=48)
+    df = add_indicators(df)
+    # Sla op in DB zodat de scheduler ze ook kan gebruiken
+    for i in range(max(1, len(df) - 47), len(df) + 1):
+        try:
+            sig = _latest(df.iloc[:i].copy())
+            save_signal(market, interval, sig, None)
+        except Exception:
+            pass
+    result = get_latest_signals(market, limit=48)
+    if not result:
+        # DB-save mislukt, lever toch live data terug
+        result = [_latest(df)]
+    return result
+
+
 @app.route("/api/signals/<market>")
 def api_signals(market: str):
     market = market.upper()
@@ -303,27 +341,13 @@ def api_signals(market: str):
         _log.error("api_signals DB fout voor %s: %s", market, exc, exc_info=True)
         return jsonify([])
 
-    if not signals:
+    # Haal verse data op als: geen signalen ÓÓÓK als meest recente signaal > 2 uur oud
+    if not signals or _signals_are_stale(signals):
         try:
-            from src.candles import get_candles, add_indicators, latest_signals as _latest
-            from src.database import save_signal
-            client = get_client()
-            interval = os.getenv("CANDLE_INTERVAL", "1h")
-            df  = get_candles(client, market, interval, limit=48)
-            df  = add_indicators(df)
-            for i in range(max(1, len(df) - 47), len(df) + 1):
-                try:
-                    sig = _latest(df.iloc[:i].copy())
-                    save_signal(market, interval, sig, None)
-                except Exception:
-                    pass
-            signals = get_latest_signals(market, limit=48)
-            if not signals:
-                # DB-save mislukt maar lever toch live data terug
-                sig = _latest(df)
-                signals = [sig]
+            signals = _fetch_live_signals(market)
         except Exception as exc:
-            _log.warning("api_signals on-demand fetch mislukt voor %s: %s", market, exc)
+            _log.warning("api_signals live fetch mislukt voor %s: %s", market, exc)
+            # Val terug op DB-data als die er is
     return jsonify(signals)
 
 
