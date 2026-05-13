@@ -1,5 +1,9 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.32
+- fix: Oude batch-signalen (zelfde timestamp) worden bij elke opstart automatisch opgeruimd
+- fix: Stale-drempel verlaagd naar 90 minuten zodat grafieken sneller ververst worden
+
 ## v1.18.31
 - fix: Grafiektijden tonen lokale tijd (CEST) i.p.v. UTC — 13:30 UTC wordt nu correct als 15:30 getoond
 - fix: Alle signaal-timestamps opgeslagen in UTC voor consistente sortering
