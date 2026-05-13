@@ -234,13 +234,19 @@ def init_db() -> None:
 # --- Signals ---
 
 def save_signal(market: str, interval: str, indicators: dict, signal: str | None) -> None:
+    # Gebruik de candle-timestamp zodat de X-as de echte tijdlijn toont
+    ts_raw = indicators.get("ts")
+    if ts_raw and str(ts_raw) not in ("None", "nan", ""):
+        ts = str(ts_raw)[:19].replace(" ", "T")  # normaliseer naar YYYY-MM-DDTHH:MM:SS
+    else:
+        ts = _now()
     with get_conn() as conn:
         conn.execute("""
             INSERT INTO signals (ts, market, interval, close, sma_20, sma_50,
                                  rsi_14, macd, macd_signal, bb_lower, bb_upper, signal, atr_14)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
-            _now(),
+            ts,
             market, interval,
             indicators.get("close"),
             indicators.get("sma_20"),

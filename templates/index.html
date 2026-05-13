@@ -292,7 +292,7 @@
           <span>{{ m.market }} <span class="cap-badge cap-{{ m.market_class }}">{{ m.market_class }}</span></span>
           <span class="d-flex align-items-center gap-2">
             <span id="chart-ts-{{ loop.index }}" style="font-size:.68rem; color:#94a3b8;"></span>
-            <span class="signal-{{ m.signal }}">{{ m.signal }}</span>
+            <span class="signal-{{ m.signal }}">{{ m.signal if m.signal and m.signal != 'None' else '—' }}</span>
           </span>
         </div>
         <div class="card-body">
