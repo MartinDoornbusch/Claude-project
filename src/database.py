@@ -230,6 +230,18 @@ def init_db() -> None:
         if "entry_price" not in ai_cols:
             conn.execute("ALTER TABLE ai_decisions ADD COLUMN entry_price REAL")
 
+        # Eenmalige opschoning: verwijder batch-signalen (≥10 rijen exact dezelfde ts
+        # per markt) die ontstonden toen on-demand fetch _now() gebruikte ipv candle-ts
+        conn.execute("""
+            DELETE FROM signals WHERE rowid IN (
+                SELECT s.rowid FROM signals s
+                JOIN (
+                    SELECT market, ts FROM signals
+                    GROUP BY market, ts HAVING COUNT(*) >= 10
+                ) dup ON s.market = dup.market AND s.ts = dup.ts
+            )
+        """)
+
 
 # --- Signals ---
 

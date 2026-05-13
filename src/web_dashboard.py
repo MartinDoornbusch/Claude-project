@@ -305,7 +305,7 @@ def _signals_are_stale(signals: list[dict]) -> bool:
         if last_ts.tzinfo is None:
             last_ts = last_ts.replace(tzinfo=_dt.timezone.utc)
         age_minutes = (_dt.datetime.now(_dt.timezone.utc) - last_ts).total_seconds() / 60
-        return age_minutes > 120  # ouder dan 2 uur
+        return age_minutes > 90  # ouder dan 1,5 uur (1 gemiste cyclus)
     except Exception:
         return False
 
