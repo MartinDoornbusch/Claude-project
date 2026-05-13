@@ -234,15 +234,15 @@ def init_db() -> None:
 # --- Signals ---
 
 def save_signal(market: str, interval: str, indicators: dict, signal: str | None) -> None:
-    # Gebruik de candle-timestamp zodat de X-as de echte tijdlijn toont
+    # Gebruik candle-timestamp voor correcte X-as; strip timezone voor consistente sortering
     ts_raw = indicators.get("ts")
     if ts_raw and str(ts_raw) not in ("None", "nan", ""):
-        ts = str(ts_raw)[:19].replace(" ", "T")  # normaliseer naar YYYY-MM-DDTHH:MM:SS
+        ts = str(ts_raw)[:19].replace(" ", "T")  # YYYY-MM-DDTHH:MM:SS, geen tijdzone
     else:
-        ts = _now()
+        ts = _now()[:19]  # strip +HH:MM zodat sortering consistent is met candle-timestamps
     with get_conn() as conn:
         conn.execute("""
-            INSERT INTO signals (ts, market, interval, close, sma_20, sma_50,
+            INSERT OR REPLACE INTO signals (ts, market, interval, close, sma_20, sma_50,
                                  rsi_14, macd, macd_signal, bb_lower, bb_upper, signal, atr_14)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (

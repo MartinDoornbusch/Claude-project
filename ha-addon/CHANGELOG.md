@@ -1,5 +1,10 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.30
+- fix: X-as toont eindelijk de correcte candle-tijden — timestamps consistent opgeslagen (geen tijdzone-conflict meer)
+- fix: Oude batchsignalen automatisch opgeruimd voor de live candle fetch
+- fix: INSERT OR REPLACE voorkomt dubbele rijen per candle-timestamp
+
 ## v1.18.29
 - fix: X-as toont nu de echte candle-tijden (was eerder allemaal hetzelfde tijdstip)
 - fix: SMA 50 volledig zichtbaar — 200 candles ophalen i.p.v. 48
