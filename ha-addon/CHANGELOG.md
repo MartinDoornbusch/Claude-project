@@ -1,5 +1,10 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.27
+- fix: Cache-Control: no-store + cache-busting op alle API-aanroepen — grafieken worden nooit meer bevroren door HA ingress-proxy
+- feat: Bot heartbeat statusbalk op dashboard (groen/geel/rood) — toont minuten geleden dat de bot voor het laast draaide
+- fix: Grafiek van nieuwe coin laadt direct via on-demand candle fetch (geen wachttijd)
+
 ## v1.18.26
 - feat: Bot heartbeat indicator op dashboard — toont wanneer de laatste cyclus was (groen/geel/rood)
 - fix: Grafiek van nieuwe coin laadt direct — candles worden on-demand opgehaald zonder te wachten op de volgende cyclus
