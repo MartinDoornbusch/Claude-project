@@ -1,5 +1,9 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.31
+- fix: Grafiektijden tonen lokale tijd (CEST) i.p.v. UTC — 13:30 UTC wordt nu correct als 15:30 getoond
+- fix: Alle signaal-timestamps opgeslagen in UTC voor consistente sortering
+
 ## v1.18.30
 - fix: X-as toont eindelijk de correcte candle-tijden — timestamps consistent opgeslagen (geen tijdzone-conflict meer)
 - fix: Oude batchsignalen automatisch opgeruimd voor de live candle fetch
