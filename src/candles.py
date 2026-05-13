@@ -54,13 +54,20 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     atr = ta_volatility.AverageTrueRange(df["high"], df["low"], close, window=14)
     df["atr_14"] = atr.average_true_range()
 
-    # VWAP (rollend 24-candle venster — herstelt niet per dag maar geeft institutioneel referentiepunt)
-    typical = (df["high"] + df["low"] + close) / 3
-    df["vwap_24"] = (typical * df["volume"]).rolling(24).sum() / df["volume"].rolling(24).sum()
+    try:
+        # VWAP (rollend 24-candle venster)
+        typical = (df["high"] + df["low"] + close) / 3
+        vol_sum = df["volume"].rolling(24).sum()
+        df["vwap_24"] = (typical * df["volume"]).rolling(24).sum() / vol_sum.replace(0, float("nan"))
+    except Exception:
+        df["vwap_24"] = float("nan")
 
-    # ADX — marktregime (> 25 trending, < 20 sideways)
-    adx_ind = ta_trend.ADXIndicator(df["high"], df["low"], close, window=14)
-    df["adx_14"] = adx_ind.adx()
+    try:
+        # ADX — marktregime (> 25 trending, < 20 sideways)
+        adx_ind = ta_trend.ADXIndicator(df["high"], df["low"], close, window=14)
+        df["adx_14"] = adx_ind.adx()
+    except Exception:
+        df["adx_14"] = float("nan")
 
     return df
 
