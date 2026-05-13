@@ -223,7 +223,7 @@
 
   async function loadAnalytics() {
     const mkt = document.getElementById('mkt-select').value;
-    const url = BASE_URL + '/api/analytics' + (mkt ? '?market=' + mkt : '');
+    const url = BASE_URL + '/api/analytics' + (mkt ? '?market=' + mkt : '') + (mkt ? '&' : '?') + '_t=' + Date.now();
     try {
       const r = await fetch(url);
       const d = await r.json();
@@ -459,7 +459,7 @@
     const body = document.getElementById('benchmark-body');
     if (!body) return;
     try {
-      const r = await fetch(BASE_URL + '/api/analytics/benchmark');
+      const r = await fetch(BASE_URL + '/api/analytics/benchmark?_t=' + Date.now());
       const d = await r.json();
       if (!d.available) {
         body.innerHTML = '<p class="text-muted mb-0">Nog niet genoeg data (minimaal 1 afgesloten trade vereist).</p>';

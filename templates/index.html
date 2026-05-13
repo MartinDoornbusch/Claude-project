@@ -644,7 +644,7 @@
   let growthChart = null;
   async function loadGrowthChart() {
     try {
-      const r = await fetch(BASE_URL + '/api/portfolio/history?limit=500');
+      const r = await fetch(BASE_URL + '/api/portfolio/history?limit=500&_t=' + Date.now());
       const data = await r.json();
       const canvas = document.getElementById('portfolio-growth-chart');
       const empty  = document.getElementById('portfolio-growth-empty');
@@ -739,7 +739,7 @@
   // Bot heartbeat indicator
   async function checkHeartbeat() {
     try {
-      const r = await fetch(BASE_URL + '/api/heartbeat');
+      const r = await fetch(BASE_URL + '/api/heartbeat?_t=' + Date.now());
       const d = await r.json();
       const bar  = document.getElementById('bot-heartbeat-bar');
       const dot  = document.getElementById('heartbeat-dot');
@@ -772,7 +772,7 @@
   checkHeartbeat();
 
   // Auto-refresh pagina
-  setTimeout(() => location.reload(), 60000);
+  setTimeout(() => location.reload(true), 60000);
 
   // RSI grafieken per markt
   const markets = {{ markets | tojson }};
@@ -784,7 +784,7 @@
     if (!canvas) return;
     const placeholder = canvas.parentElement.querySelector('.chart-placeholder');
 
-    fetch(BASE_URL + '/api/signals/' + market)
+    fetch(BASE_URL + '/api/signals/' + market + '?_t=' + Date.now())
       .then(r => r.json())
       .then(data => {
         if (!data || data.length === 0) {

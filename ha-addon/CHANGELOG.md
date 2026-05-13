@@ -3,6 +3,7 @@
 ## v1.18.26
 - feat: Bot heartbeat indicator op dashboard — toont wanneer de laatste cyclus was (groen/geel/rood)
 - fix: Grafiek van nieuwe coin laadt direct — candles worden on-demand opgehaald zonder te wachten op de volgende cyclus
+- fix: Grafieken bevroren door proxy-caching — Cache-Control: no-store + cache-busting op alle API-aanroepen zodat HA ingress nooit oude data teruggeeft
 
 ## v1.18.25
 - feat: Portfolio groeigrafiek op dashboard — totale waarde + cash + startkapitaal over tijd
