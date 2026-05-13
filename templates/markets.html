@@ -299,7 +299,7 @@
   async function scanMarkets() {
     showSpinner('Marktdata ophalen van Bitvavo...');
     try {
-      const r = await fetch(BASE_URL + '/api/markets/scan');
+      const r = await fetch(BASE_URL + '/api/markets/scan?_t=' + Date.now());
       const data = await r.json();
       if (data.error) throw new Error(data.error);
       rebuildTable(data.markets);

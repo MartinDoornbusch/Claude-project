@@ -60,9 +60,12 @@ app.wsgi_app = _IngressMiddleware(app.wsgi_app)
 
 @app.after_request
 def allow_iframe(response):
-    """Sta embedding in HA dashboard iframe toe."""
+    """Sta embedding in HA dashboard iframe toe + voorkom proxy-caching van API-responses."""
     response.headers.pop("X-Frame-Options", None)
     response.headers["Content-Security-Policy"] = "frame-ancestors *"
+    if request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
     return response
 
 def _dashboard_markets() -> list[str]:
