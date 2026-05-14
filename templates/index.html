@@ -747,7 +747,7 @@
       const bar  = document.getElementById('bot-heartbeat-bar');
       const dot  = document.getElementById('heartbeat-dot');
       const text = document.getElementById('heartbeat-text');
-      if (!d || d.status === 'unknown') return;
+      if (!d || d.error || d.status === 'unknown') return;
       bar.style.display = 'flex';
       const ago = d.minutes_ago !== null ? `${d.minutes_ago} min geleden` : '?';
       const ts  = d.last_ts ? ` (${d.last_ts})` : '';
