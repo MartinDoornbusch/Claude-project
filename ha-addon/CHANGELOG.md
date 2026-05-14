@@ -1,5 +1,8 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.34
+- fix: Tijdfilter 0–0 blokkeerde alle cycli — `start == end` betekent nu 24/7 (geen beperking)
+
 ## v1.18.33
 - fix: Google/Gemini signaal-parsing — detecteert nu ook `{"signal":"HOLD"}` en `{"decision":"BUY/SELL"}` naast het standaard sentiment-formaat; voegt "HOLD" toe aan NEUTRAL-keywords zodat tactische responses correct als sentiment worden geïnterpreteerd
 

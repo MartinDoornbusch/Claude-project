@@ -140,16 +140,18 @@ def run_cycle() -> None:
     from datetime import datetime as _dt
     from zoneinfo import ZoneInfo
     now_hour = _dt.now(ZoneInfo("Europe/Amsterdam")).hour
-    if trade_start <= trade_end:
-        outside_hours = not (trade_start <= now_hour < trade_end)
-    else:
-        outside_hours = not (now_hour >= trade_start or now_hour < trade_end)
-    if outside_hours:
-        logger.info(
-            "Tijdfilter: %02d:xx buiten handelsuren %02d:00–%02d:00 — cyclus overgeslagen",
-            now_hour, trade_start, trade_end,
-        )
-        return
+    # start == end betekent geen beperking (24/7)
+    if trade_start != trade_end:
+        if trade_start < trade_end:
+            outside_hours = not (trade_start <= now_hour < trade_end)
+        else:
+            outside_hours = not (now_hour >= trade_start or now_hour < trade_end)
+        if outside_hours:
+            logger.info(
+                "Tijdfilter: %02d:xx buiten handelsuren %02d:00–%02d:00 — cyclus overgeslagen",
+                now_hour, trade_start, trade_end,
+            )
+            return
 
     markets = _active_markets()
     logger.info(
