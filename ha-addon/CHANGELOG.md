@@ -1,5 +1,10 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.35
+- feat: Handelsuren toggle — tijdfilter volledig uitschakelbaar via switch in Instellingen
+- feat: Handelsuren op minuut-precisie — bijv. 00:05–23:57 i.p.v. alleen hele uren
+- fix: Bestaande HH (getal) configs worden automatisch omgezet naar HH:00 formaat
+
 ## v1.18.34
 - fix: Tijdfilter 0–0 blokkeerde alle cycli — `start == end` betekent nu 24/7 (geen beperking)
 

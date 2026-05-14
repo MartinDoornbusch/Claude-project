@@ -948,17 +948,25 @@
 
               <div class="mb-3">
                 <label class="form-label fw-semibold">Handelsuren</label>
-                <div class="d-flex align-items-center gap-2" style="max-width:260px;">
-                  <input type="number" class="form-control" name="TRADE_HOURS_START"
-                         value="{{ config.TRADE_HOURS_START }}" min="0" max="23" step="1" style="width:80px;">
-                  <span class="text-muted">:00 t/m</span>
-                  <input type="number" class="form-control" name="TRADE_HOURS_END"
-                         value="{{ config.TRADE_HOURS_END }}" min="0" max="23" step="1" style="width:80px;">
-                  <span class="text-muted">:00</span>
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" role="switch"
+                         id="tradeHoursEnabled" name="TRADE_HOURS_ENABLED" value="true"
+                         {% if config.TRADE_HOURS_ENABLED | lower not in ('false','0','off') %}checked{% endif %}
+                         onchange="document.getElementById('tradeHoursInputs').style.opacity=this.checked?'1':'0.4'">
+                  <label class="form-check-label" for="tradeHoursEnabled">Tijdfilter ingeschakeld</label>
+                </div>
+                <div id="tradeHoursInputs" class="d-flex align-items-center gap-2"
+                     style="max-width:280px; opacity:{{ '1' if config.TRADE_HOURS_ENABLED | lower not in ('false','0','off') else '0.4' }};">
+                  <input type="time" class="form-control" name="TRADE_HOURS_START"
+                         value="{{ config.TRADE_HOURS_START if ':' in config.TRADE_HOURS_START else '%02d:00' % (config.TRADE_HOURS_START | int) }}"
+                         style="width:110px;">
+                  <span class="text-muted">t/m</span>
+                  <input type="time" class="form-control" name="TRADE_HOURS_END"
+                         value="{{ config.TRADE_HOURS_END if ':' in config.TRADE_HOURS_END else '%02d:00' % (config.TRADE_HOURS_END | int) }}"
+                         style="width:110px;">
                 </div>
                 <div class="form-text">
-                  Bot slaat cycli buiten deze uren over (Amsterdam-tijd). <strong>6–23 = aanbevolen</strong> (laag volume 's nachts).
-                  Gebruik 0–0 voor 24/7.
+                  Amsterdam-tijd. Gelijke start- en eindtijd = 24/7. Schakel de toggle uit om de filter volledig te negeren.
                 </div>
               </div>
 
