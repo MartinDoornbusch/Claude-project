@@ -434,13 +434,15 @@ def api_portfolio_history():
 def api_heartbeat():
     """Laatste bot-cyclus tijdstempel — voor de heartbeat-indicator op het dashboard."""
     try:
-        import datetime
+        import datetime as _dt
         snaps = get_portfolio_snapshots(limit=1)
         if not snaps:
             return jsonify({"status": "unknown", "minutes_ago": None, "last_ts": None})
         last_ts_str = snaps[0]["ts"]
-        last_ts = datetime.datetime.fromisoformat(last_ts_str)
-        now = datetime.datetime.utcnow()
+        last_ts = _dt.datetime.fromisoformat(last_ts_str)
+        if last_ts.tzinfo is None:
+            last_ts = last_ts.replace(tzinfo=_dt.timezone.utc)
+        now = _dt.datetime.now(_dt.timezone.utc)
         minutes_ago = round((now - last_ts).total_seconds() / 60, 1)
         check_minutes = int(os.getenv("CHECK_INTERVAL_MINUTES", "60"))
         if minutes_ago <= check_minutes * 1.5:

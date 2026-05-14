@@ -1,5 +1,8 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.36
+- fix: Heartbeat toonde "undefined min geleden" — timezone-mismatch (Amsterdam +02:00 vs naive UTC) veroorzaakte een crash in de API; JS vangt nu ook error-responses af
+
 ## v1.18.35
 - feat: Handelsuren toggle — tijdfilter volledig uitschakelbaar via switch in Instellingen
 - feat: Handelsuren op minuut-precisie — bijv. 00:05–23:57 i.p.v. alleen hele uren
