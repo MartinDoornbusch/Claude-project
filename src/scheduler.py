@@ -135,21 +135,39 @@ def run_cycle() -> None:
                     pass
 
     # Tijdfilter: niet handelen buiten ingestelde handelsuren
-    trade_start = env_int("TRADE_HOURS_START", 6)
-    trade_end   = env_int("TRADE_HOURS_END", 23)
-    from datetime import datetime as _dt
-    from zoneinfo import ZoneInfo
-    now_hour = _dt.now(ZoneInfo("Europe/Amsterdam")).hour
-    if trade_start <= trade_end:
-        outside_hours = not (trade_start <= now_hour < trade_end)
-    else:
-        outside_hours = not (now_hour >= trade_start or now_hour < trade_end)
-    if outside_hours:
-        logger.info(
-            "Tijdfilter: %02d:xx buiten handelsuren %02d:00–%02d:00 — cyclus overgeslagen",
-            now_hour, trade_start, trade_end,
-        )
-        return
+    trade_enabled = os.getenv("TRADE_HOURS_ENABLED", "true").lower() not in ("false", "0", "off")
+    if trade_enabled:
+        def _hhmm_to_min(val: str, default_hour: int) -> int:
+            """Parseer 'HH:MM' of 'H' naar minuten vanaf middernacht."""
+            v = str(val).strip()
+            if ":" in v:
+                h, m = v.split(":", 1)
+                return int(h) * 60 + int(m)
+            return int(v) * 60
+
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo
+        now_dt   = _dt.now(ZoneInfo("Europe/Amsterdam"))
+        now_min  = now_dt.hour * 60 + now_dt.minute
+        ts_raw   = os.getenv("TRADE_HOURS_START", "06:00")
+        te_raw   = os.getenv("TRADE_HOURS_END",   "23:00")
+        ts_min   = _hhmm_to_min(ts_raw, 6)
+        te_min   = _hhmm_to_min(te_raw, 23)
+
+        # start == end = geen beperking (24/7)
+        if ts_min != te_min:
+            if ts_min < te_min:
+                outside_hours = not (ts_min <= now_min < te_min)
+            else:
+                outside_hours = not (now_min >= ts_min or now_min < te_min)
+            if outside_hours:
+                logger.info(
+                    "Tijdfilter: %02d:%02d buiten handelsuren %s–%s — cyclus overgeslagen",
+                    now_dt.hour, now_dt.minute,
+                    f"{ts_min // 60:02d}:{ts_min % 60:02d}",
+                    f"{te_min // 60:02d}:{te_min % 60:02d}",
+                )
+                return
 
     markets = _active_markets()
     logger.info(

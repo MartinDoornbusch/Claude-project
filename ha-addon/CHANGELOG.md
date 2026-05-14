@@ -1,5 +1,16 @@
 # Wijzigingslogboek — Bitvavo Trading Bot
 
+## v1.18.35
+- feat: Handelsuren toggle — tijdfilter volledig uitschakelbaar via switch in Instellingen
+- feat: Handelsuren op minuut-precisie — bijv. 00:05–23:57 i.p.v. alleen hele uren
+- fix: Bestaande HH (getal) configs worden automatisch omgezet naar HH:00 formaat
+
+## v1.18.34
+- fix: Tijdfilter 0–0 blokkeerde alle cycli — `start == end` betekent nu 24/7 (geen beperking)
+
+## v1.18.33
+- fix: Google/Gemini signaal-parsing — detecteert nu ook `{"signal":"HOLD"}` en `{"decision":"BUY/SELL"}` naast het standaard sentiment-formaat; voegt "HOLD" toe aan NEUTRAL-keywords zodat tactische responses correct als sentiment worden geïnterpreteerd
+
 ## v1.18.32
 - fix: Oude batch-signalen (zelfde timestamp) worden bij elke opstart automatisch opgeruimd
 - fix: Stale-drempel verlaagd naar 90 minuten zodat grafieken sneller ververst worden
