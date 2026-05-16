@@ -1261,6 +1261,7 @@
       let html = '<div class="table-responsive"><table class="table table-sm table-borderless mb-0" style="font-size:.85rem;">';
       html += '<thead><tr>'
             + '<th style="color:#64748b;font-weight:600;">Coin</th>'
+            + '<th style="color:#64748b;font-weight:600;">Huidige positie</th>'
             + '<th style="color:#64748b;font-weight:600;">HODL aan</th>'
             + '<th style="color:#64748b;font-weight:600;">Vloer (coins)</th>'
             + '<th style="color:#64748b;font-weight:600;">Winstsplit %</th>'
@@ -1271,11 +1272,32 @@
         const m = cfg.market;
         const id = m.replace('-', '_');
         const pending = parseFloat(cfg.pending_eur || 0);
+        const amount  = parseFloat(cfg.current_amount || 0);
+        const price   = parseFloat(cfg.current_price  || 0);
+
+        // Sla genoeg decimalen op voor kleine coins
+        const decimals = amount > 0 && amount < 0.01 ? 8 : amount < 1 ? 6 : amount < 1000 ? 4 : 2;
+        const amountFmt = amount > 0
+          ? amount.toFixed(decimals)
+          : null;
+        const eurFmt = price > 0 && amount > 0
+          ? ` <span style="color:#94a3b8;">(≈€${(amount * price).toFixed(2)})</span>`
+          : '';
+
+        const positionCell = amountFmt
+          ? `<span style="font-variant-numeric:tabular-nums;">${amountFmt}</span>${eurFmt}
+             <button type="button" class="btn btn-link btn-sm py-0 px-1" style="font-size:.75rem;vertical-align:baseline;"
+                     onclick="document.getElementById('hodl_floor_${id}').value='${amountFmt}'"
+                     title="Gebruik huidige positie als vloer">↙ vloer</button>`
+          : '<span style="color:#cbd5e1;">geen</span>';
+
         const pendingLabel = pending > 0
           ? `<span style="color:#d97706;" title="Wacht op MIN_ORDER_EUR drempel">€${pending.toFixed(2)}</span>`
           : '<span style="color:#cbd5e1;">—</span>';
+
         html += `<tr id="hodl-row-${id}">
           <td class="align-middle fw-semibold">${m}</td>
+          <td class="align-middle" style="white-space:nowrap;">${positionCell}</td>
           <td class="align-middle">
             <div class="form-check form-switch m-0">
               <input class="form-check-input" type="checkbox" id="hodl_en_${id}"
@@ -1285,9 +1307,9 @@
           </td>
           <td class="align-middle">
             <input type="number" id="hodl_floor_${id}" class="form-control form-control-sm"
-                   style="width:130px;" step="any" min="0"
+                   style="width:140px;" step="any" min="0"
                    value="${cfg.floor_amount || 0}"
-                   placeholder="0.001"
+                   placeholder="0"
                    title="Aantal coins dat nooit verkocht mag worden">
           </td>
           <td class="align-middle">

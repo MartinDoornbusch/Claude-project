@@ -586,13 +586,47 @@ def settings_save():
 
 @app.route("/api/hodl", methods=["GET"])
 def api_hodl_get():
-    from src.database import get_hodl_config
+    from src.database import get_hodl_config, get_position
+    live_mode = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
+
+    if live_mode:
+        try:
+            client = get_client()
+        except Exception:
+            client = None
+
     configs = []
     for m in _dashboard_markets():
         cfg = get_hodl_config(m) or {
             "market": m, "enabled": 0,
             "floor_amount": 0.0, "accumulation_split_pct": 0.0, "pending_eur": 0.0,
         }
+
+        # Huidige positie ophalen
+        current_amount = 0.0
+        current_price = 0.0
+        try:
+            if live_mode and client:
+                symbol = m.split("-")[0]
+                balances = client.balance({"symbol": symbol})
+                current_amount = next(
+                    (float(b["available"]) for b in (balances if isinstance(balances, list) else [])
+                     if b["symbol"] == symbol), 0.0
+                )
+            else:
+                pos = get_position(m)
+                current_amount = pos["amount"]
+                current_price = pos["avg_price"]
+
+            if current_price == 0.0:
+                p = get_ticker_price(client if live_mode else get_client(), m)
+                if p:
+                    current_price = p
+        except Exception:
+            pass
+
+        cfg["current_amount"] = current_amount
+        cfg["current_price"] = current_price
         configs.append(cfg)
     return jsonify(configs)
 
