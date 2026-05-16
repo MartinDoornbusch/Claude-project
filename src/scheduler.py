@@ -269,8 +269,9 @@ def run_cycle() -> None:
                             fraction = get_atr_fraction(df, base_frac)
                         else:
                             fraction = None
+                        atr_val = sig.get("atr_14") or None
                         result = execute_buy(client, market, current_price, reason=reason,
-                                             fraction=fraction)
+                                             fraction=fraction, entry_atr=atr_val)
                         if result and ai_decision_id:
                             mark_ai_decision_executed(ai_decision_id)
                 elif signal == "SELL":
