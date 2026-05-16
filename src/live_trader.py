@@ -466,3 +466,24 @@ def check_cancel_oco(client, market: str) -> str | None:
             return leg
 
     return None
+
+
+def cancel_exchange_oco_orders(client: Bitvavo, market: str) -> None:
+    """
+    Annuleert openstaande OCO-legs op Bitvavo na een software-triggered verkoop
+    (trailing stop, breakeven, handmatig). Voorkomt dat stale orders blijven staan.
+    """
+    from src.database import get_open_oco_orders, update_oco_status
+    for oco in get_open_oco_orders(market):
+        cancelled_any = False
+        for order_id in [oco.get("tp_order_id"), oco.get("sl_order_id")]:
+            if not order_id:
+                continue
+            try:
+                client.cancelOrder(market, order_id)
+                logger.info("[%s] OCO order geannuleerd (software sell): %s", market, order_id)
+                cancelled_any = True
+            except Exception as exc:
+                logger.warning("[%s] OCO annulering mislukt voor %s: %s", market, order_id, exc)
+        if cancelled_any:
+            update_oco_status(oco["id"], "cancelled")

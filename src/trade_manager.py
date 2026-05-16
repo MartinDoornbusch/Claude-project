@@ -415,6 +415,8 @@ def execute_sell(client: Bitvavo, market: str, price: float, reason: str = "") -
                 notify_trade(market, "SELL", price, reason)
                 from src.database import cancel_all_oco_orders
                 cancel_all_oco_orders(market)
+                if live_mode:
+                    live.cancel_exchange_oco_orders(client, market)
                 fee_rate = live.FEE_RATE if live_mode else paper.FEE_RATE
                 approx_pnl = sellable * (price - avg_buy_price) - sellable * price * fee_rate
                 _trigger_hodl_accumulation(client, market, approx_pnl)
@@ -430,6 +432,8 @@ def execute_sell(client: Bitvavo, market: str, price: float, reason: str = "") -
         notify_trade(market, "SELL", price, reason)
         from src.database import cancel_all_oco_orders
         cancel_all_oco_orders(market)
+        if live_mode:
+            live.cancel_exchange_oco_orders(client, market)
         pnl = result.get("pnl") or 0.0
         _trigger_hodl_accumulation(client, market, pnl)
     return result

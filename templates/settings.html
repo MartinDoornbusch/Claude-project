@@ -393,7 +393,10 @@
               <div class="d-flex align-items-center justify-content-between">
                 <div>
                   <label class="form-label mb-0">OCO Modus <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem;">One-Cancels-Other</span></label>
-                  <div class="form-text mt-0">Na elke koop worden SL én TP bewaakt — de eerste die raakt annuleert de ander</div>
+                  <div class="form-text mt-0">
+                    Plaatst na elke koop losse SL- en/of TP-orders op de exchange als vangnet.
+                    Combineer met <strong>Trailing Stop</strong> voor dynamisch winstbeheer — dan is alleen Stop-Loss % nodig.
+                  </div>
                 </div>
                 <div class="form-check form-switch m-0">
                   <input class="form-check-input" type="checkbox" role="switch"
@@ -401,8 +404,12 @@
                          {{ 'checked' if config.OCO_ENABLED == 'true' }}>
                 </div>
               </div>
-              {% if config.OCO_ENABLED == 'true' and (not config.STOP_LOSS_PCT or not config.TAKE_PROFIT_PCT) %}
-              <div class="mt-1" style="font-size:.75rem; color:#b45309;">⚠ OCO vereist zowel Stop-Loss % als Take-Profit % ingesteld</div>
+              {% if config.OCO_ENABLED == 'true' and not config.STOP_LOSS_PCT and not config.TAKE_PROFIT_PCT %}
+              <div class="mt-1" style="font-size:.75rem; color:#b45309;">⚠ OCO is aan maar er is geen Stop-Loss % of Take-Profit % ingesteld — er worden geen orders geplaatst</div>
+              {% elif config.OCO_ENABLED == 'true' and config.STOP_LOSS_PCT and not config.TAKE_PROFIT_PCT %}
+              <div class="mt-1" style="font-size:.75rem; color:#0369a1;">ℹ OCO plaatst alleen een Stop-Loss order — TP wordt beheerd door de Trailing Stop</div>
+              {% elif config.OCO_ENABLED == 'true' and not config.STOP_LOSS_PCT and config.TAKE_PROFIT_PCT %}
+              <div class="mt-1" style="font-size:.75rem; color:#0369a1;">ℹ OCO plaatst alleen een Take-Profit order — onderkant wordt bewaakt door software SL</div>
               {% endif %}
             </div>
             <div class="mb-3">
