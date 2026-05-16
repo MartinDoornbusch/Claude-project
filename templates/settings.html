@@ -1,45 +1,156 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="nl" data-bs-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Instellingen — Bitvavo Bot</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>const BASE_URL = '{{ url_for("index") }}'.replace(/\/$/, '');</script>
   <style>
-    body { background: #f1f5f9; color: #1e293b; }
-    .card { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-    .card-header { background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #1e293b; }
-    .navbar { background: #1e40af !important; border-bottom: none; }
-    .form-control, .form-select {
-      background: #ffffff; border-color: #cbd5e1; color: #1e293b;
-    }
-    .form-control:focus, .form-select:focus {
-      background: #ffffff; border-color: #3b82f6; color: #1e293b;
-      box-shadow: 0 0 0 .2rem rgba(59,130,246,.15);
-    }
-    .form-control::placeholder { color: #94a3b8; }
-    .input-group-text {
-      background: #f8fafc; border-color: #cbd5e1; color: #64748b;
-      cursor: pointer; user-select: none;
-    }
-    .input-group-text:hover { color: #1e293b; }
-    .form-label { color: #64748b; font-size: .8rem; margin-bottom: .3rem;
-                  text-transform: uppercase; letter-spacing: .05em; }
-    .form-text  { color: #94a3b8 !important; font-size: .78rem; }
-    .card-live  { border-color: rgba(220,38,38,.4) !important; }
-    .card-ai    { border-color: rgba(59,130,246,.4) !important; }
-    .card-mode  { border-color: rgba(59,130,246,.4) !important; background: #ffffff; }
-    .mode-col   { border-radius: .5rem; padding: 1.2rem 1rem; }
-    .mode-col-paper { background: rgba(22,163,74,.06); }
-    .mode-col-live  { background: rgba(220,38,38,.06); }
-    .mode-col-regel { background: rgba(100,116,139,.06); }
-    .mode-col-ai    { background: rgba(59,130,246,.06); }
-    .big-switch .form-check-input { width: 3.2em; height: 1.6em; cursor: pointer; }
-    .mode-name { font-size: 1.05rem; font-weight: 700; letter-spacing: .02em; }
-    .mode-desc { font-size: .78rem; color: #64748b; min-height: 1.2em; }
-    .live-note { font-size: .75rem; color: #94a3b8; }
-    option { background: #ffffff; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --surface-1: rgba(13, 20, 36, 0.9);
+  --surface-2: rgba(30, 41, 59, 0.6);
+  --border: rgba(148, 163, 184, 0.1);
+  --accent: #f59e0b;
+}
+
+html { color-scheme: dark; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #060b16;
+  background-image:
+    radial-gradient(ellipse at 18% 45%, rgba(99,102,241,.07) 0%, transparent 55%),
+    radial-gradient(ellipse at 82% 18%, rgba(16,185,129,.04) 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 95%, rgba(245,158,11,.03) 0%, transparent 40%);
+  background-attachment: fixed;
+  color: #cbd5e1;
+  min-height: 100vh;
+}
+
+.card {
+  background: rgba(13, 20, 36, 0.88);
+  border: 1px solid rgba(148,163,184,.1);
+  border-radius: 14px !important;
+  box-shadow: 0 4px 32px rgba(0,0,0,.4), 0 1px 0 rgba(255,255,255,.04) inset;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.card-header {
+  background: rgba(30,41,59,.5) !important;
+  border-bottom: 1px solid rgba(148,163,184,.1) !important;
+  font-weight: 600;
+  color: #e2e8f0;
+  border-radius: 14px 14px 0 0 !important;
+}
+
+.navbar {
+  background: linear-gradient(180deg, rgba(6,11,22,.98) 0%, rgba(9,15,30,.95) 100%) !important;
+  border-bottom: 1px solid rgba(99,102,241,.22) !important;
+  box-shadow: 0 2px 24px rgba(0,0,0,.5) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.form-control, .form-select {
+  background: rgba(30,41,59,.85) !important;
+  border: 1px solid rgba(148,163,184,.15) !important;
+  color: #e2e8f0 !important; border-radius: 8px !important;
+}
+.form-control:focus, .form-select:focus {
+  background: rgba(30,41,59,.95) !important;
+  border-color: rgba(99,102,241,.6) !important;
+  box-shadow: 0 0 0 3px rgba(99,102,241,.12) !important;
+  color: #e2e8f0 !important;
+}
+.form-control::placeholder { color: #475569; }
+.input-group-text {
+  background: rgba(30,41,59,.8);
+  border-color: rgba(148,163,184,.15);
+  color: #94a3b8;
+  cursor: pointer; user-select: none;
+}
+.input-group-text:hover { color: #e2e8f0; }
+.form-label { color: #94a3b8; font-size: .8rem; margin-bottom: .3rem;
+              text-transform: uppercase; letter-spacing: .05em; }
+.form-text  { color: #64748b !important; font-size: .78rem; }
+option { background: #1e293b !important; color: #e2e8f0 !important; }
+
+.form-check-input { background-color: rgba(30,41,59,.8); border-color: rgba(148,163,184,.3); cursor: pointer; }
+.form-check-input:checked { background-color: #6366f1; border-color: #6366f1; }
+
+.card-live  { border-color: rgba(244,63,94,.4) !important; }
+.card-ai    { border-color: rgba(99,102,241,.4) !important; }
+.card-mode  { border-color: rgba(99,102,241,.4) !important; background: rgba(13,20,36,.88); }
+.mode-col   { border-radius: .5rem; padding: 1.2rem 1rem; }
+.mode-col-paper { background: rgba(16,185,129,.06); }
+.mode-col-live  { background: rgba(244,63,94,.06); }
+.mode-col-regel { background: rgba(100,116,139,.06); }
+.mode-col-ai    { background: rgba(99,102,241,.06); }
+.big-switch .form-check-input { width: 3.2em; height: 1.6em; cursor: pointer; }
+.mode-name { font-size: 1.05rem; font-weight: 700; letter-spacing: .02em; color: #e2e8f0; }
+.mode-desc { font-size: .78rem; color: #64748b; min-height: 1.2em; }
+.live-note { font-size: .75rem; color: #64748b; }
+
+.btn-primary {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+  border-color: transparent !important;
+  box-shadow: 0 2px 10px rgba(99,102,241,.3);
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%) !important;
+  box-shadow: 0 4px 16px rgba(99,102,241,.4);
+}
+.btn-success { background: linear-gradient(135deg,#059669 0%,#10b981 100%) !important; border-color: transparent !important; }
+.btn-danger  { background: linear-gradient(135deg,#dc2626 0%,#f43f5e 100%) !important; border-color: transparent !important; }
+.btn-warning { background: linear-gradient(135deg,#d97706 0%,#f59e0b 100%) !important; border-color: transparent !important; color:#000 !important; }
+.btn-outline-light     { border-color: rgba(148,163,184,.3) !important; color: #94a3b8 !important; }
+.btn-outline-light:hover{ background: rgba(148,163,184,.1) !important; color: #e2e8f0 !important; }
+.btn-outline-secondary { border-color: rgba(148,163,184,.2) !important; color: #94a3b8 !important; }
+.btn-outline-secondary:hover { background: rgba(148,163,184,.1) !important; color: #e2e8f0 !important; }
+.btn-outline-danger  { border-color: rgba(244,63,94,.4) !important; color: #f43f5e !important; }
+.btn-outline-danger:hover  { background: rgba(244,63,94,.14) !important; }
+.btn-outline-primary { border-color: rgba(99,102,241,.4) !important; color: #818cf8 !important; }
+.btn-outline-primary:hover { background: rgba(99,102,241,.14) !important; }
+.btn-outline-success { border-color: rgba(16,185,129,.4) !important; color: #10b981 !important; }
+.btn-outline-success:hover { background: rgba(16,185,129,.12) !important; }
+.btn-outline-warning { border-color: rgba(245,158,11,.4) !important; color: #f59e0b !important; }
+.btn-outline-warning:hover { background: rgba(245,158,11,.12) !important; }
+
+.alert-success { background: rgba(16,185,129,.1);  border-color: rgba(16,185,129,.3);  color: #6ee7b7; }
+.alert-danger  { background: rgba(244,63,94,.1);   border-color: rgba(244,63,94,.3);   color: #fca5a5; }
+.alert-warning { background: rgba(245,158,11,.1);  border-color: rgba(245,158,11,.3);  color: #fcd34d; }
+.alert-info    { background: rgba(99,102,241,.12); border-color: rgba(99,102,241,.25); color: #c7d2fe; }
+
+.badge.bg-secondary { background: rgba(100,116,139,.5) !important; }
+.badge.bg-success { background: rgba(16,185,129,.85) !important; }
+.badge.bg-danger  { background: rgba(244,63,94,.85) !important; }
+
+.border-top { border-color: rgba(148,163,184,.1) !important; }
+.border-bottom { border-color: rgba(148,163,184,.1) !important; }
+.border, .border-rounded { border-color: rgba(148,163,184,.1) !important; }
+.rounded, .rounded-2 { background: rgba(30,41,59,.4); }
+
+.text-muted { color: #64748b !important; }
+a { color: #818cf8; }
+a:hover { color: #c7d2fe; }
+hr { border-color: rgba(148,163,184,.1); }
+code { color: #f59e0b; background: rgba(245,158,11,.1); padding: 1px 4px; border-radius: 3px; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(148,163,184,.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.35); }
+
+@media (max-width:576px) { .hide-sm { display:none !important; } }
   </style>
 </head>
 <body>
@@ -52,7 +163,7 @@
 <div class="container-fluid px-3 pb-5" style="max-width:960px;">
 
   {% if saved %}
-  <div class="alert alert-success alert-dismissible fade show mb-4" role="alert" style="background:#f0fdf4; border-color:#86efac; color:#166534;">
+  <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
     ✓ Instellingen opgeslagen — wijzigingen zijn direct actief.
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
   </div>
@@ -81,7 +192,7 @@
                 </div>
               </div>
               <div class="mode-name" id="trading-name"
-                   style="color: {{ '#dc2626' if config.LIVE_TRADING_ENABLED == 'true' else '#16a34a' }}">
+                   style="color: {{ '#f43f5e' if config.LIVE_TRADING_ENABLED == 'true' else '#10b981' }}">
                 {{ 'LIVE TRADING' if config.LIVE_TRADING_ENABLED == 'true' else 'PAPER TRADING' }}
               </div>
               <div class="mode-desc" id="trading-desc">
@@ -108,7 +219,7 @@
                 </div>
               </div>
               <div class="mode-name" id="strategy-name"
-                   style="color: {{ '#3b82f6' if config.AI_STRATEGY_ENABLED == 'true' else '#64748b' }}">
+                   style="color: {{ '#818cf8' if config.AI_STRATEGY_ENABLED == 'true' else '#64748b' }}">
                 {{ _ai_label if config.AI_STRATEGY_ENABLED == 'true' else 'REGEL-GEBASEERD' }}
               </div>
               <div class="mode-desc" id="strategy-desc">
@@ -131,7 +242,7 @@
           <div class="card-header">Bitvavo API</div>
           <div class="card-body">
             <div class="mb-3">
-              <label class="form-label">API Key {% if config.BITVAVO_API_KEY %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
+              <label class="form-label">API Key {% if config.BITVAVO_API_KEY %}<span class="badge" style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
               <div class="input-group">
                 <input type="password" class="form-control font-monospace" name="BITVAVO_API_KEY"
                        placeholder="{{ '●●●●●●●● (ingesteld)' if config.BITVAVO_API_KEY else 'Voer API key in' }}">
@@ -140,7 +251,7 @@
               <div class="form-text">Laat leeg om de huidige waarde te bewaren</div>
             </div>
             <div class="mb-3">
-              <label class="form-label">API Secret {% if config.BITVAVO_API_SECRET %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
+              <label class="form-label">API Secret {% if config.BITVAVO_API_SECRET %}<span class="badge" style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
               <div class="input-group">
                 <input type="password" class="form-control font-monospace" name="BITVAVO_API_SECRET"
                        placeholder="{{ '●●●●●●●● (ingesteld)' if config.BITVAVO_API_SECRET else 'Voer API secret in' }}">
@@ -171,7 +282,7 @@
                 </button>
                 <span id="markets_status" style="font-size:.78rem; color:#64748b;"></span>
               </div>
-              <div id="markets_picker" class="mt-2" style="display:none; border:1px solid #e2e8f0; border-radius:.4rem; background:#f8fafc; padding:.5rem;">
+              <div id="markets_picker" class="mt-2" style="display:none; border:1px solid rgba(148,163,184,.15); border-radius:.4rem; background:rgba(30,41,59,.6); padding:.5rem;">
                 <input type="text" id="markets_search" class="form-control form-control-sm mb-2" placeholder="Zoek markt, bijv. SOL...">
                 <div id="markets_list" style="max-height:200px; overflow-y:auto;"></div>
               </div>
@@ -193,7 +304,7 @@
                 </button>
                 <span id="blacklist_status" style="font-size:.78rem; color:#64748b;"></span>
               </div>
-              <div id="blacklist_picker" style="display:none; border:1px solid #e2e8f0; border-radius:.4rem; background:#f8fafc; padding:.5rem;">
+              <div id="blacklist_picker" style="display:none; border:1px solid rgba(148,163,184,.15); border-radius:.4rem; background:rgba(30,41,59,.6); padding:.5rem;">
                 <input type="text" id="blacklist_search" class="form-control form-control-sm mb-2" placeholder="Zoek markt...">
                 <div id="blacklist_list" style="max-height:200px; overflow-y:auto;"></div>
               </div>
@@ -273,7 +384,7 @@
               <div class="form-text">Alleen actief bij een nieuw (leeg) portfolio</div>
             </div>
             <!-- Position sizing -->
-            <div class="border rounded p-3" style="background:#f8fafc;">
+            <div class="border rounded p-3" style="background:rgba(30,41,59,.4); border-color:rgba(148,163,184,.1) !important;">
               <div class="fw-semibold mb-2" style="font-size:.88rem;">Positiegrootte methode</div>
               <div class="d-flex gap-4 mb-3">
                 <div class="form-check">
@@ -402,7 +513,7 @@
                 </div>
               </div>
               {% if config.OCO_ENABLED == 'true' and (not config.STOP_LOSS_PCT or not config.TAKE_PROFIT_PCT) %}
-              <div class="mt-1" style="font-size:.75rem; color:#b45309;">⚠ OCO vereist zowel Stop-Loss % als Take-Profit % ingesteld</div>
+              <div class="mt-1" style="font-size:.75rem; color:#f59e0b;">⚠ OCO vereist zowel Stop-Loss % als Take-Profit % ingesteld</div>
               {% endif %}
             </div>
             <div class="mb-3">
@@ -561,7 +672,7 @@
             <div class="mt-3 pt-3 border-top">
               <div class="d-flex align-items-center justify-content-between mb-1">
                 <strong>HODL / Accumulatie-modus</strong>
-                <span id="hodlSaveStatus" style="font-size:.78rem; color:#16a34a; display:none;">✓ Opgeslagen</span>
+                <span id="hodlSaveStatus" style="font-size:.78rem; color:#10b981; display:none;">✓ Opgeslagen</span>
               </div>
               <div class="form-text mb-3">
                 Bescherm een vaste hoeveelheid van een coin tegen verkoop en bouw positie op met een percentage van elke winstgevende verkoop.
@@ -640,7 +751,7 @@
 
         <!-- AI Strategie -->
         <div class="card mb-4 card-ai">
-          <div class="card-header" style="color:#2563eb;">AI Strategie</div>
+          <div class="card-header" style="color:#818cf8;">AI Strategie</div>
           <div class="card-body">
 
             <div class="form-text mb-3">
@@ -651,7 +762,7 @@
             </div>
 
             <!-- ── Anthropic ── -->
-            <div class="card mb-2" style="border-color:#e0e7ff;">
+            <div class="card mb-2" style="border-color:rgba(99,102,241,.3);">
               <div class="card-body py-2 px-3">
                 <div class="d-flex align-items-center justify-content-between">
                   <div>
@@ -682,8 +793,8 @@
                         <span class="input-group-text toggle-pw">Toon</span>
                       </div>
                       <div class="form-text">
-                        {% if config.ANTHROPIC_API_KEY %}<span style="color:#16a34a;">✓ Ingesteld</span> · {% endif %}
-                        <a href="https://console.anthropic.com" target="_blank" style="color:#2563eb;">console.anthropic.com</a>
+                        {% if config.ANTHROPIC_API_KEY %}<span style="color:#10b981;">✓ Ingesteld</span> · {% endif %}
+                        <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>
                       </div>
                     </div>
                   </div>
@@ -692,7 +803,7 @@
             </div>
 
             <!-- ── Google Gemini ── -->
-            <div class="card mb-2" style="border-color:#e0e7ff;">
+            <div class="card mb-2" style="border-color:rgba(99,102,241,.3);">
               <div class="card-body py-2 px-3">
                 <div class="d-flex align-items-center justify-content-between">
                   <div>
@@ -730,8 +841,8 @@
                         <span class="input-group-text toggle-pw">Toon</span>
                       </div>
                       <div class="form-text">
-                        {% if config.GOOGLE_API_KEY %}<span style="color:#16a34a;">✓ Ingesteld</span> · {% endif %}
-                        <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#2563eb;">aistudio.google.com/apikey</a>
+                        {% if config.GOOGLE_API_KEY %}<span style="color:#10b981;">✓ Ingesteld</span> · {% endif %}
+                        <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>
                       </div>
                     </div>
                   </div>
@@ -740,7 +851,7 @@
             </div>
 
             <!-- ── Groq ── -->
-            <div class="card mb-2" style="border-color:#e0e7ff;">
+            <div class="card mb-2" style="border-color:rgba(99,102,241,.3);">
               <div class="card-body py-2 px-3">
                 <div class="d-flex align-items-center justify-content-between">
                   <div>
@@ -778,8 +889,8 @@
                         <span class="input-group-text toggle-pw">Toon</span>
                       </div>
                       <div class="form-text">
-                        {% if config.GROQ_API_KEY %}<span style="color:#16a34a;">✓ Ingesteld</span> · {% endif %}
-                        <a href="https://console.groq.com/keys" target="_blank" style="color:#2563eb;">console.groq.com</a>
+                        {% if config.GROQ_API_KEY %}<span style="color:#10b981;">✓ Ingesteld</span> · {% endif %}
+                        <a href="https://console.groq.com/keys" target="_blank">console.groq.com</a>
                       </div>
                     </div>
                   </div>
@@ -788,7 +899,7 @@
             </div>
 
             <!-- ── Mistral ── -->
-            <div class="card mb-2" style="border-color:#e0e7ff;">
+            <div class="card mb-2" style="border-color:rgba(99,102,241,.3);">
               <div class="card-body py-2 px-3">
                 <div class="d-flex align-items-center justify-content-between">
                   <div>
@@ -826,8 +937,8 @@
                         <span class="input-group-text toggle-pw">Toon</span>
                       </div>
                       <div class="form-text">
-                        {% if config.MISTRAL_API_KEY %}<span style="color:#16a34a;">✓ Ingesteld</span> · {% endif %}
-                        <a href="https://console.mistral.ai/api-keys" target="_blank" style="color:#2563eb;">console.mistral.ai</a>
+                        {% if config.MISTRAL_API_KEY %}<span style="color:#10b981;">✓ Ingesteld</span> · {% endif %}
+                        <a href="https://console.mistral.ai/api-keys" target="_blank">console.mistral.ai</a>
                       </div>
                     </div>
                   </div>
@@ -836,7 +947,7 @@
             </div>
 
             <!-- ── Cerebras ── -->
-            <div class="card mb-3" style="border-color:#e0e7ff;">
+            <div class="card mb-3" style="border-color:rgba(99,102,241,.3);">
               <div class="card-body py-2 px-3">
                 <div class="d-flex align-items-center justify-content-between">
                   <div>
@@ -874,8 +985,8 @@
                         <span class="input-group-text toggle-pw">Toon</span>
                       </div>
                       <div class="form-text">
-                        {% if config.CEREBRAS_API_KEY %}<span style="color:#16a34a;">✓ Ingesteld</span> · {% endif %}
-                        <a href="https://cloud.cerebras.ai" target="_blank" style="color:#2563eb;">cloud.cerebras.ai</a>
+                        {% if config.CEREBRAS_API_KEY %}<span style="color:#10b981;">✓ Ingesteld</span> · {% endif %}
+                        <a href="https://cloud.cerebras.ai" target="_blank">cloud.cerebras.ai</a>
                       </div>
                     </div>
                   </div>
@@ -1003,9 +1114,9 @@
                 <div class="form-text">
                   Komma-gescheiden markten die altijd als ALT worden behandeld, ook als ze in de MID-lijst staan.
                   Laat leeg om alleen de ingebouwde classificatie te gebruiken
-                  (<span class="fw-semibold text-primary">LARGE</span>: BTC, ETH —
-                   <span class="fw-semibold" style="color:#7e22ce;">MID</span>: SOL, ADA, XRP, AVAX… —
-                   <span class="fw-semibold" style="color:#854d0e;">ALT</span>: al het overige).
+                  (<span class="fw-semibold" style="color:#818cf8;">LARGE</span>: BTC, ETH —
+                   <span class="fw-semibold" style="color:#c084fc;">MID</span>: SOL, ADA, XRP, AVAX… —
+                   <span class="fw-semibold" style="color:#f59e0b;">ALT</span>: al het overige).
                 </div>
               </div>
             </div>
@@ -1015,7 +1126,7 @@
 
         <!-- Live Trading -->
         <div class="card mb-4 card-live{% if config.LIVE_TRADING_ENABLED != 'true' %} opacity-50{% endif %}">
-          <div class="card-header d-flex justify-content-between align-items-center" style="color:#dc2626;">
+          <div class="card-header d-flex justify-content-between align-items-center" style="color:#f43f5e;">
             <span>Live Trading</span>
             {% if config.LIVE_TRADING_ENABLED == 'true' %}
             <span class="badge bg-danger" style="font-size:.68rem;">⚡ ACTIEF</span>
@@ -1024,7 +1135,7 @@
             {% endif %}
           </div>
           <div class="card-body">
-            <div class="alert mb-3 p-2" style="background:rgba(220,38,38,.06); border:1px solid rgba(220,38,38,.25); font-size:.82rem; color:#7f1d1d;">
+            <div class="alert mb-3 p-2" style="background:rgba(244,63,94,.06); border:1px solid rgba(244,63,94,.25); font-size:.82rem; color:#fca5a5;">
               ⚠️ Echte orders met echt geld. Controleer of je Bitvavo API-sleutel
               <strong>Handelen</strong> rechten heeft (maar <strong>geen</strong> Opnemen).
             </div>
@@ -1083,7 +1194,7 @@
                      value="{{ config.MQTT_USER }}" autocomplete="off">
             </div>
             <div>
-              <label class="form-label">Wachtwoord {% if config.MQTT_PASS %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
+              <label class="form-label">Wachtwoord {% if config.MQTT_PASS %}<span class="badge" style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
               <div class="input-group">
                 <input type="password" class="form-control" name="MQTT_PASS"
                        placeholder="{{ '●●●●●●●● (ingesteld)' if config.MQTT_PASS else 'Laat leeg om ongewijzigd te laten' }}">
@@ -1094,8 +1205,8 @@
         </div>
 
         <!-- Home Assistant Notificaties -->
-        <div class="card mb-4" style="border-color: rgba(22,163,74,.4);">
-          <div class="card-header" style="color:#16a34a;">Home Assistant Notificaties</div>
+        <div class="card mb-4" style="border-color: rgba(16,185,129,.4);">
+          <div class="card-header" style="color:#10b981;">Home Assistant Notificaties</div>
           <div class="card-body">
             <div class="mb-3">
               <label class="form-label">HA URL</label>
@@ -1104,7 +1215,7 @@
               <div class="form-text">URL van je Home Assistant instantie</div>
             </div>
             <div class="mb-3">
-              <label class="form-label">Long-lived Access Token {% if config.HA_TOKEN %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
+              <label class="form-label">Long-lived Access Token {% if config.HA_TOKEN %}<span class="badge" style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);font-size:.7rem;">✓ Ingesteld</span>{% endif %}</label>
               <div class="input-group">
                 <input type="password" class="form-control font-monospace" name="HA_TOKEN"
                        placeholder="{{ '●●●●●●●● (ingesteld)' if config.HA_TOKEN else 'Profiel → Beveiliging → Token aanmaken' }}">
@@ -1161,7 +1272,7 @@
     const live = liveToggle.checked;
     colTrading.className = 'mode-col ' + (live ? 'mode-col-live' : 'mode-col-paper');
     tradingName.textContent = live ? 'LIVE TRADING'  : 'PAPER TRADING';
-    tradingName.style.color = live ? '#dc2626'       : '#16a34a';
+    tradingName.style.color = live ? '#f43f5e'       : '#10b981';
     tradingDesc.textContent = live ? 'Echte orders op Bitvavo' : 'Virtueel geld, geen risico';
   }
   liveToggle.addEventListener('change', updateTrading);
@@ -1176,7 +1287,7 @@
     const ai = aiToggle.checked;
     colStrategy.className = 'mode-col ' + (ai ? 'mode-col-ai' : 'mode-col-regel');
     strategyName.textContent = ai ? AI_STRATEGY_NAME : 'REGEL-GEBASEERD';
-    strategyName.style.color = ai ? '#3b82f6'        : '#64748b';
+    strategyName.style.color = ai ? '#818cf8'        : '#64748b';
     strategyDesc.textContent = ai ? AI_STRATEGY_DESC : 'MA crossover + RSI regels';
   }
   aiToggle.addEventListener('change', updateStrategy);
@@ -1192,27 +1303,27 @@
       const d = await r.json();
       let html = '';
       if (d.bitvavo) {
-        html += '<span style="color:#16a34a;">✓ Bitvavo verbinding OK</span><br>';
+        html += '<span style="color:#10b981;">✓ Bitvavo verbinding OK</span><br>';
       } else {
         const msg = (d.errors && d.errors.bitvavo) ? d.errors.bitvavo : 'Onbekende fout';
-        html += `<span style="color:#dc2626;">✗ Bitvavo: ${msg}</span><br>`;
+        html += `<span style="color:#f43f5e;">✗ Bitvavo: ${msg}</span><br>`;
       }
       const provs = d.providers || {};
       if (Object.keys(provs).length === 0 && d.errors && d.errors.ai) {
-        html += `<span style="color:#dc2626;">✗ AI: ${d.errors.ai}</span>`;
+        html += `<span style="color:#f43f5e;">✗ AI: ${d.errors.ai}</span>`;
       } else {
         for (const [prov, info] of Object.entries(provs)) {
           if (info.ok) {
-            html += `<span style="color:#16a34a;">✓ AI OK (${prov} / ${info.model})</span><br>`;
+            html += `<span style="color:#10b981;">✓ AI OK (${prov} / ${info.model})</span><br>`;
           } else {
             const msg = info.error || 'Onbekende fout';
-            html += `<span style="color:#dc2626;">✗ AI (${prov}): ${msg}</span><br>`;
+            html += `<span style="color:#f43f5e;">✗ AI (${prov}): ${msg}</span><br>`;
           }
         }
       }
       res.innerHTML = html || '<span style="color:#64748b;">Geen providers geconfigureerd</span>';
     } catch(e) {
-      res.innerHTML = `<span style="color:#dc2626;">Fout: ${e.message}</span>`;
+      res.innerHTML = `<span style="color:#f43f5e;">Fout: ${e.message}</span>`;
     }
     btn.disabled = false;
   }
@@ -1332,7 +1443,7 @@
       html += '<div class="form-text mt-1">Vloer = minimale coinpositie die nooit verkocht wordt. Winstsplit = % van elke winstgevende verkoop. Buffer = opgebouwde EUR die wacht tot MIN_ORDER_EUR drempel bereikt is.</div>';
       container.innerHTML = html;
     } catch(e) {
-      container.innerHTML = `<span style="color:#dc2626;font-size:.82rem;">Fout bij laden: ${e.message}</span>`;
+      container.innerHTML = `<span style="color:#f43f5e;font-size:.82rem;">Fout bij laden: ${e.message}</span>`;
     }
   }
 
@@ -1360,7 +1471,7 @@
       }
     } catch(e) {
       status.style.display = 'inline';
-      status.style.color = '#dc2626';
+      status.style.color = '#f43f5e';
       status.textContent = `Fout: ${e.message}`;
     }
   }
@@ -1380,17 +1491,17 @@
         body: JSON.stringify({pct}),
       });
       const d = await r.json();
-      if (!d.ok) { res.innerHTML = `<span style="color:#dc2626;">Fout: ${d.error}</span>`; return; }
+      if (!d.ok) { res.innerHTML = `<span style="color:#f43f5e;">Fout: ${d.error}</span>`; return; }
       if (d.count === 0) {
         res.innerHTML = '<span style="color:#64748b;">Geen onbekende posities gevonden.</span>';
       } else {
         const rows = d.results.map(x =>
-          `<span style="color:${x.ok ? '#16a34a' : '#dc2626'};">${x.ok ? '✓' : '✗'} ${x.market}: ${x.amount} @ €${parseFloat(x.price).toFixed(4)}</span>`
+          `<span style="color:${x.ok ? '#10b981' : '#f43f5e'};">${x.ok ? '✓' : '✗'} ${x.market}: ${x.amount} @ €${parseFloat(x.price).toFixed(4)}</span>`
         ).join('<br>');
         res.innerHTML = `<strong>${d.count} positie(s) verwerkt:</strong><br>${rows}`;
       }
     } catch(e) {
-      res.innerHTML = `<span style="color:#dc2626;">Fout: ${e.message}</span>`;
+      res.innerHTML = `<span style="color:#f43f5e;">Fout: ${e.message}</span>`;
     }
     btn.disabled = false;
   }
@@ -1423,7 +1534,7 @@
       });
     } catch(e) {
       status.textContent = 'Fout: ' + e.message;
-      status.style.color = '#dc2626';
+      status.style.color = '#f43f5e';
     }
     btn.disabled = false;
   }
@@ -1472,7 +1583,7 @@
       });
     } catch(e) {
       status.textContent = 'Fout: ' + e.message;
-      status.style.color = '#dc2626';
+      status.style.color = '#f43f5e';
     }
     btn.disabled = false;
   }
@@ -1521,14 +1632,14 @@
     try {
       const r = await fetch(BASE_URL + '/api/ai/google/models');
       const d = await r.json();
-      if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#dc2626'; return; }
+      if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#f43f5e'; return; }
       if (!d.models || !d.models.length) { status.textContent = 'Geen modellen gevonden (API key ingesteld?)'; status.style.color = '#f59e0b'; return; }
       _buildOptions(sel, d.models, sel.value);
       status.textContent = `✓ ${d.models.length} modellen geladen`;
-      status.style.color = '#16a34a';
+      status.style.color = '#10b981';
     } catch(e) {
       status.textContent = 'Netwerk fout: ' + e.message;
-      status.style.color = '#dc2626';
+      status.style.color = '#f43f5e';
     }
   }
 
@@ -1540,14 +1651,14 @@
     try {
       const r = await fetch(BASE_URL + '/api/ai/groq/models');
       const d = await r.json();
-      if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#dc2626'; return; }
+      if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#f43f5e'; return; }
       if (!d.models || !d.models.length) { status.textContent = 'Geen modellen gevonden (API key ingesteld?)'; status.style.color = '#f59e0b'; return; }
       _buildOptions(sel, d.models, sel.value);
       status.textContent = `✓ ${d.models.length} modellen geladen`;
-      status.style.color = '#16a34a';
+      status.style.color = '#10b981';
     } catch(e) {
       status.textContent = 'Netwerk fout: ' + e.message;
-      status.style.color = '#dc2626';
+      status.style.color = '#f43f5e';
     }
   }
 
@@ -1559,14 +1670,14 @@
     try {
       const r = await fetch(BASE_URL + '/api/ai/mistral/models');
       const d = await r.json();
-      if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#dc2626'; return; }
+      if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#f43f5e'; return; }
       if (!d.models || !d.models.length) { status.textContent = 'Geen modellen gevonden (API key ingesteld?)'; status.style.color = '#f59e0b'; return; }
       _buildOptions(sel, d.models, sel.value);
       status.textContent = `✓ ${d.models.length} modellen geladen`;
-      status.style.color = '#16a34a';
+      status.style.color = '#10b981';
     } catch(e) {
       status.textContent = 'Netwerk fout: ' + e.message;
-      status.style.color = '#dc2626';
+      status.style.color = '#f43f5e';
     }
   }
 
@@ -1578,14 +1689,14 @@
     try {
       const r = await fetch(BASE_URL + '/api/ai/cerebras/models');
       const d = await r.json();
-      if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#dc2626'; return; }
+      if (d.error) { status.textContent = 'Fout: ' + d.error; status.style.color = '#f43f5e'; return; }
       if (!d.models || !d.models.length) { status.textContent = 'Geen modellen gevonden (API key ingesteld?)'; status.style.color = '#f59e0b'; return; }
       _buildOptions(sel, d.models, sel.value);
       status.textContent = `✓ ${d.models.length} modellen geladen`;
-      status.style.color = '#16a34a';
+      status.style.color = '#10b981';
     } catch(e) {
       status.textContent = 'Netwerk fout: ' + e.message;
-      status.style.color = '#dc2626';
+      status.style.color = '#f43f5e';
     }
   }
 
