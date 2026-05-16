@@ -524,7 +524,7 @@ hr { border-color: rgba(148,163,184,.1); }
     tbody.innerHTML = pairs.slice().reverse().map(p => {
       const cls = p.pnl_eur >= 0 ? 'pos' : 'neg';
       const slip = p.slippage_pct != null
-        ? `<span style="color:${Math.abs(p.slippage_pct) > 0.1 ? '#dc2626' : '#64748b'};">${p.slippage_pct > 0 ? '+' : ''}${p.slippage_pct.toFixed(3)}%</span>`
+        ? `<span style="color:${Math.abs(p.slippage_pct) > 0.1 ? '#f43f5e' : '#64748b'};">${p.slippage_pct > 0 ? '+' : ''}${p.slippage_pct.toFixed(3)}%</span>`
         : '<span class="text-muted">—</span>';
       return `<tr>
         <td class="font-monospace" style="font-size:.78rem;">${p.sell_ts.slice(0,16)}</td>
