@@ -262,9 +262,118 @@ def check_dca(client: Bitvavo, market: str, current_price: float) -> bool:
     return bool(result)
 
 
+def _trigger_hodl_accumulation(client: Bitvavo, source_market: str, profit_eur: float) -> None:
+    """
+    Na een winstgevende verkoop: voeg winstdeel toe aan de buffer per HODL coin.
+    Zodra de buffer ≥ MIN_ORDER_EUR is wordt de bijkoop uitgevoerd en de buffer gereset.
+    """
+    if profit_eur <= 0:
+        return
+
+    from src.database import get_all_hodl_configs, hodl_add_pending, hodl_reset_pending
+    from src.portfolio import get_ticker_price
+    from src.notifier import notify_trade
+
+    min_order = env_float("MIN_ORDER_EUR", 5.0)
+
+    for cfg in get_all_hodl_configs():
+        if not cfg["enabled"]:
+            continue
+        market = cfg["market"]
+        split_pct = float(cfg["accumulation_split_pct"])
+        if split_pct <= 0:
+            continue
+
+        share_eur = profit_eur * split_pct / 100
+        pending = hodl_add_pending(market, share_eur)
+
+        if pending < min_order:
+            logger.info(
+                "[%s] HODL buffer +€%.2f → €%.2f (wacht op minimum €%.2f)",
+                market, share_eur, pending, min_order,
+            )
+            continue
+
+        price = get_ticker_price(client, market)
+        if not price:
+            logger.warning("[%s] HODL accum overgeslagen — prijs niet beschikbaar", market)
+            continue
+
+        reason = (
+            f"HODL accum {split_pct:.0f}% ({source_market}) — buffer €{pending:.2f}"
+        )
+        if os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true":
+            result = live.accumulation_buy(client, market, price, reason, pending)
+        else:
+            result = paper.accumulation_buy(market, price, reason, pending)
+
+        if result:
+            hodl_reset_pending(market)
+            from src.database import update_position_peak
+            notify_trade(market, "BUY", price, reason)
+            update_position_peak(market, price)
+        else:
+            logger.info("[%s] HODL bijkoop mislukt — buffer €%.2f bewaard", market, pending)
+
+
 def execute_sell(client: Bitvavo, market: str, price: float, reason: str = "") -> dict | None:
     from src.notifier import notify_trade
-    if os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true":
+    live_mode = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
+
+    # HODL vloer: blokkeer of beperk verkoop om ingestelde minimumpositie te bewaren
+    from src.database import get_hodl_config, get_position as _get_pos
+    hodl_cfg = get_hodl_config(market)
+    if hodl_cfg and hodl_cfg["enabled"] and float(hodl_cfg["floor_amount"]) > 0:
+        floor = float(hodl_cfg["floor_amount"])
+
+        if live_mode:
+            symbol = market.split("-")[0]
+            balances = client.balance({"symbol": symbol})
+            current_amount = next(
+                (float(b["available"]) for b in (balances if isinstance(balances, list) else [])
+                 if b["symbol"] == symbol), 0.0
+            )
+            # Avg buy price voor PnL-berekening
+            from src.database import get_live_trades as _glt
+            buy_trades = [t for t in _glt(market, limit=100)
+                          if t["side"] == "BUY" and t["status"] == "filled"]
+            avg_buy_price = (
+                sum(t["price"] * t["amount"] for t in buy_trades) /
+                sum(t["amount"] for t in buy_trades)
+                if buy_trades else price
+            )
+        else:
+            pos = _get_pos(market)
+            current_amount = pos["amount"]
+            avg_buy_price = pos["avg_price"] if pos["avg_price"] > 0 else price
+
+        sellable = current_amount - floor
+        if sellable <= 1e-8:
+            logger.info(
+                "[%s] SELL geblokkeerd — HODL vloer %.8f beschermt volledige positie %.8f",
+                market, floor, current_amount,
+            )
+            return None
+
+        if sellable < current_amount - 1e-8:
+            logger.info(
+                "[%s] SELL beperkt door HODL vloer — verkoop %.8f (vloer: %.8f beschermd)",
+                market, sellable, floor,
+            )
+            if live_mode:
+                result = live.partial_sell(client, market, sellable, price, reason)
+            else:
+                result = paper.partial_sell(market, sellable, price, reason)
+            if result:
+                notify_trade(market, "SELL", price, reason)
+                from src.database import cancel_all_oco_orders
+                cancel_all_oco_orders(market)
+                fee_rate = live.FEE_RATE if live_mode else paper.FEE_RATE
+                approx_pnl = sellable * (price - avg_buy_price) - sellable * price * fee_rate
+                _trigger_hodl_accumulation(client, market, approx_pnl)
+            return result
+
+    if live_mode:
         logger.info("[%s] Mode: LIVE — SELL uitvoeren", market)
         result = live.sell(client, market, price, reason)
     else:
@@ -274,4 +383,6 @@ def execute_sell(client: Bitvavo, market: str, price: float, reason: str = "") -
         notify_trade(market, "SELL", price, reason)
         from src.database import cancel_all_oco_orders
         cancel_all_oco_orders(market)
+        pnl = result.get("pnl") or 0.0
+        _trigger_hodl_accumulation(client, market, pnl)
     return result

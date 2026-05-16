@@ -584,6 +584,35 @@ def settings_save():
     return redirect(url_for("settings_page", saved=1))
 
 
+@app.route("/api/hodl", methods=["GET"])
+def api_hodl_get():
+    from src.database import get_hodl_config
+    configs = []
+    for m in _dashboard_markets():
+        cfg = get_hodl_config(m) or {
+            "market": m, "enabled": 0,
+            "floor_amount": 0.0, "accumulation_split_pct": 0.0, "pending_eur": 0.0,
+        }
+        configs.append(cfg)
+    return jsonify(configs)
+
+
+@app.route("/api/hodl", methods=["POST"])
+def api_hodl_save():
+    from src.database import set_hodl_config
+    data = request.get_json(force=True, silent=True) or {}
+    market = data.get("market", "").strip().upper()
+    if not market:
+        return jsonify({"error": "Markt ontbreekt"}), 400
+    set_hodl_config(
+        market,
+        bool(data.get("enabled", False)),
+        float(data.get("floor_amount", 0)),
+        float(data.get("accumulation_split_pct", 0)),
+    )
+    return jsonify({"ok": True})
+
+
 @app.route("/markets")
 def markets_page():
     watchlist = get_watchlist()

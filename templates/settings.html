@@ -557,6 +557,20 @@
               </div>
             </div>
 
+            <!-- HODL / Accumulatie-modus -->
+            <div class="mt-3 pt-3 border-top">
+              <div class="d-flex align-items-center justify-content-between mb-1">
+                <strong>HODL / Accumulatie-modus</strong>
+                <span id="hodlSaveStatus" style="font-size:.78rem; color:#16a34a; display:none;">✓ Opgeslagen</span>
+              </div>
+              <div class="form-text mb-3">
+                Bescherm een vaste hoeveelheid van een coin tegen verkoop en bouw positie op met een percentage van elke winstgevende verkoop.
+              </div>
+              <div id="hodlTable">
+                <div style="color:#94a3b8; font-size:.82rem;">Markten laden…</div>
+              </div>
+            </div>
+
             <!-- Iceberg orders -->
             <div class="mt-3 pt-3 border-top">
               <div class="form-check form-switch mb-2">
@@ -1234,6 +1248,101 @@
     document.getElementById('houseMoneyFields').style.display = enabled ? 'block' : 'none';
   }
 
+  // ── HODL / Accumulatie ──
+  async function loadHodlConfig() {
+    const container = document.getElementById('hodlTable');
+    try {
+      const r = await fetch(BASE_URL + '/api/hodl');
+      const configs = await r.json();
+      if (!configs.length) {
+        container.innerHTML = '<div style="color:#94a3b8;font-size:.82rem;">Geen handelsparen geconfigureerd.</div>';
+        return;
+      }
+      let html = '<div class="table-responsive"><table class="table table-sm table-borderless mb-0" style="font-size:.85rem;">';
+      html += '<thead><tr>'
+            + '<th style="color:#64748b;font-weight:600;">Coin</th>'
+            + '<th style="color:#64748b;font-weight:600;">HODL aan</th>'
+            + '<th style="color:#64748b;font-weight:600;">Vloer (coins)</th>'
+            + '<th style="color:#64748b;font-weight:600;">Winstsplit %</th>'
+            + '<th style="color:#64748b;font-weight:600;">Buffer</th>'
+            + '<th></th>'
+            + '</tr></thead><tbody>';
+      configs.forEach(cfg => {
+        const m = cfg.market;
+        const id = m.replace('-', '_');
+        const pending = parseFloat(cfg.pending_eur || 0);
+        const pendingLabel = pending > 0
+          ? `<span style="color:#d97706;" title="Wacht op MIN_ORDER_EUR drempel">€${pending.toFixed(2)}</span>`
+          : '<span style="color:#cbd5e1;">—</span>';
+        html += `<tr id="hodl-row-${id}">
+          <td class="align-middle fw-semibold">${m}</td>
+          <td class="align-middle">
+            <div class="form-check form-switch m-0">
+              <input class="form-check-input" type="checkbox" id="hodl_en_${id}"
+                     ${cfg.enabled ? 'checked' : ''}
+                     onchange="hodlToggleRow('${m}', this.checked)">
+            </div>
+          </td>
+          <td class="align-middle">
+            <input type="number" id="hodl_floor_${id}" class="form-control form-control-sm"
+                   style="width:130px;" step="any" min="0"
+                   value="${cfg.floor_amount || 0}"
+                   placeholder="0.001"
+                   title="Aantal coins dat nooit verkocht mag worden">
+          </td>
+          <td class="align-middle">
+            <div class="input-group input-group-sm" style="width:110px;">
+              <input type="number" id="hodl_split_${id}" class="form-control"
+                     step="1" min="0" max="100"
+                     value="${cfg.accumulation_split_pct || 0}"
+                     title="Percentage van elke winstgevende verkoop dat naar deze coin gaat">
+              <span class="input-group-text">%</span>
+            </div>
+          </td>
+          <td class="align-middle" style="white-space:nowrap;">${pendingLabel}</td>
+          <td class="align-middle">
+            <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2"
+                    onclick="saveHodlRow('${m}')">Opslaan</button>
+          </td>
+        </tr>`;
+      });
+      html += '</tbody></table></div>';
+      html += '<div class="form-text mt-1">Vloer = minimale coinpositie die nooit verkocht wordt. Winstsplit = % van elke winstgevende verkoop. Buffer = opgebouwde EUR die wacht tot MIN_ORDER_EUR drempel bereikt is.</div>';
+      container.innerHTML = html;
+    } catch(e) {
+      container.innerHTML = `<span style="color:#dc2626;font-size:.82rem;">Fout bij laden: ${e.message}</span>`;
+    }
+  }
+
+  function hodlToggleRow(market, enabled) {
+    saveHodlRow(market);
+  }
+
+  async function saveHodlRow(market) {
+    const id = market.replace('-', '_');
+    const enabled = document.getElementById(`hodl_en_${id}`)?.checked || false;
+    const floor   = parseFloat(document.getElementById(`hodl_floor_${id}`)?.value || 0);
+    const split   = parseFloat(document.getElementById(`hodl_split_${id}`)?.value || 0);
+    const status  = document.getElementById('hodlSaveStatus');
+    try {
+      const r = await fetch(BASE_URL + '/api/hodl', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({market, enabled, floor_amount: floor, accumulation_split_pct: split}),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        status.style.display = 'inline';
+        status.textContent = `✓ ${market} opgeslagen`;
+        setTimeout(() => { status.style.display = 'none'; }, 2000);
+      }
+    } catch(e) {
+      status.style.display = 'inline';
+      status.style.color = '#dc2626';
+      status.textContent = `Fout: ${e.message}`;
+    }
+  }
+
   // ── Portfolio opschoning ──
   async function runCleanup(btn) {
     const pctInput = document.querySelector('input[name="CLEANUP_PCT"]');
@@ -1457,6 +1566,8 @@
       status.style.color = '#dc2626';
     }
   }
+
+  document.addEventListener('DOMContentLoaded', loadHodlConfig);
 </script>
 </body>
 </html>
