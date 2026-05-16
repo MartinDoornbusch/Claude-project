@@ -22,45 +22,44 @@ html { color-scheme: dark; }
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #060b16;
-  background-image:
-    radial-gradient(ellipse at 18% 45%, rgba(99,102,241,.07) 0%, transparent 55%),
-    radial-gradient(ellipse at 82% 18%, rgba(16,185,129,.04) 0%, transparent 45%),
-    radial-gradient(ellipse at 50% 95%, rgba(245,158,11,.03) 0%, transparent 40%);
+  background: #0d1117;
+  background-image: linear-gradient(160deg, #0d1117 0%, #0e1526 55%, #0b0f1c 100%);
   background-attachment: fixed;
-  color: #cbd5e1;
+  color: #c9d1d9;
   min-height: 100vh;
 }
 
 .card {
-  background: rgba(13, 20, 36, 0.88);
-  border: 1px solid rgba(148,163,184,.1);
-  border-radius: 14px !important;
-  box-shadow: 0 4px 32px rgba(0,0,0,.4), 0 1px 0 rgba(255,255,255,.04) inset;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #161d2f;
+  border: 1px solid rgba(255,255,255,.07);
+  border-top: 1px solid rgba(99,102,241,.4);
+  border-radius: 12px !important;
+  box-shadow: 0 8px 40px rgba(0,0,0,.5), 0 1px 0 rgba(255,255,255,.03) inset;
+  transition: box-shadow .2s, transform .2s;
+}
+.card:hover {
+  box-shadow: 0 14px 52px rgba(0,0,0,.65), 0 0 0 1px rgba(99,102,241,.15);
+  transform: translateY(-1px);
 }
 
 .card-header {
-  background: rgba(30,41,59,.5) !important;
-  border-bottom: 1px solid rgba(148,163,184,.1) !important;
+  background: rgba(255,255,255,.025) !important;
+  border-bottom: 1px solid rgba(255,255,255,.07) !important;
   font-weight: 600;
-  color: #e2e8f0;
-  border-radius: 14px 14px 0 0 !important;
+  color: #e6edf3;
+  border-radius: 12px 12px 0 0 !important;
 }
 
 .navbar {
-  background: linear-gradient(180deg, rgba(6,11,22,.98) 0%, rgba(9,15,30,.95) 100%) !important;
-  border-bottom: 1px solid rgba(99,102,241,.22) !important;
-  box-shadow: 0 2px 24px rgba(0,0,0,.5) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: linear-gradient(135deg, #0d1117 0%, #150f2e 55%, #0d1928 100%) !important;
+  border-bottom: 1px solid rgba(99,102,241,.3) !important;
+  box-shadow: 0 4px 30px rgba(0,0,0,.6), 0 1px 0 rgba(99,102,241,.15) !important;
   padding-top: 10px;
   padding-bottom: 10px;
 }
 
-.btn-outline-light     { border-color: rgba(148,163,184,.3) !important; color: #94a3b8 !important; }
-.btn-outline-light:hover{ background: rgba(148,163,184,.1) !important; color: #e2e8f0 !important; }
+.btn-outline-light     { border-color: rgba(255,255,255,.15) !important; color: #c9d1d9 !important; background: rgba(255,255,255,.08) !important; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.btn-outline-light:hover{ background: rgba(99,102,241,.22) !important; color: #e2e8f0 !important; border-color: rgba(99,102,241,.5) !important; box-shadow: 0 0 16px rgba(99,102,241,.22), 0 2px 8px rgba(0,0,0,.4) !important; }
 .btn-outline-secondary { border-color: rgba(148,163,184,.2) !important; color: #94a3b8 !important; }
 .btn-outline-secondary:hover { background: rgba(148,163,184,.1) !important; color: #e2e8f0 !important; }
 .btn-outline-danger  { border-color: rgba(244,63,94,.4) !important; color: #f43f5e !important; }
@@ -90,10 +89,10 @@ hr { border-color: rgba(148,163,184,.1); }
 #log-container { max-height: 75vh; overflow-y: auto; }
 .filter-btn.active { font-weight:700; box-shadow:inset 0 0 0 2px currentColor; }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(148,163,184,.2); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.35); }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,.5); }
   </style>
   <script>const BASE_URL = '{{ url_for("index") }}'.replace(/\/$/, '');</script>
 </head>
@@ -101,7 +100,7 @@ hr { border-color: rgba(148,163,184,.1); }
 
 <nav class="navbar navbar-dark px-3 mb-4">
   <a class="btn btn-sm btn-outline-light fw-semibold px-3" href="{{ url_for('index') }}">‹ Dashboard</a>
-  <span style="font-size:.85rem; color:#93c5fd;">Logboek</span>
+  <span style="font-size:.85rem; color:#a5b4fc;">Logboek</span>
   <a href="{{ url_for('settings_page') }}" class="btn btn-sm btn-outline-light">⚙ Instellingen</a>
 </nav>
 

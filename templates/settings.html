@@ -23,60 +23,59 @@ html { color-scheme: dark; }
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #060b16;
-  background-image:
-    radial-gradient(ellipse at 18% 45%, rgba(99,102,241,.07) 0%, transparent 55%),
-    radial-gradient(ellipse at 82% 18%, rgba(16,185,129,.04) 0%, transparent 45%),
-    radial-gradient(ellipse at 50% 95%, rgba(245,158,11,.03) 0%, transparent 40%);
+  background: #0d1117;
+  background-image: linear-gradient(160deg, #0d1117 0%, #0e1526 55%, #0b0f1c 100%);
   background-attachment: fixed;
-  color: #cbd5e1;
+  color: #c9d1d9;
   min-height: 100vh;
 }
 
 .card {
-  background: rgba(13, 20, 36, 0.88);
-  border: 1px solid rgba(148,163,184,.1);
-  border-radius: 14px !important;
-  box-shadow: 0 4px 32px rgba(0,0,0,.4), 0 1px 0 rgba(255,255,255,.04) inset;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #161d2f;
+  border: 1px solid rgba(255,255,255,.07);
+  border-top: 1px solid rgba(99,102,241,.4);
+  border-radius: 12px !important;
+  box-shadow: 0 8px 40px rgba(0,0,0,.5), 0 1px 0 rgba(255,255,255,.03) inset;
+  transition: box-shadow .2s, transform .2s;
+}
+.card:hover {
+  box-shadow: 0 14px 52px rgba(0,0,0,.65), 0 0 0 1px rgba(99,102,241,.15);
+  transform: translateY(-1px);
 }
 
 .card-header {
-  background: rgba(30,41,59,.5) !important;
-  border-bottom: 1px solid rgba(148,163,184,.1) !important;
+  background: rgba(255,255,255,.025) !important;
+  border-bottom: 1px solid rgba(255,255,255,.07) !important;
   font-weight: 600;
-  color: #e2e8f0;
-  border-radius: 14px 14px 0 0 !important;
+  color: #e6edf3;
+  border-radius: 12px 12px 0 0 !important;
 }
 
 .navbar {
-  background: linear-gradient(180deg, rgba(6,11,22,.98) 0%, rgba(9,15,30,.95) 100%) !important;
-  border-bottom: 1px solid rgba(99,102,241,.22) !important;
-  box-shadow: 0 2px 24px rgba(0,0,0,.5) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: linear-gradient(135deg, #0d1117 0%, #150f2e 55%, #0d1928 100%) !important;
+  border-bottom: 1px solid rgba(99,102,241,.3) !important;
+  box-shadow: 0 4px 30px rgba(0,0,0,.6), 0 1px 0 rgba(99,102,241,.15) !important;
   padding-top: 10px;
   padding-bottom: 10px;
 }
 
 .form-control, .form-select {
-  background: rgba(30,41,59,.85) !important;
-  border: 1px solid rgba(148,163,184,.15) !important;
-  color: #e2e8f0 !important; border-radius: 8px !important;
+  background: #1c2333 !important;
+  border: 1px solid rgba(255,255,255,.1) !important;
+  color: #e6edf3 !important; border-radius: 8px !important;
+  transition: border-color .2s, box-shadow .2s;
 }
 .form-control:focus, .form-select:focus {
-  background: rgba(30,41,59,.95) !important;
+  background: #1c2845 !important;
   border-color: rgba(99,102,241,.6) !important;
-  box-shadow: 0 0 0 3px rgba(99,102,241,.12) !important;
-  color: #e2e8f0 !important;
+  box-shadow: 0 0 0 3px rgba(99,102,241,.15) !important;
+  color: #e6edf3 !important;
 }
 .form-control::placeholder { color: #475569; }
 .input-group-text {
-  background: rgba(30,41,59,.8);
-  border-color: rgba(148,163,184,.15);
-  color: #94a3b8;
-  cursor: pointer; user-select: none;
+  background: #1c2333;
+  border-color: rgba(255,255,255,.1);
+  color: #8b949e;
 }
 .input-group-text:hover { color: #e2e8f0; }
 .form-label { color: #94a3b8; font-size: .8rem; margin-bottom: .3rem;
@@ -112,8 +111,8 @@ option { background: #1e293b !important; color: #e2e8f0 !important; }
 .btn-success { background: linear-gradient(135deg,#059669 0%,#10b981 100%) !important; border-color: transparent !important; }
 .btn-danger  { background: linear-gradient(135deg,#dc2626 0%,#f43f5e 100%) !important; border-color: transparent !important; }
 .btn-warning { background: linear-gradient(135deg,#d97706 0%,#f59e0b 100%) !important; border-color: transparent !important; color:#000 !important; }
-.btn-outline-light     { border-color: rgba(148,163,184,.3) !important; color: #94a3b8 !important; }
-.btn-outline-light:hover{ background: rgba(148,163,184,.1) !important; color: #e2e8f0 !important; }
+.btn-outline-light     { border-color: rgba(255,255,255,.15) !important; color: #c9d1d9 !important; background: rgba(255,255,255,.08) !important; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.btn-outline-light:hover{ background: rgba(99,102,241,.22) !important; color: #e2e8f0 !important; border-color: rgba(99,102,241,.5) !important; box-shadow: 0 0 16px rgba(99,102,241,.22), 0 2px 8px rgba(0,0,0,.4) !important; }
 .btn-outline-secondary { border-color: rgba(148,163,184,.2) !important; color: #94a3b8 !important; }
 .btn-outline-secondary:hover { background: rgba(148,163,184,.1) !important; color: #e2e8f0 !important; }
 .btn-outline-danger  { border-color: rgba(244,63,94,.4) !important; color: #f43f5e !important; }
@@ -145,10 +144,10 @@ a:hover { color: #c7d2fe; }
 hr { border-color: rgba(148,163,184,.1); }
 code { color: #f59e0b; background: rgba(245,158,11,.1); padding: 1px 4px; border-radius: 3px; }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(148,163,184,.2); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.35); }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,.5); }
 
 @media (max-width:576px) { .hide-sm { display:none !important; } }
   </style>
@@ -157,7 +156,7 @@ code { color: #f59e0b; background: rgba(245,158,11,.1); padding: 1px 4px; border
 
 <nav class="navbar navbar-dark px-3 mb-4">
   <a class="btn btn-sm btn-outline-light fw-semibold px-3" href="{{ url_for('index') }}">‹ Dashboard</a>
-  <span style="font-size:.85rem; color:#93c5fd;">Instellingen</span>
+  <span style="font-size:.85rem; color:#a5b4fc;">Instellingen</span>
 </nav>
 
 <div class="container-fluid px-3 pb-5" style="max-width:960px;">
@@ -512,8 +511,35 @@ code { color: #f59e0b; background: rgba(245,158,11,.1); padding: 1px 4px; border
                          {{ 'checked' if config.OCO_ENABLED == 'true' }}>
                 </div>
               </div>
-              {% if config.OCO_ENABLED == 'true' and (not config.STOP_LOSS_PCT or not config.TAKE_PROFIT_PCT) %}
-              <div class="mt-1" style="font-size:.75rem; color:#f59e0b;">⚠ OCO vereist zowel Stop-Loss % als Take-Profit % ingesteld</div>
+              {% if config.OCO_ENABLED == 'true' %}
+                {% set has_sl = config.STOP_LOSS_PCT and config.STOP_LOSS_PCT|float > 0 %}
+                {% set has_tp = config.TAKE_PROFIT_PCT and config.TAKE_PROFIT_PCT|float > 0 %}
+                {% set has_tsl = config.TRAILING_STOP_ENABLED == 'true' %}
+                {% if not has_sl and not has_tp %}
+                <div class="mt-2 p-2 rounded" style="font-size:.78rem; background:rgba(244,63,94,.1); border:1px solid rgba(244,63,94,.3); color:#f85149;">
+                  ✕ OCO vereist Stop-Loss % én Take-Profit % — beide zijn nu leeg
+                </div>
+                {% elif not has_sl %}
+                <div class="mt-2 p-2 rounded" style="font-size:.78rem; background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.3); color:#f59e0b;">
+                  ⚠ OCO heeft ook een Stop-Loss % nodig — nu alleen Take-Profit ingesteld
+                </div>
+                {% elif not has_tp %}
+                <div class="mt-2 p-2 rounded" style="font-size:.78rem; background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.3); color:#f59e0b;">
+                  ⚠ OCO heeft ook een Take-Profit % nodig — nu alleen Stop-Loss ingesteld
+                </div>
+                {% elif has_tsl %}
+                <div class="mt-2 p-2 rounded" style="font-size:.78rem; background:rgba(99,102,241,.1); border:1px solid rgba(99,102,241,.3); color:#818cf8;">
+                  ℹ OCO actief met Trailing Stop — bij software-verkoop via TSL worden de OCO-orders op Bitvavo automatisch geannuleerd
+                </div>
+                {% else %}
+                <div class="mt-2 p-2 rounded" style="font-size:.78rem; background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.3); color:#3fb950;">
+                  ✓ OCO correct ingesteld — SL {{ config.STOP_LOSS_PCT }}% en TP {{ config.TAKE_PROFIT_PCT }}%
+                </div>
+                {% endif %}
+              {% elif config.STOP_LOSS_PCT and config.TAKE_PROFIT_PCT %}
+              <div class="mt-2 p-2 rounded" style="font-size:.78rem; background:rgba(99,102,241,.08); border:1px solid rgba(99,102,241,.2); color:#818cf8;">
+                ℹ Zowel SL als TP zijn ingesteld — overweeg OCO aan te zetten voor gecoördineerde bewaking
+              </div>
               {% endif %}
             </div>
             <div class="mb-3">

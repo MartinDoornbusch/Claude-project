@@ -21,73 +21,73 @@ html { color-scheme: dark; }
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #060b16;
-  background-image:
-    radial-gradient(ellipse at 18% 45%, rgba(99,102,241,.07) 0%, transparent 55%),
-    radial-gradient(ellipse at 82% 18%, rgba(16,185,129,.04) 0%, transparent 45%),
-    radial-gradient(ellipse at 50% 95%, rgba(245,158,11,.03) 0%, transparent 40%);
+  background: #0d1117;
+  background-image: linear-gradient(160deg, #0d1117 0%, #0e1526 55%, #0b0f1c 100%);
   background-attachment: fixed;
-  color: #cbd5e1;
+  color: #c9d1d9;
   min-height: 100vh;
 }
 
 .card {
-  background: rgba(13, 20, 36, 0.88);
-  border: 1px solid rgba(148,163,184,.1);
-  border-radius: 14px !important;
-  box-shadow: 0 4px 32px rgba(0,0,0,.4), 0 1px 0 rgba(255,255,255,.04) inset;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #161d2f;
+  border: 1px solid rgba(255,255,255,.07);
+  border-top: 1px solid rgba(99,102,241,.4);
+  border-radius: 12px !important;
+  box-shadow: 0 8px 40px rgba(0,0,0,.5), 0 1px 0 rgba(255,255,255,.03) inset;
+  transition: box-shadow .2s, transform .2s;
+}
+.card:hover {
+  box-shadow: 0 14px 52px rgba(0,0,0,.65), 0 0 0 1px rgba(99,102,241,.15);
+  transform: translateY(-1px);
 }
 
 .card-header {
-  background: rgba(30,41,59,.5) !important;
-  border-bottom: 1px solid rgba(148,163,184,.1) !important;
+  background: rgba(255,255,255,.025) !important;
+  border-bottom: 1px solid rgba(255,255,255,.07) !important;
   font-weight: 600;
-  color: #e2e8f0;
-  border-radius: 14px 14px 0 0 !important;
+  color: #e6edf3;
+  border-radius: 12px 12px 0 0 !important;
 }
 
 .navbar {
-  background: linear-gradient(180deg, rgba(6,11,22,.98) 0%, rgba(9,15,30,.95) 100%) !important;
-  border-bottom: 1px solid rgba(99,102,241,.22) !important;
-  box-shadow: 0 2px 24px rgba(0,0,0,.5) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: linear-gradient(135deg, #0d1117 0%, #150f2e 55%, #0d1928 100%) !important;
+  border-bottom: 1px solid rgba(99,102,241,.3) !important;
+  box-shadow: 0 4px 30px rgba(0,0,0,.6), 0 1px 0 rgba(99,102,241,.15) !important;
   padding-top: 10px;
   padding-bottom: 10px;
 }
 
-.stat-label { font-size: .72rem; color: #64748b; text-transform: uppercase; letter-spacing: .06em; }
-.stat-value { font-size: 1.6rem; font-weight: 700; color: #e2e8f0; }
-.pos { color: #10b981; }
-.neg { color: #f43f5e; }
+.stat-label { font-size: .68rem; color: #484f58; text-transform: uppercase; letter-spacing: .08em; font-weight: 500; }
+.stat-value { font-size: 1.75rem; font-weight: 800; color: #e6edf3; letter-spacing: -.02em; }
+.pos { color: #3fb950; }
+.neg { color: #f85149; }
 
 table { font-size: .87rem; }
 thead th {
-  color: #64748b !important; font-weight: 500;
-  border-color: rgba(148,163,184,.08) !important;
-  background: rgba(30,41,59,.65) !important;
-  text-transform: uppercase; letter-spacing: .05em; font-size: .72rem;
+  color: #818cf8 !important; font-weight: 600;
+  border-color: rgba(99,102,241,.12) !important;
+  background: rgba(99,102,241,.08) !important;
+  text-transform: uppercase; letter-spacing: .06em; font-size: .7rem;
 }
-tbody td { border-color: rgba(148,163,184,.07) !important; color: #cbd5e1; vertical-align: middle; }
-tbody tr:hover td { background: rgba(99,102,241,.06) !important; }
+tbody td { border-color: rgba(255,255,255,.05) !important; color: #c9d1d9; vertical-align: middle; }
+tbody tr:hover td { background: rgba(99,102,241,.07) !important; }
 
 .form-control, .form-select {
-  background: rgba(30,41,59,.85) !important;
-  border: 1px solid rgba(148,163,184,.15) !important;
-  color: #e2e8f0 !important; border-radius: 8px !important;
+  background: #1c2333 !important;
+  border: 1px solid rgba(255,255,255,.1) !important;
+  color: #e6edf3 !important; border-radius: 8px !important;
+  transition: border-color .2s, box-shadow .2s;
 }
 .form-control:focus, .form-select:focus {
-  background: rgba(30,41,59,.95) !important;
+  background: #1c2845 !important;
   border-color: rgba(99,102,241,.6) !important;
-  box-shadow: 0 0 0 3px rgba(99,102,241,.12) !important;
-  color: #e2e8f0 !important;
+  box-shadow: 0 0 0 3px rgba(99,102,241,.15) !important;
+  color: #e6edf3 !important;
 }
 option { background: #1e293b !important; color: #e2e8f0 !important; }
 
-.btn-outline-light     { border-color: rgba(148,163,184,.3) !important; color: #94a3b8 !important; }
-.btn-outline-light:hover{ background: rgba(148,163,184,.1) !important; color: #e2e8f0 !important; }
+.btn-outline-light     { border-color: rgba(255,255,255,.15) !important; color: #c9d1d9 !important; background: rgba(255,255,255,.08) !important; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.btn-outline-light:hover{ background: rgba(99,102,241,.22) !important; color: #e2e8f0 !important; border-color: rgba(99,102,241,.5) !important; box-shadow: 0 0 16px rgba(99,102,241,.22), 0 2px 8px rgba(0,0,0,.4) !important; }
 .btn-outline-secondary { border-color: rgba(148,163,184,.2) !important; color: #94a3b8 !important; }
 .btn-outline-secondary:hover { background: rgba(148,163,184,.1) !important; color: #e2e8f0 !important; }
 .btn-outline-success { border-color: rgba(16,185,129,.4) !important; color: #10b981 !important; }
@@ -107,10 +107,10 @@ a { color: #818cf8; }
 a:hover { color: #c7d2fe; }
 hr { border-color: rgba(148,163,184,.1); }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(148,163,184,.2); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.35); }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,.5); }
 
 @media (max-width:576px) { .hide-sm { display:none !important; } }
   </style>
@@ -120,7 +120,7 @@ hr { border-color: rgba(148,163,184,.1); }
 
 <nav class="navbar navbar-dark px-3 mb-4">
   <a class="btn btn-sm btn-outline-light fw-semibold px-3" href="{{ url_for('index') }}">‹ Dashboard</a>
-  <span style="font-size:.85rem; color:#93c5fd;">Performance Analytics</span>
+  <span style="font-size:.85rem; color:#a5b4fc;">Performance Analytics</span>
 </nav>
 
 <div class="container-fluid px-3 pb-5" style="max-width:960px;">
