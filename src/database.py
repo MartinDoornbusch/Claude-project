@@ -210,6 +210,13 @@ def init_db() -> None:
                 horizon_h   REAL NOT NULL,
                 eval_ts     TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS hodl_config (
+                market                  TEXT PRIMARY KEY,
+                enabled                 INTEGER NOT NULL DEFAULT 0,
+                floor_amount            REAL NOT NULL DEFAULT 0,
+                accumulation_split_pct  REAL NOT NULL DEFAULT 0
+            );
         """)
     # Migration: add columns to existing tables if missing
     with get_conn() as conn:
@@ -980,3 +987,35 @@ def get_last_live_trade_pnl(market: str) -> float | None:
         if not buy:
             return None
     return (float(sell["price"]) - float(buy["price"])) * float(sell["amount"])
+
+
+# --- HODL / Accumulatie configuratie ---
+
+def get_hodl_config(market: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT market, enabled, floor_amount, accumulation_split_pct FROM hodl_config WHERE market=?",
+            (market,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def set_hodl_config(market: str, enabled: bool, floor_amount: float, accumulation_split_pct: float) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO hodl_config (market, enabled, floor_amount, accumulation_split_pct)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(market) DO UPDATE SET
+                enabled=excluded.enabled,
+                floor_amount=excluded.floor_amount,
+                accumulation_split_pct=excluded.accumulation_split_pct
+        """, (market, int(enabled), float(floor_amount), float(accumulation_split_pct)))
+
+
+def get_all_hodl_configs() -> list[dict]:
+    """Geeft HODL-configuratie voor alle markten (ook uitgeschakelde)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT market, enabled, floor_amount, accumulation_split_pct FROM hodl_config"
+        ).fetchall()
+    return [dict(r) for r in rows]

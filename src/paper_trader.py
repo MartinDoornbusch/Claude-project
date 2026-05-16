@@ -228,6 +228,47 @@ def partial_sell(market: str, amount: float, price: float, reason: str = "") -> 
             "partial": True, "remaining": remaining}
 
 
+def accumulation_buy(market: str, price: float, reason: str, spend_eur: float) -> dict | None:
+    """Koop extra van een HODL coin met winstdeel — voegt toe aan bestaande positie."""
+    if _check_daily_loss(market):
+        return None
+
+    cash = get_cash()
+    if cash < 1.0:
+        logger.info("[%s] HODL accum overgeslagen — te weinig cash (€%.2f)", market, cash)
+        return None
+
+    spend_eur = min(spend_eur, cash)
+    min_order = env_float("MIN_ORDER_EUR", 5.0)
+    if spend_eur < min_order:
+        logger.info(
+            "[%s] HODL accum overgeslagen — €%.2f onder minimum €%.2f",
+            market, spend_eur, min_order,
+        )
+        return None
+
+    fee = spend_eur * FEE_RATE
+    net_eur = spend_eur - fee
+    amount = net_eur / price
+
+    cur = get_position(market)
+    if cur["amount"] > 0:
+        new_total = cur["amount"] + amount
+        new_avg = (cur["amount"] * cur["avg_price"] + amount * price) / new_total
+    else:
+        new_total, new_avg = amount, price
+
+    set_cash(cash - spend_eur)
+    set_position(market, new_total, new_avg)
+    save_paper_trade(market, "BUY", price, amount, reason, planned_price=price, fee=fee)
+
+    logger.info(
+        "[%s] PAPER HODL BUY — €%.2f | %.6f @ €%.4f | positie totaal: %.6f",
+        market, spend_eur, amount, price, new_total,
+    )
+    return {"side": "BUY", "price": price, "amount": amount, "eur": spend_eur}
+
+
 def portfolio_value(market_prices: dict[str, float]) -> dict:
     """
     Bereken de totale waarde van het paper portfolio.

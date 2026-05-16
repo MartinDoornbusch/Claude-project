@@ -329,6 +329,58 @@ def partial_sell(client: Bitvavo, market: str, amount: float, current_price: flo
         return None
 
 
+def accumulation_buy(client: Bitvavo, market: str, price: float, reason: str, spend_eur: float) -> dict | None:
+    """Koop extra van een HODL coin met winstdeel — voegt toe aan bestaande positie."""
+    min_order = env_float("MIN_ORDER_EUR", 5.0)
+    if spend_eur < min_order:
+        logger.info(
+            "[%s] HODL accum overgeslagen — €%.2f onder minimum €%.2f",
+            market, spend_eur, min_order,
+        )
+        return None
+
+    if os.getenv("LIVE_TRADING_ENABLED", "false").lower() != "true":
+        logger.warning("[%s] LIVE HODL BUY geblokkeerd: LIVE_TRADING_ENABLED niet true", market)
+        return None
+
+    from src.database import get_total_daily_loss
+    daily_loss_pct = env_float("DAILY_LOSS_LIMIT_PCT", 2.0)
+    portfolio_basis = env_float("PAPER_STARTING_CAPITAL", 1000)
+    if daily_loss_pct > 0:
+        daily_loss = get_total_daily_loss()
+        daily_loss_limit = portfolio_basis * daily_loss_pct / 100
+        if daily_loss < 0 and abs(daily_loss) >= daily_loss_limit:
+            logger.warning("[%s] HODL accum geblokkeerd — dagelijkse verliesgrens bereikt", market)
+            return None
+
+    logger.info("[%s] LIVE HODL BUY plaatsen — €%.2f | reden: %s", market, spend_eur, reason)
+    trade_id = save_live_trade(market, "BUY", None, price, None, spend_eur, "pending", reason)
+
+    result = client.placeOrder(market, "buy", "market", {"amountQuote": str(spend_eur)})
+    if isinstance(result, dict) and "error" in result:
+        update_live_trade(trade_id, price, 0, spend_eur, "error")
+        logger.error("[%s] LIVE HODL BUY mislukt: %s", market, result["error"])
+        return None
+
+    order_id = result.get("orderId", "")
+    filled = _poll_order(client, market, order_id)
+
+    if filled and filled.get("status") == "filled":
+        f_price = float(filled.get("price") or price)
+        f_amount = float(filled.get("filledAmount", 0))
+        f_eur = float(filled.get("filledAmountQuote", spend_eur))
+        update_live_trade(trade_id, f_price, f_amount, f_eur, "filled")
+        logger.info(
+            "[%s] LIVE HODL BUY gevuld — prijs: €%.4f | bedrag: %.6f | totaal: €%.2f",
+            market, f_price, f_amount, f_eur,
+        )
+        return {"side": "BUY", "price": f_price, "amount": f_amount, "eur": f_eur}
+    else:
+        update_live_trade(trade_id, price, 0, spend_eur, "timeout")
+        logger.warning("[%s] LIVE HODL BUY niet gevuld binnen timeout", market)
+        return None
+
+
 def place_oco_orders(client, market: str, amount: float, entry_price: float) -> dict:
     """
     Na een BUY: plaatst takeProfit- en/of stopLoss-orders op Bitvavo.
