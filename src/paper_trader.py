@@ -150,19 +150,22 @@ def buy(market: str, price: float, reason: str = "", fraction: float | None = No
                 market, cash, min_order,
             )
             return None
+    slippage_pct = env_float("PAPER_SLIPPAGE_PCT", 0.0)
+    fill_price = price * (1 + slippage_pct / 100) if slippage_pct > 0 else price
+
     fee = spend_eur * FEE_RATE
     net_eur = spend_eur - fee
-    amount = net_eur / price
+    amount = net_eur / fill_price
 
     set_cash(cash - spend_eur)
-    set_position(market, amount, price)
-    save_paper_trade(market, "BUY", price, amount, reason, planned_price=price, fee=fee)
+    set_position(market, amount, fill_price)
+    save_paper_trade(market, "BUY", fill_price, amount, reason, planned_price=price, fee=fee)
 
     logger.info(
-        "[%s] PAPER BUY  — prijs: €%.4f | bedrag: %.6f | kosten: €%.2f | fee: €%.4f | fractie: %.0f%%",
-        market, price, amount, spend_eur, fee, used_fraction * 100,
+        "[%s] PAPER BUY  — prijs: €%.4f | fill: €%.4f | bedrag: %.6f | kosten: €%.2f | fee: €%.4f | fractie: %.0f%%",
+        market, price, fill_price, amount, spend_eur, fee, used_fraction * 100,
     )
-    return {"side": "BUY", "price": price, "amount": amount, "eur": spend_eur}
+    return {"side": "BUY", "price": fill_price, "amount": amount, "eur": spend_eur}
 
 
 def sell(market: str, price: float, reason: str = "") -> dict | None:
@@ -175,8 +178,11 @@ def sell(market: str, price: float, reason: str = "") -> dict | None:
         logger.info("[%s] SELL overgeslagen — geen open positie", market)
         return None
 
+    slippage_pct = env_float("PAPER_SLIPPAGE_PCT", 0.0)
+    fill_price = price * (1 - slippage_pct / 100) if slippage_pct > 0 else price
+
     amount = position["amount"]
-    gross_eur = amount * price
+    gross_eur = amount * fill_price
     fee = gross_eur * FEE_RATE
     net_eur = gross_eur - fee
 
@@ -188,13 +194,13 @@ def sell(market: str, price: float, reason: str = "") -> dict | None:
     set_cash(cash + net_eur)
     set_position(market, 0.0, 0.0)
     add_daily_pnl(market, pnl)
-    save_paper_trade(market, "SELL", price, amount, reason, planned_price=price, fee=fee)
+    save_paper_trade(market, "SELL", fill_price, amount, reason, planned_price=price, fee=fee)
 
     logger.info(
-        "[%s] PAPER SELL — prijs: €%.4f | bedrag: %.6f | opbrengst: €%.2f | PnL: €%.2f",
-        market, price, amount, net_eur, pnl,
+        "[%s] PAPER SELL — prijs: €%.4f | fill: €%.4f | bedrag: %.6f | opbrengst: €%.2f | PnL: €%.2f",
+        market, price, fill_price, amount, net_eur, pnl,
     )
-    return {"side": "SELL", "price": price, "amount": amount, "eur": net_eur, "pnl": pnl}
+    return {"side": "SELL", "price": fill_price, "amount": amount, "eur": net_eur, "pnl": pnl}
 
 
 def partial_sell(market: str, amount: float, price: float, reason: str = "") -> dict | None:

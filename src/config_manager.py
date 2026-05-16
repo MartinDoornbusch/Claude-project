@@ -100,6 +100,18 @@ DEFAULTS: dict[str, str] = {
     "DCA_ENABLED":              "false",
     "DCA_THRESHOLD_PCT":        "5.0",
     "DCA_MAX_LAYERS":           "2",
+    # Maximaal aantal open posities
+    "MAX_OPEN_POSITIONS":       "0",
+    # ATR-gebaseerde Stop-Loss / Take-Profit
+    "ATR_SL_ENABLED":           "false",
+    "ATR_SL_MULTIPLIER":        "1.5",
+    "ATR_TP_MULTIPLIER":        "3.0",
+    # Slippage simulatie (paper trading)
+    "PAPER_SLIPPAGE_PCT":       "0.1",
+    # Macro trend filter
+    "MACRO_TREND_ENABLED":      "false",
+    "MACRO_TREND_MARKET":       "BTC-EUR",
+    "MACRO_TREND_SMA":          "50",
     # Market regime
     "ADX_TREND_THRESHOLD":      "25",
     # MQTT
@@ -126,7 +138,8 @@ BOOL_KEYS = {"LIVE_TRADING_ENABLED", "AI_STRATEGY_ENABLED", "MTF_ENABLED", "VOL_
              "HOUSE_MONEY_ENABLED", "HOUSE_MONEY_ONLY_PROFIT",
              "AI_ANTHROPIC_ENABLED", "AI_GOOGLE_ENABLED", "AI_GROQ_ENABLED",
              "AI_MISTRAL_ENABLED", "AI_CEREBRAS_ENABLED",
-             "MQTT_ENABLED", "DCA_ENABLED", "TRADE_HOURS_ENABLED"}
+             "MQTT_ENABLED", "DCA_ENABLED", "TRADE_HOURS_ENABLED",
+             "ATR_SL_ENABLED", "MACRO_TREND_ENABLED"}
 
 
 def read_config() -> dict[str, str]:
@@ -167,6 +180,8 @@ _NUMERIC_KEYS = {
     "TRADE_HOURS_ENABLED", "TRADE_HOURS_START", "TRADE_HOURS_END",
     "ATR_FLAT_THRESHOLD", "ATR_SENSITIVITY", "CORR_THRESHOLD", "MQTT_PORT", "MQTT_CONNECT_TIMEOUT", "MIN_VOLUME_EUR",
     "DCA_THRESHOLD_PCT", "DCA_MAX_LAYERS", "ADX_TREND_THRESHOLD",
+    "MAX_OPEN_POSITIONS", "ATR_SL_MULTIPLIER", "ATR_TP_MULTIPLIER",
+    "PAPER_SLIPPAGE_PCT", "MACRO_TREND_SMA",
     "AI_CALL_DELAY_SECONDS", "AI_ACCURACY_HORIZON_HOURS", "SENTIMENT_VETO_CONF",
     "WIN_EXCL_COOLDOWN_HOURS", "MIN_ORDER_EUR",
 }

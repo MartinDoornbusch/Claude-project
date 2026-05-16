@@ -482,6 +482,101 @@
               </div>
             </div>
 
+            <!-- ATR-gebaseerde SL/TP -->
+            <div class="mt-3 pt-3 border-top">
+              <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox" id="atrSlEnabled"
+                       name="ATR_SL_ENABLED"
+                       {{ 'checked' if config.ATR_SL_ENABLED == 'true' }}
+                       onchange="document.getElementById('atrSlFields').style.display=this.checked?'block':'none'">
+                <label class="form-check-label" for="atrSlEnabled">
+                  <strong>ATR-gebaseerde Stop-Loss &amp; Take-Profit</strong>
+                </label>
+              </div>
+              <div class="form-text mb-2">
+                SL en TP worden berekend op basis van de ATR (Average True Range) op het moment van instap — past automatisch aan de volatiliteit aan. <strong>Overschrijft de vaste SL/TP percentages hierboven.</strong>
+              </div>
+              <div id="atrSlFields" style="display:{{ 'block' if config.ATR_SL_ENABLED == 'true' else 'none' }}">
+                <div class="row g-2">
+                  <div class="col-6">
+                    <label class="form-label">SL multiplier (× ATR)</label>
+                    <div class="input-group input-group-sm">
+                      <input type="number" class="form-control" name="ATR_SL_MULTIPLIER"
+                             value="{{ config.ATR_SL_MULTIPLIER }}" step="0.1" min="0.5" max="5">
+                      <span class="input-group-text">× ATR</span>
+                    </div>
+                    <div class="form-text">Stop bij instapprijs − (multiplier × ATR). <strong>1.5 aanbevolen.</strong></div>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label">TP multiplier (× ATR)</label>
+                    <div class="input-group input-group-sm">
+                      <input type="number" class="form-control" name="ATR_TP_MULTIPLIER"
+                             value="{{ config.ATR_TP_MULTIPLIER }}" step="0.1" min="0.5" max="10">
+                      <span class="input-group-text">× ATR</span>
+                    </div>
+                    <div class="form-text">Target bij instapprijs + (multiplier × ATR). <strong>3.0 = R:R 1:2.</strong></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Max open posities -->
+            <div class="mt-3 pt-3 border-top">
+              <label class="form-label">Maximaal aantal open posities</label>
+              <div class="input-group" style="max-width:180px;">
+                <input type="number" class="form-control" name="MAX_OPEN_POSITIONS"
+                       value="{{ config.MAX_OPEN_POSITIONS }}" step="1" min="0" max="50">
+                <span class="input-group-text">posities</span>
+              </div>
+              <div class="form-text">Hard cap: bot opent geen nieuwe positie als dit aantal bereikt is. <strong>0 = geen limiet.</strong> Bij 1.5% risico per trade en 5 posities staat max 7.5% van kapitaal bloot.</div>
+            </div>
+
+            <!-- Slippage simulatie -->
+            <div class="mt-3 pt-3 border-top">
+              <label class="form-label">Slippage simulatie (paper trading)</label>
+              <div class="input-group" style="max-width:180px;">
+                <input type="number" class="form-control" name="PAPER_SLIPPAGE_PCT"
+                       value="{{ config.PAPER_SLIPPAGE_PCT }}" step="0.01" min="0" max="2">
+                <span class="input-group-text">%</span>
+              </div>
+              <div class="form-text">Simuleert ongunstige uitvoering: koopprijs × (1+%) en verkoopprijs × (1−%). Bitvavo taker fee is al 0.25% — voeg 0.05–0.15% toe voor slippage. <strong>0 = alleen fee.</strong></div>
+            </div>
+
+            <!-- Macro trend filter -->
+            <div class="mt-3 pt-3 border-top">
+              <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox" id="macroTrendEnabled"
+                       name="MACRO_TREND_ENABLED"
+                       {{ 'checked' if config.MACRO_TREND_ENABLED == 'true' }}
+                       onchange="document.getElementById('macroTrendFields').style.display=this.checked?'block':'none'">
+                <label class="form-check-label" for="macroTrendEnabled">
+                  <strong>Macro trend filter — cash-bescherming</strong>
+                </label>
+              </div>
+              <div class="form-text mb-2">
+                Blokkeert alle nieuwe kopen wanneer de geselecteerde macro-coin onder zijn SMA staat. Voorkomt kopen in een dalende markt.
+              </div>
+              <div id="macroTrendFields" style="display:{{ 'block' if config.MACRO_TREND_ENABLED == 'true' else 'none' }}">
+                <div class="row g-2">
+                  <div class="col-6">
+                    <label class="form-label">Macro markt</label>
+                    <input type="text" class="form-control form-control-sm" name="MACRO_TREND_MARKET"
+                           value="{{ config.MACRO_TREND_MARKET }}" placeholder="BTC-EUR">
+                    <div class="form-text">Proxy voor marktrichting. <strong>BTC-EUR aanbevolen.</strong></div>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label">SMA periode</label>
+                    <div class="input-group input-group-sm">
+                      <input type="number" class="form-control" name="MACRO_TREND_SMA"
+                             value="{{ config.MACRO_TREND_SMA }}" step="1" min="20" max="50">
+                      <span class="input-group-text">candles</span>
+                    </div>
+                    <div class="form-text">20 of 50 — past bij opgeslagen signalen.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- DCA -->
             <div class="mt-3 pt-3 border-top">
               <div class="form-check form-switch mb-1">

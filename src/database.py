@@ -132,7 +132,8 @@ def init_db() -> None:
                 market                TEXT PRIMARY KEY,
                 peak_price            REAL NOT NULL DEFAULT 0,
                 breakeven_set         INTEGER NOT NULL DEFAULT 0,
-                house_money_activated INTEGER NOT NULL DEFAULT 0
+                house_money_activated INTEGER NOT NULL DEFAULT 0,
+                entry_atr             REAL NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS bot_settings (
@@ -230,6 +231,10 @@ def init_db() -> None:
         if "house_money_activated" not in cols:
             conn.execute(
                 "ALTER TABLE position_meta ADD COLUMN house_money_activated INTEGER NOT NULL DEFAULT 0"
+            )
+        if "entry_atr" not in cols:
+            conn.execute(
+                "ALTER TABLE position_meta ADD COLUMN entry_atr REAL NOT NULL DEFAULT 0"
             )
         trade_cols = {r["name"] for r in conn.execute("PRAGMA table_info(paper_trades)").fetchall()}
         if "planned_price" not in trade_cols:
@@ -628,10 +633,22 @@ def reset_paper_trading(starting_capital: float = 1000.0) -> None:
 def get_position_meta(market: str) -> dict:
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT peak_price, breakeven_set, house_money_activated FROM position_meta WHERE market=?",
+            "SELECT peak_price, breakeven_set, house_money_activated, entry_atr "
+            "FROM position_meta WHERE market=?",
             (market,)
         ).fetchone()
-    return dict(row) if row else {"peak_price": 0.0, "breakeven_set": 0, "house_money_activated": 0}
+    return dict(row) if row else {
+        "peak_price": 0.0, "breakeven_set": 0, "house_money_activated": 0, "entry_atr": 0.0,
+    }
+
+
+def set_entry_atr(market: str, atr: float) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO position_meta (market, peak_price, breakeven_set, house_money_activated, entry_atr)
+            VALUES (?,0,0,0,?)
+            ON CONFLICT(market) DO UPDATE SET entry_atr=?
+        """, (market, float(atr), float(atr)))
 
 
 def update_position_peak(market: str, price: float) -> None:

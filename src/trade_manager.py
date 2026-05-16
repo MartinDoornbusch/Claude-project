@@ -30,10 +30,12 @@ def check_sl_tp(client: Bitvavo, market: str, current_price: float) -> bool:
     stop_loss_pct     = env_float_opt("STOP_LOSS_PCT")
     take_profit_pct   = env_float_opt("TAKE_PROFIT_PCT")
     breakeven_trigger = env_float_opt("BREAKEVEN_TRIGGER_PCT")
+    atr_sl_enabled    = os.getenv("ATR_SL_ENABLED", "false").lower() == "true"
 
     nothing_to_check = (
         stop_loss_pct is None and take_profit_pct is None
         and not trailing_enabled and breakeven_trigger is None
+        and not atr_sl_enabled
     )
     if nothing_to_check:
         return False
@@ -45,6 +47,19 @@ def check_sl_tp(client: Bitvavo, market: str, current_price: float) -> bool:
     avg_price = pos["avg_price"]
     chg_pct   = (current_price - avg_price) / avg_price * 100
     meta      = get_position_meta(market)
+
+    # ── ATR-gebaseerde SL/TP: overschrijf vaste percentages ──────────────────
+    if atr_sl_enabled:
+        entry_atr = float(meta.get("entry_atr") or 0)
+        if entry_atr > 0 and avg_price > 0:
+            sl_mult = env_float("ATR_SL_MULTIPLIER", 1.5)
+            tp_mult = env_float("ATR_TP_MULTIPLIER", 3.0)
+            stop_loss_pct   = -(sl_mult * entry_atr / avg_price * 100)
+            take_profit_pct =   tp_mult * entry_atr / avg_price * 100
+            logger.debug(
+                "[%s] ATR SL/TP: ATR=%.4f → SL=%.2f%% / TP=%.2f%%",
+                market, entry_atr, stop_loss_pct, take_profit_pct,
+            )
 
     # ── Trailing stop: update piek ────────────────────────────────────────────
     if trailing_enabled:
@@ -144,6 +159,7 @@ def check_house_money(client: Bitvavo, market: str, current_price: float) -> boo
 def execute_buy(
     client: Bitvavo, market: str, price: float, reason: str = "",
     fraction: float | None = None,
+    entry_atr: float | None = None,
 ) -> dict | None:
     from src.notifier import notify_trade
 
@@ -152,6 +168,35 @@ def execute_buy(
     if market.upper() in blacklist:
         logger.info("[%s] BUY overgeslagen — markt staat op blacklist", market)
         return None
+
+    # Maximaal aantal open posities
+    max_pos = int(env_float("MAX_OPEN_POSITIONS", 0))
+    if max_pos > 0:
+        from src.database import get_all_positions
+        open_count = len(get_all_positions())
+        if open_count >= max_pos:
+            logger.info(
+                "[%s] BUY overgeslagen — max posities bereikt (%d/%d)",
+                market, open_count, max_pos,
+            )
+            return None
+
+    # Macro trend filter: blokkeer kopen als macro-markt in neerwaartse trend zit
+    if os.getenv("MACRO_TREND_ENABLED", "false").lower() == "true":
+        macro_market = os.getenv("MACRO_TREND_MARKET", "BTC-EUR").strip().upper()
+        macro_sma_period = int(env_float("MACRO_TREND_SMA", 50))
+        from src.database import get_latest_signals as _gls
+        macro_sigs = _gls(macro_market, limit=1)
+        if macro_sigs:
+            ms = macro_sigs[0]
+            macro_price = float(ms.get("close") or 0)
+            macro_sma = float(ms.get("sma_50") or 0) if macro_sma_period >= 50 else float(ms.get("sma_20") or 0)
+            if macro_price > 0 and macro_sma > 0 and macro_price < macro_sma:
+                logger.info(
+                    "[%s] BUY geblokkeerd — macro filter: %s €%.2f < SMA%d €%.2f (bearish)",
+                    market, macro_market, macro_price, macro_sma_period, macro_sma,
+                )
+                return None
 
     # Winst-exclusiviteit: blokkeer nieuwe kopen als laatste trade verlies maakte
     if os.getenv("HOUSE_MONEY_ONLY_PROFIT", "false").lower() == "true":
@@ -204,9 +249,11 @@ def execute_buy(
         result = paper.buy(market, price, reason, fraction=fraction)
     if result:
         notify_trade(market, "BUY", price, reason)
-        from src.database import update_position_peak, cancel_all_oco_orders
+        from src.database import update_position_peak, cancel_all_oco_orders, set_entry_atr
         update_position_peak(market, price)
-        cancel_all_oco_orders(market)   # wis eventuele stale OCO orders van vorige positie
+        cancel_all_oco_orders(market)
+        if entry_atr and entry_atr > 0:
+            set_entry_atr(market, entry_atr)
         # OCO: plaats TP + SL orders na een LIVE koop
         if (os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
                 and os.getenv("OCO_ENABLED", "false").lower() == "true"):
