@@ -215,11 +215,17 @@ def init_db() -> None:
                 market                  TEXT PRIMARY KEY,
                 enabled                 INTEGER NOT NULL DEFAULT 0,
                 floor_amount            REAL NOT NULL DEFAULT 0,
-                accumulation_split_pct  REAL NOT NULL DEFAULT 0
+                accumulation_split_pct  REAL NOT NULL DEFAULT 0,
+                pending_eur             REAL NOT NULL DEFAULT 0
             );
         """)
     # Migration: add columns to existing tables if missing
     with get_conn() as conn:
+        hodl_cols = {r["name"] for r in conn.execute("PRAGMA table_info(hodl_config)").fetchall()}
+        if hodl_cols and "pending_eur" not in hodl_cols:
+            conn.execute(
+                "ALTER TABLE hodl_config ADD COLUMN pending_eur REAL NOT NULL DEFAULT 0"
+            )
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(position_meta)").fetchall()}
         if "house_money_activated" not in cols:
             conn.execute(
@@ -994,7 +1000,8 @@ def get_last_live_trade_pnl(market: str) -> float | None:
 def get_hodl_config(market: str) -> dict | None:
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT market, enabled, floor_amount, accumulation_split_pct FROM hodl_config WHERE market=?",
+            "SELECT market, enabled, floor_amount, accumulation_split_pct, pending_eur "
+            "FROM hodl_config WHERE market=?",
             (market,)
         ).fetchone()
     return dict(row) if row else None
@@ -1003,8 +1010,8 @@ def get_hodl_config(market: str) -> dict | None:
 def set_hodl_config(market: str, enabled: bool, floor_amount: float, accumulation_split_pct: float) -> None:
     with get_conn() as conn:
         conn.execute("""
-            INSERT INTO hodl_config (market, enabled, floor_amount, accumulation_split_pct)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO hodl_config (market, enabled, floor_amount, accumulation_split_pct, pending_eur)
+            VALUES (?, ?, ?, ?, 0)
             ON CONFLICT(market) DO UPDATE SET
                 enabled=excluded.enabled,
                 floor_amount=excluded.floor_amount,
@@ -1012,10 +1019,32 @@ def set_hodl_config(market: str, enabled: bool, floor_amount: float, accumulatio
         """, (market, int(enabled), float(floor_amount), float(accumulation_split_pct)))
 
 
+def hodl_add_pending(market: str, eur: float) -> float:
+    """Voegt EUR toe aan de accumulatiebuffer en geeft het nieuwe totaal terug."""
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO hodl_config (market, enabled, floor_amount, accumulation_split_pct, pending_eur)
+            VALUES (?, 0, 0, 0, ?)
+            ON CONFLICT(market) DO UPDATE SET pending_eur = pending_eur + ?
+        """, (market, float(eur), float(eur)))
+        row = conn.execute(
+            "SELECT pending_eur FROM hodl_config WHERE market=?", (market,)
+        ).fetchone()
+    return float(row["pending_eur"]) if row else eur
+
+
+def hodl_reset_pending(market: str) -> None:
+    """Reset de accumulatiebuffer naar 0 na een geslaagde bijkoop."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE hodl_config SET pending_eur=0 WHERE market=?", (market,)
+        )
+
+
 def get_all_hodl_configs() -> list[dict]:
     """Geeft HODL-configuratie voor alle markten (ook uitgeschakelde)."""
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT market, enabled, floor_amount, accumulation_split_pct FROM hodl_config"
+            "SELECT market, enabled, floor_amount, accumulation_split_pct, pending_eur FROM hodl_config"
         ).fetchall()
     return [dict(r) for r in rows]

@@ -591,7 +591,7 @@ def api_hodl_get():
     for m in _dashboard_markets():
         cfg = get_hodl_config(m) or {
             "market": m, "enabled": 0,
-            "floor_amount": 0.0, "accumulation_split_pct": 0.0,
+            "floor_amount": 0.0, "accumulation_split_pct": 0.0, "pending_eur": 0.0,
         }
         configs.append(cfg)
     return jsonify(configs)

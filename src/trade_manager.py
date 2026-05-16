@@ -263,13 +263,18 @@ def check_dca(client: Bitvavo, market: str, current_price: float) -> bool:
 
 
 def _trigger_hodl_accumulation(client: Bitvavo, source_market: str, profit_eur: float) -> None:
-    """Na een winstgevende verkoop: koop extra van ingestelde HODL coins."""
+    """
+    Na een winstgevende verkoop: voeg winstdeel toe aan de buffer per HODL coin.
+    Zodra de buffer ≥ MIN_ORDER_EUR is wordt de bijkoop uitgevoerd en de buffer gereset.
+    """
     if profit_eur <= 0:
         return
 
-    from src.database import get_all_hodl_configs
+    from src.database import get_all_hodl_configs, hodl_add_pending, hodl_reset_pending
     from src.portfolio import get_ticker_price
     from src.notifier import notify_trade
+
+    min_order = env_float("MIN_ORDER_EUR", 5.0)
 
     for cfg in get_all_hodl_configs():
         if not cfg["enabled"]:
@@ -279,22 +284,36 @@ def _trigger_hodl_accumulation(client: Bitvavo, source_market: str, profit_eur: 
         if split_pct <= 0:
             continue
 
-        buy_eur = profit_eur * split_pct / 100
+        share_eur = profit_eur * split_pct / 100
+        pending = hodl_add_pending(market, share_eur)
+
+        if pending < min_order:
+            logger.info(
+                "[%s] HODL buffer +€%.2f → €%.2f (wacht op minimum €%.2f)",
+                market, share_eur, pending, min_order,
+            )
+            continue
+
         price = get_ticker_price(client, market)
         if not price:
             logger.warning("[%s] HODL accum overgeslagen — prijs niet beschikbaar", market)
             continue
 
-        reason = f"HODL accum {split_pct:.0f}% van €{profit_eur:.2f} winst ({source_market})"
+        reason = (
+            f"HODL accum {split_pct:.0f}% ({source_market}) — buffer €{pending:.2f}"
+        )
         if os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true":
-            result = live.accumulation_buy(client, market, price, reason, buy_eur)
+            result = live.accumulation_buy(client, market, price, reason, pending)
         else:
-            result = paper.accumulation_buy(market, price, reason, buy_eur)
+            result = paper.accumulation_buy(market, price, reason, pending)
 
         if result:
+            hodl_reset_pending(market)
             from src.database import update_position_peak
             notify_trade(market, "BUY", price, reason)
             update_position_peak(market, price)
+        else:
+            logger.info("[%s] HODL bijkoop mislukt — buffer €%.2f bewaard", market, pending)
 
 
 def execute_sell(client: Bitvavo, market: str, price: float, reason: str = "") -> dict | None:

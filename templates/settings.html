@@ -1262,13 +1262,18 @@
       html += '<thead><tr>'
             + '<th style="color:#64748b;font-weight:600;">Coin</th>'
             + '<th style="color:#64748b;font-weight:600;">HODL aan</th>'
-            + '<th style="color:#64748b;font-weight:600;">Vloer (aantal coins)</th>'
+            + '<th style="color:#64748b;font-weight:600;">Vloer (coins)</th>'
             + '<th style="color:#64748b;font-weight:600;">Winstsplit %</th>'
+            + '<th style="color:#64748b;font-weight:600;">Buffer</th>'
             + '<th></th>'
             + '</tr></thead><tbody>';
       configs.forEach(cfg => {
         const m = cfg.market;
         const id = m.replace('-', '_');
+        const pending = parseFloat(cfg.pending_eur || 0);
+        const pendingLabel = pending > 0
+          ? `<span style="color:#d97706;" title="Wacht op MIN_ORDER_EUR drempel">€${pending.toFixed(2)}</span>`
+          : '<span style="color:#cbd5e1;">—</span>';
         html += `<tr id="hodl-row-${id}">
           <td class="align-middle fw-semibold">${m}</td>
           <td class="align-middle">
@@ -1294,6 +1299,7 @@
               <span class="input-group-text">%</span>
             </div>
           </td>
+          <td class="align-middle" style="white-space:nowrap;">${pendingLabel}</td>
           <td class="align-middle">
             <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2"
                     onclick="saveHodlRow('${m}')">Opslaan</button>
@@ -1301,7 +1307,7 @@
         </tr>`;
       });
       html += '</tbody></table></div>';
-      html += '<div class="form-text mt-1">Vloer = minimale coinpositie die nooit verkocht wordt. Winstsplit = % van elke gerealiseerde winst dat direct als bijkoop wordt ingezet.</div>';
+      html += '<div class="form-text mt-1">Vloer = minimale coinpositie die nooit verkocht wordt. Winstsplit = % van elke winstgevende verkoop. Buffer = opgebouwde EUR die wacht tot MIN_ORDER_EUR drempel bereikt is.</div>';
       container.innerHTML = html;
     } catch(e) {
       container.innerHTML = `<span style="color:#dc2626;font-size:.82rem;">Fout bij laden: ${e.message}</span>`;
