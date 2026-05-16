@@ -1,28 +1,99 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="nl" data-bs-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Logboek — Bitvavo Trading Bot</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    body { background: #f1f5f9; color: #1e293b; }
-    .navbar { background: #1e40af !important; }
-    .card { background: #fff; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-    .card-header { background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-weight: 600; }
-    .log-row { font-family: monospace; font-size: .82rem; border-bottom: 1px solid #f1f5f9; padding: 3px 6px; white-space: pre-wrap; word-break: break-word; }
-    .log-row.WARNING  { background: #fffbeb; color: #92400e; }
-    .log-row.ERROR    { background: #fef2f2; color: #991b1b; }
-    .log-row.CRITICAL { background: #fef2f2; color: #7f1d1d; font-weight: 700; }
-    .log-row.DEBUG    { color: #94a3b8; }
-    .log-row.INFO     { color: #1e293b; }
-    .badge-INFO     { background:#e0f2fe; color:#0369a1; }
-    .badge-WARNING  { background:#fef3c7; color:#92400e; }
-    .badge-ERROR    { background:#fee2e2; color:#991b1b; }
-    .badge-CRITICAL { background:#fecaca; color:#7f1d1d; }
-    .badge-DEBUG    { background:#f1f5f9; color:#64748b; }
-    #log-container { max-height: 75vh; overflow-y: auto; }
-    .filter-btn.active { font-weight: 700; box-shadow: inset 0 0 0 2px currentColor; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --surface-1: rgba(13, 20, 36, 0.9);
+  --surface-2: rgba(30, 41, 59, 0.6);
+  --border: rgba(148, 163, 184, 0.1);
+  --accent: #f59e0b;
+}
+
+html { color-scheme: dark; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #060b16;
+  background-image:
+    radial-gradient(ellipse at 18% 45%, rgba(99,102,241,.07) 0%, transparent 55%),
+    radial-gradient(ellipse at 82% 18%, rgba(16,185,129,.04) 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 95%, rgba(245,158,11,.03) 0%, transparent 40%);
+  background-attachment: fixed;
+  color: #cbd5e1;
+  min-height: 100vh;
+}
+
+.card {
+  background: rgba(13, 20, 36, 0.88);
+  border: 1px solid rgba(148,163,184,.1);
+  border-radius: 14px !important;
+  box-shadow: 0 4px 32px rgba(0,0,0,.4), 0 1px 0 rgba(255,255,255,.04) inset;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.card-header {
+  background: rgba(30,41,59,.5) !important;
+  border-bottom: 1px solid rgba(148,163,184,.1) !important;
+  font-weight: 600;
+  color: #e2e8f0;
+  border-radius: 14px 14px 0 0 !important;
+}
+
+.navbar {
+  background: linear-gradient(180deg, rgba(6,11,22,.98) 0%, rgba(9,15,30,.95) 100%) !important;
+  border-bottom: 1px solid rgba(99,102,241,.22) !important;
+  box-shadow: 0 2px 24px rgba(0,0,0,.5) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.btn-outline-light     { border-color: rgba(148,163,184,.3) !important; color: #94a3b8 !important; }
+.btn-outline-light:hover{ background: rgba(148,163,184,.1) !important; color: #e2e8f0 !important; }
+.btn-outline-secondary { border-color: rgba(148,163,184,.2) !important; color: #94a3b8 !important; }
+.btn-outline-secondary:hover { background: rgba(148,163,184,.1) !important; color: #e2e8f0 !important; }
+.btn-outline-danger  { border-color: rgba(244,63,94,.4) !important; color: #f43f5e !important; }
+.btn-outline-danger:hover  { background: rgba(244,63,94,.14) !important; }
+.btn-outline-primary { border-color: rgba(99,102,241,.4) !important; color: #818cf8 !important; }
+.btn-outline-primary:hover { background: rgba(99,102,241,.14) !important; }
+.btn-outline-warning { border-color: rgba(245,158,11,.4) !important; color: #f59e0b !important; }
+.btn-outline-warning:hover { background: rgba(245,158,11,.12) !important; }
+
+.text-muted { color: #64748b !important; }
+a { color: #818cf8; }
+a:hover { color: #c7d2fe; }
+
+hr { border-color: rgba(148,163,184,.1); }
+
+.log-row { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size:.82rem; border-bottom:1px solid rgba(148,163,184,.06); padding:4px 8px; white-space:pre-wrap; word-break:break-word; }
+.log-row.WARNING  { background:rgba(245,158,11,.07); color:#fcd34d; }
+.log-row.ERROR    { background:rgba(244,63,94,.07);  color:#fca5a5; }
+.log-row.CRITICAL { background:rgba(244,63,94,.12);  color:#fca5a5; font-weight:700; }
+.log-row.DEBUG    { color: #475569; }
+.log-row.INFO     { color: #94a3b8; }
+.badge-INFO     { background:rgba(99,102,241,.15); color:#818cf8; }
+.badge-WARNING  { background:rgba(245,158,11,.15); color:#f59e0b; }
+.badge-ERROR    { background:rgba(244,63,94,.15);  color:#f43f5e; }
+.badge-CRITICAL { background:rgba(244,63,94,.25);  color:#f43f5e; }
+.badge-DEBUG    { background:rgba(100,116,139,.12); color:#64748b; }
+#log-container { max-height: 75vh; overflow-y: auto; }
+.filter-btn.active { font-weight:700; box-shadow:inset 0 0 0 2px currentColor; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(148,163,184,.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.35); }
   </style>
   <script>const BASE_URL = '{{ url_for("index") }}'.replace(/\/$/, '');</script>
 </head>
