@@ -23,23 +23,23 @@ html { color-scheme: dark; }
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #0d1117;
-  background-image: linear-gradient(160deg, #0d1117 0%, #0e1526 55%, #0b0f1c 100%);
+  background: #08080d;
+  background-image: linear-gradient(160deg, #08080d 0%, #0b0a10 100%);
   background-attachment: fixed;
   color: #c9d1d9;
   min-height: 100vh;
 }
 
 .card {
-  background: #161d2f;
-  border: 1px solid rgba(255,255,255,.07);
-  border-top: 1px solid rgba(99,102,241,.4);
-  border-radius: 12px !important;
-  box-shadow: 0 8px 40px rgba(0,0,0,.5), 0 1px 0 rgba(255,255,255,.03) inset;
+  background: #0e0f18;
+  border: 1px solid rgba(255,255,255,.05);
+  border-top: 2px solid rgba(240,165,0,.55);
+  border-radius: 8px !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,.7);
   transition: box-shadow .2s, transform .2s;
 }
 .card:hover {
-  box-shadow: 0 14px 52px rgba(0,0,0,.65), 0 0 0 1px rgba(99,102,241,.15);
+  box-shadow: 0 8px 36px rgba(0,0,0,.8), 0 0 0 1px rgba(240,165,0,.12);
   transform: translateY(-1px);
 }
 
@@ -48,13 +48,13 @@ body {
   border-bottom: 1px solid rgba(255,255,255,.07) !important;
   font-weight: 600;
   color: #e6edf3;
-  border-radius: 12px 12px 0 0 !important;
+  border-radius: 8px 8px 0 0 !important;
 }
 
 .navbar {
-  background: linear-gradient(135deg, #0d1117 0%, #150f2e 55%, #0d1928 100%) !important;
-  border-bottom: 1px solid rgba(99,102,241,.3) !important;
-  box-shadow: 0 4px 30px rgba(0,0,0,.6), 0 1px 0 rgba(99,102,241,.15) !important;
+  background: #060609 !important;
+  border-bottom: 1px solid rgba(240,165,0,.4) !important;
+  box-shadow: 0 2px 20px rgba(0,0,0,.9) !important;
   padding-top: 10px;
   padding-bottom: 10px;
 }
@@ -67,8 +67,8 @@ body {
 }
 .form-control:focus, .form-select:focus {
   background: #1c2845 !important;
-  border-color: rgba(99,102,241,.6) !important;
-  box-shadow: 0 0 0 3px rgba(99,102,241,.15) !important;
+  border-color: rgba(240,165,0,.55) !important;
+  box-shadow: 0 0 0 3px rgba(240,165,0,.1) !important;
   color: #e6edf3 !important;
 }
 .form-control::placeholder { color: #475569; }
@@ -84,16 +84,16 @@ body {
 option { background: #1e293b !important; color: #e2e8f0 !important; }
 
 .form-check-input { background-color: rgba(30,41,59,.8); border-color: rgba(148,163,184,.3); cursor: pointer; }
-.form-check-input:checked { background-color: #6366f1; border-color: #6366f1; }
+.form-check-input:checked { background-color: #d97706; border-color: #d97706; }
 
 .card-live  { border-color: rgba(244,63,94,.4) !important; }
-.card-ai    { border-color: rgba(99,102,241,.4) !important; }
-.card-mode  { border-color: rgba(99,102,241,.4) !important; background: rgba(13,20,36,.88); }
+.card-ai    { border-color: rgba(240,165,0,.4) !important; }
+.card-mode  { border-color: rgba(240,165,0,.4) !important; background: rgba(13,20,36,.88); }
 .mode-col   { border-radius: .5rem; padding: 1.2rem 1rem; }
 .mode-col-paper { background: rgba(16,185,129,.06); }
 .mode-col-live  { background: rgba(244,63,94,.06); }
 .mode-col-regel { background: rgba(100,116,139,.06); }
-.mode-col-ai    { background: rgba(99,102,241,.06); }
+.mode-col-ai    { background: rgba(240,165,0,.04); }
 .big-switch .form-check-input { width: 3.2em; height: 1.6em; cursor: pointer; }
 .mode-name { font-size: 1.05rem; font-weight: 700; letter-spacing: .02em; color: #e2e8f0; }
 .mode-desc { font-size: .78rem; color: #64748b; min-height: 1.2em; }
@@ -111,14 +111,14 @@ option { background: #1e293b !important; color: #e2e8f0 !important; }
 .btn-success { background: linear-gradient(135deg,#059669 0%,#10b981 100%) !important; border-color: transparent !important; }
 .btn-danger  { background: linear-gradient(135deg,#dc2626 0%,#f43f5e 100%) !important; border-color: transparent !important; }
 .btn-warning { background: linear-gradient(135deg,#d97706 0%,#f59e0b 100%) !important; border-color: transparent !important; color:#000 !important; }
-.btn-outline-light     { border-color: rgba(255,255,255,.15) !important; color: #c9d1d9 !important; background: rgba(255,255,255,.08) !important; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
-.btn-outline-light:hover{ background: rgba(99,102,241,.22) !important; color: #e2e8f0 !important; border-color: rgba(99,102,241,.5) !important; box-shadow: 0 0 16px rgba(99,102,241,.22), 0 2px 8px rgba(0,0,0,.4) !important; }
+.btn-outline-light     { border-color: rgba(240,165,0,.3) !important; color: #f0a500 !important; background: rgba(240,165,0,.06) !important; }
+.btn-outline-light:hover{ background: rgba(240,165,0,.15) !important; color: #fcd34d !important; border-color: rgba(240,165,0,.5) !important; box-shadow: 0 0 12px rgba(240,165,0,.2) !important; }
 .btn-outline-secondary { border-color: rgba(148,163,184,.2) !important; color: #94a3b8 !important; }
 .btn-outline-secondary:hover { background: rgba(148,163,184,.1) !important; color: #e2e8f0 !important; }
 .btn-outline-danger  { border-color: rgba(244,63,94,.4) !important; color: #f43f5e !important; }
 .btn-outline-danger:hover  { background: rgba(244,63,94,.14) !important; }
 .btn-outline-primary { border-color: rgba(99,102,241,.4) !important; color: #818cf8 !important; }
-.btn-outline-primary:hover { background: rgba(99,102,241,.14) !important; }
+.btn-outline-primary:hover { background: rgba(240,165,0,.1) !important; }
 .btn-outline-success { border-color: rgba(16,185,129,.4) !important; color: #10b981 !important; }
 .btn-outline-success:hover { background: rgba(16,185,129,.12) !important; }
 .btn-outline-warning { border-color: rgba(245,158,11,.4) !important; color: #f59e0b !important; }
@@ -139,15 +139,15 @@ option { background: #1e293b !important; color: #e2e8f0 !important; }
 .rounded, .rounded-2 { background: rgba(30,41,59,.4); }
 
 .text-muted { color: #64748b !important; }
-a { color: #818cf8; }
-a:hover { color: #c7d2fe; }
+a { color: #d97706; }
+a:hover { color: #f0a500; }
 hr { border-color: rgba(148,163,184,.1); }
 code { color: #f59e0b; background: rgba(245,158,11,.1); padding: 1px 4px; border-radius: 3px; }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,.5); }
+::-webkit-scrollbar-thumb:hover { background: rgba(240,165,0,.4); }
 
 @media (max-width:576px) { .hide-sm { display:none !important; } }
   </style>
